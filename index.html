@@ -1839,15 +1839,35 @@ const usedIds=new Set();
 const mapped=rows.map((r,i)=>{const serie=get(r,["ID Purificator","Serie","Serial","Serial number","SN"]);const sourceId=get(r,["ID Aparat","ID","ID Purificator"])||serie||`IMPORT-${String(i+1).padStart(4,"0")}`;const id=sourceId||`IMPORT-${String(i+1).padStart(4,"0")}`;const client=get(r,["client","Client","Clienti","Locatie","Location","Client locatie","Nume client","Nume locatie"]);const tip=get(r,["Tip Aparat","Tip aparat","Model","Aparat"]);const zona=get(r,["Zona","Zone","Etaj / Zona","Etaj","Etage","Floor"]);const adresa=addressKey?norm(r[addressKey]):get(r,["Adresa","Address"]);const instalare=get(r,["Data Instalarii","Data instalare","Data Instalare"]);const retragere=get(r,["Data Retragere","Data Retragerii"]);return {"ID Aparat":id,"Cod OFRESH":"","Client":client,"Zona":zona,"Adresa":adresa,"Producator":"","Model":tip,"Serie":serie,"Tip aparat":tip,"Data instalare":instalare,"Data Retragere":retragere,"Status":retragere?"Retras":"Activ"};});
 const existingIds=new Set((db.Aparate||[]).map(m=>norm(m["ID Aparat"]||m.id||m.ID)));const fresh=mapped.filter(m=>!existingIds.has(norm(m["ID Aparat"])));document.getElementById("modalRoot").innerHTML=`<div class="modalBackdrop"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>Import Excel</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody"><p class="small"><strong>${esc(file.name)}</strong> - ${fresh.length} aparate noi din ${mapped.length} randuri.</p><div class="importInfo"><strong>Import pastrat din fisier:</strong> ID Purificator → ID Aparat + Serie, client, Tip Aparat, adresa, zona si datele de instalare/retragere. Cod OFRESH ramane gol. Nu se genereaza ID-uri APR-.</div><div class="tableWrap"><table class="table"><thead><tr><th>ID Aparat</th><th>Client</th><th>Tip Aparat</th><th>Serie</th><th>Zona</th><th>Status</th></tr></thead><tbody>${fresh.slice(0,50).map(m=>`<tr><td>${esc(m["ID Aparat"])}</td><td>${esc(m.Client)}</td><td>${esc(m["Tip aparat"]||m.Model)}</td><td>${esc(m.Serie)}</td><td>${esc(m.Zona||"")}</td><td>${esc(m.Status)}</td></tr>`).join("")}</tbody></table></div>${fresh.length>50?`<p class="small">Se afiseaza primele 50 randuri.</p>`:""}</div><div class="modalFooter"><button class="secondaryButton" onclick="closeModal()">Anuleaza</button><button class="primaryButton" onclick='confirmImport(${JSON.stringify(fresh)})'>Importa ${fresh.length} aparate</button></div></div></div>`}catch(e){msg(e.message||"Fisierul nu a putut fi citit.",false)}input.value=""}
 async function confirmImport(rows){try{closeModal();if(!rows.length)return msg("Nu exista aparate noi de importat.",false);let done=0;for(const r of rows){await rawSave("Aparate",r,"ID Aparat","");done++;if(done%25===0)msg(`Import in curs: ${done} / ${rows.length}...`,true)}msg(`Import finalizat: ${done} aparate.`);await load()}catch(e){msg(`Import oprit dupa salvarea partiala: ${e.message}`,false);await load()}}
+function makePublicQrToken(key){
+ const value=String(key||"").trim();
+ if(!value)return "";
+ // Token compact, opac pentru QR: nu afiseaza ID-ul/seria in clar si se decodeaza instant.
+ try{
+   const bytes=new TextEncoder().encode(value);
+   let binary=""; for(const b of bytes)binary+=String.fromCharCode(b);
+   return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+ }catch(e){return btoa(unescape(encodeURIComponent(value))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
+}
+function decodePublicQrToken(token){
+ try{
+   let s=String(token||"").replace(/-/g,"+").replace(/_/g,"/");
+   while(s.length%4)s+="=";
+   const binary=atob(s);
+   const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+   return new TextDecoder().decode(bytes);
+ }catch(e){return "";}
+}
+
 async function qrMachine(r){
  const key=String(r["ID Aparat"]||r["Cod OFRESH"]||r["Serie Aparat"]||r.Serie||"").trim();
  if(!key)return msg("Aparatul nu are ID, Cod OFRESH sau serie pentru QR.",false);
- // QR compact: URL scurt, cu un singur parametru stabil pentru aparat.
- const publicBase=(location.protocol==="http:"||location.protocol==="https:")?(location.origin+location.pathname):"";
- const publicUrl=publicBase?publicBase+(publicBase.includes("?")?"&":"?")+"m="+encodeURIComponent(key):"";
- document.getElementById("modalRoot").innerHTML=`<div class="modalBackdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>QR aparat</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody" style="text-align:center"><div id="qrBox" style="display:inline-block;margin:15px;padding:12px;background:#fff;border-radius:12px"></div><p><strong>${esc(machineClient(r))}</strong></p><p class="small">Scaneaza QR-ul cu telefonul. Se va deschide automat fisa publica a aparatului.</p>${publicUrl?`<p class="small" style="word-break:break-all">${esc(publicUrl)}</p>`:`<p class="small" style="color:#a51d2d;font-weight:700">QR-ul public se genereaza dupa ce aplicatia este publicata online. Nu se genereaza un QR file://.</p>`}</div><div class="modalFooter"><button class="primaryButton" onclick="openMachineScanner();return false;">📷 Scaneaza QR</button><button class="secondaryButton" onclick="window.print()">Printeaza QR</button><button class="secondaryButton" onclick="closeModal()">Inchide</button></div></div></div>`;
+ // QR public V2: in cod apare doar un token opac, nu ID-ul/seria aparatului.
+ const token=await makePublicQrToken(key);
+ const publicBase=(location.protocol==="http:"||location.protocol==="https:")?(location.origin+location.pathname):"https://dawn-hall-7a4f.razvanofresh10.workers.dev/";
+ const publicUrl=publicBase+"?q="+encodeURIComponent(token);
+ document.getElementById("modalRoot").innerHTML=`<div class="modalBackdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>QR aparat</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody" style="text-align:center"><div id="qrBox" style="display:inline-block;margin:15px;padding:12px;background:#fff;border-radius:12px"></div><p><strong>${esc(machineClient(r))}</strong></p><p class="small">Scaneaza QR-ul cu telefonul. Se va deschide direct fisa publica a aparatului.</p></div><div class="modalFooter"><button class="primaryButton" onclick="openMachineScanner();return false;">📷 Scaneaza QR</button><button class="secondaryButton" onclick="window.print()">Printeaza QR</button><button class="secondaryButton" onclick="closeModal()">Inchide</button></div></div></div>`;
  try{
-   if(!publicUrl){return msg("QR-ul public se genereaza dupa publicarea aplicatiei online.",false);}
    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",()=>!!window.QRCode);
    new QRCode(document.getElementById("qrBox"),{text:publicUrl,width:280,height:280,correctLevel:QRCode.CorrectLevel.H});
  }catch(e){msg("QR necesita conexiune la internet.",false)}
@@ -1860,10 +1880,14 @@ function extractMachineKeyFromQR(raw){
  try{
    const u=new URL(text,location.href);
    const p=u.searchParams;
-   const candidate=p.get("m")||p.get("aparat")||p.get("serie")||p.get("machine")||p.get("machineId")||p.get("id")||p.get("qr")||p.get("cod")||p.get("code");
+   const candidate=p.get("m")||p.get("aparat")||p.get("serie")||p.get("machine")||p.get("machineId")||p.get("id")||p.get("qr")||p.get("q")||p.get("cod")||p.get("code");
    if(candidate)return decodeURIComponent(candidate).trim();
    const pathParts=u.pathname.split("/").filter(Boolean);
-   if(pathParts.length)return decodeURIComponent(pathParts[pathParts.length-1]).trim();
+   if(pathParts.length){
+     const last=decodeURIComponent(pathParts[pathParts.length-1]).trim();
+     if(pathParts.length>=2 && /^p$/i.test(pathParts[pathParts.length-2])) return last;
+     if(last && last!=="index.html") return last;
+   }
  }catch(e){}
  // JSON / format OFRESH: acceptam QR-uri mai vechi.
  try{
@@ -1879,7 +1903,8 @@ async function openMachineFromQR(raw){
  if(!key){msg("Nu am putut identifica aparatul din codul QR.",false);return;}
  closeModal();
  // Deschidere directa a paginii publice, fara sa depindem de un format anume al QR-ului.
- const url=location.origin+location.pathname+"?m="+encodeURIComponent(key);
+ const publicBase=(location.protocol==="http:"||location.protocol==="https:")?(location.origin+location.pathname):"https://dawn-hall-7a4f.razvanofresh10.workers.dev/";
+ const url=publicBase+"?q="+encodeURIComponent(key);
  window.location.href=url;
 }
 
@@ -1930,16 +1955,22 @@ async function decodeMachineQrImage(file){
  }catch(e){msg("Nu am putut procesa fotografia QR.",false)}
 }
 
-async function publicMachinePage(key){
- try{
-  const data=await api({action:"read"});
-  const rows=Array.isArray(data.Aparate)?data.Aparate:[];
+function renderPublicMachineData(data,key,isQrToken=false){
+  const rows=Array.isArray(data?.Aparate)?data.Aparate:[];
   const wanted=String(key||"").trim();
   const normQR=v=>String(v??"").trim().toLowerCase().replace(/\s+/g,"").replace(/[–—-]/g,"");
   const wantedQR=normQR(wanted);
-  const r=rows.find(x=>[x["ID Aparat"],x.id,x.ID,x["Cod OFRESH"],x.codOfresh,x["Serie Aparat"],x.Serie,x.serie].some(v=>normQR(v)===wantedQR));
-  if(!r){document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Codul QR nu mai corespunde unui aparat din baza OFRESH.</p></div></div>';return}
-  const filters=Array.isArray(data.Filtre)?data.Filtre:[];
+  let r=null;
+  if(isQrToken){
+    const decoded=decodePublicQrToken(wanted);
+    if(decoded){
+      r=rows.find(x=>[x["ID Aparat"],x.id,x.ID,x["Cod OFRESH"],x.codOfresh,x["Serie Aparat"],x.Serie,x.serie].some(v=>normQR(v)===normQR(decoded)))||null;
+    }
+  }else{
+    r=rows.find(x=>[x["ID Aparat"],x.id,x.ID,x["Cod OFRESH"],x.codOfresh,x["Serie Aparat"],x.Serie,x.serie].some(v=>normQR(v)===wantedQR));
+  }
+  if(!r)return false;
+  const filters=Array.isArray(data?.Filtre)?data.Filtre:[];
   const machineKey=String(r["ID Aparat"]||r["Cod OFRESH"]||r["Serie Aparat"]||"").trim();
   const related=filters.filter(x=>{
     const ids=[x["ID Aparat"],x["Cod OFRESH"],x["Serie Aparat"]].map(v=>String(v||"").trim()).filter(Boolean);
@@ -1952,8 +1983,29 @@ async function publicMachinePage(key){
   let days="";if(next){const d=new Date(next);if(!isNaN(d))days=Math.ceil((d-new Date())/86400000)}
   const status=days===""?"":days<0?"DEPASIT":days<=15?"SCHIMBARE APROPIATA":"IN TERMEN";
   document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(r.Client||machineClient(r)||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(r["Tip aparat"]||r.Model||"")}</p><p><strong>Serie:</strong> ${esc(r["Serie Aparat"]||r.Serie||"")}</p><p><strong>Zona:</strong> ${esc(r.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||f.tipFiltru||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;
- }catch(e){document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Eroare</h2><p>Nu s-au putut incarca informatiile aparatului.</p></div></div>'}
+  return true;
 }
+
+async function publicMachinePage(key,isQrToken=false){
+  // IMPORTANT: nu mai lasam Dashboard-ul sa fie afisat in timp ce citim Google Sheets.
+  // Daca telefonul are cache local, afisam informatia imediat, apoi o actualizam in fundal.
+  document.body.innerHTML='<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>Se incarca informatiile aparatului...</h2><p class="small">Se verifica ultimele date din OFRESH Online.</p></div></div>';
+  let rendered=false;
+  try{ rendered=renderPublicMachineData(db,key,isQrToken); }catch(e){ rendered=false; }
+  try{
+    const data=await api({action:"read"});
+    db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[],...data};
+    saveCachedData();
+    if(!renderPublicMachineData(db,key,isQrToken) && !rendered){
+      document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Codul QR nu mai corespunde unui aparat din baza OFRESH.</p></div></div>';
+    }
+  }catch(e){
+    if(!rendered){
+      document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Nu s-au putut incarca informatiile</h2><p>Verifica conexiunea la internet si incearca din nou.</p></div></div>';
+    }
+  }
+}
+
 let adminSession=null;
 function showAccessPage(){
   document.body.classList.add("ofreshAccess"); document.querySelector(".sidebar")?.classList.add("accessHiddenForce"); document.querySelector(".topbar")?.classList.add("accessHiddenForce");
@@ -2030,8 +2082,16 @@ async function loginAdministrator(){
 }
 
 const publicParams=new URLSearchParams(location.search);
+const publicHashParams=new URLSearchParams(location.hash.replace(/^#/,""));
+const publicPathToken="";
+const publicHashToken=publicHashParams.get("q")||"";
+const publicQueryToken=publicParams.get("q")||"";
+const isPublicQr=!!(publicQueryToken||publicHashToken);
 restoreCachedData();
-if(publicParams.get("m")|| (publicParams.get("public")==="1"&&(publicParams.get("aparat")||publicParams.get("serie")))){publicMachinePage(publicParams.get("m")||publicParams.get("aparat")||publicParams.get("serie"));}
+if(publicPathToken){publicMachinePage(publicPathToken,true);}
+else if(publicQueryToken){publicMachinePage(publicQueryToken,true);}
+else if(publicHashToken){publicMachinePage(publicHashToken,true);}
+else if(publicParams.get("m")|| (publicParams.get("public")==="1"&&(publicParams.get("aparat")||publicParams.get("serie")))){publicMachinePage(publicParams.get("m")||publicParams.get("aparat")||publicParams.get("serie"));}
 else {
   if(false && "serviceWorker" in navigator && location.protocol!=="file:"){navigator.serviceWorker.register("ofresh-sw.js").catch(()=>{});}
   if(location.hash.includes("access_token=") || location.hash.includes("type=recovery") || location.hash.includes("error_code=")){ initPasswordRecovery(); }
@@ -2062,8 +2122,10 @@ else {
 (function(){
   try{
     var qs=new URLSearchParams(location.search);
+    var hs=new URLSearchParams(location.hash.replace(/^#/,""));
+    var hasQrHash=!!hs.get("q");
     var isMobile=((window.matchMedia&&window.matchMedia("(max-width: 768px)").matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
-    if(isMobile && !qs.get("comercial") && !qs.get("administrator") && !qs.get("admin") && !qs.get("public")){
+    if(isMobile && !qs.get("comercial") && !qs.get("administrator") && !qs.get("admin") && !qs.get("public") && !qs.get("q") && !qs.get("m") && !hasQrHash && !(location.pathname.split("/").filter(Boolean).length>=2 && /^p$/i.test(location.pathname.split("/").filter(Boolean).slice(-2,-1)[0]))){
       window.setTimeout(function(){
         try{ if(typeof window.openTechLogin === "function") window.openTechLogin(); }catch(e){}
       },100);
