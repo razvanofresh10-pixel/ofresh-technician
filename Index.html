@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="ro">
 <head>
+<script id="ofresh-qr-early-boot">(function(){try{var q=new URLSearchParams(location.search);var keys=["m","aparat","serie","id","cod","codofresh","cod_aparat","aparatId","machine","machineId","qr"];var v="";for(var i=0;i<keys.length;i++){var z=q.get(keys[i]);if(z){v=z;break}}var isPublic=q.get("public")==="1";if(v||isPublic){document.documentElement.classList.add("ofreshQrPending");window.__OFRESH_QR_KEY__=v;}}catch(e){}})();</script><style id="ofresh-qr-early-style">html.ofreshQrPending body>*{visibility:hidden!important}html.ofreshQrPending body:before{content:"Se incarca informatiile aparatului...";visibility:visible;position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;background:#f3f6f5;color:#172522;font:600 16px Arial,sans-serif;text-align:center}html.ofreshQrPending body.qr-ready:before{display:none}</style>
+
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OFRESH V18 - - Management & Service</title>
 <style>
@@ -323,6 +325,8 @@ body:not(.ofreshAccess) .main, body:not(.ofreshAccess) .main.adminCleanMain{marg
 #ofreshLocationsMap{height:500px!important;}
 @media(max-width:700px){body:not(.ofreshAccess) .sidebar,body:not(.ofreshAccess) .sidebar.adminCleanHidden{width:190px!important;min-width:190px!important;}body:not(.ofreshAccess) .main,body:not(.ofreshAccess) .main.adminCleanMain{margin-left:190px!important;width:calc(100% - 190px)!important;}#ofreshLocationsMap{height:360px!important;}}
 </style>
+<script id="ofresh-qr-early-guard">(function(){try{var q=new URLSearchParams(location.search);if(q.get("m")||(q.get("public")==="1"&&(q.get("aparat")||q.get("serie")))){document.documentElement.classList.add("ofresh-public-qr");}}catch(e){}})();</script>
+<style id="ofresh-qr-early-style">html.ofresh-public-qr body>*{visibility:hidden!important}html.ofresh-public-qr body:before{content:"Se incarca fisa aparatului...";visibility:visible;position:fixed;inset:0;z-index:2147483647;background:#f5faf8;color:#146b5b;display:flex;align-items:center;justify-content:center;font:600 16px Arial,sans-serif}html.ofresh-public-qr body.qr-ready:before{display:none}html.ofresh-public-qr body.qr-ready>*{visibility:visible!important}</style>
 </head>
 <body>
 <aside class="sidebar">
@@ -1906,7 +1910,7 @@ async function publicMachinePage(key){
   const normQR=v=>String(v??"").trim().toLowerCase().replace(/\s+/g,"").replace(/[–—-]/g,"");
   const wantedQR=normQR(wanted);
   const r=rows.find(x=>[x["ID Aparat"],x.id,x.ID,x["Cod OFRESH"],x.codOfresh,x["Serie Aparat"],x.Serie,x.serie].some(v=>normQR(v)===wantedQR));
-  if(!r){document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Codul QR nu mai corespunde unui aparat din baza OFRESH.</p></div></div>';return}
+  if(!r){document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Codul QR nu mai corespunde unui aparat din baza OFRESH.</p></div></div>';document.body.classList.add("qr-ready");document.documentElement.classList.remove("ofreshQrPending");return}
   const filters=Array.isArray(data.Filtre)?data.Filtre:[];
   const machineKey=String(r["ID Aparat"]||r["Cod OFRESH"]||r["Serie Aparat"]||"").trim();
   const related=filters.filter(x=>{
@@ -1919,8 +1923,8 @@ async function publicMachinePage(key){
   const next=f["Data urmatoarei schimbari"]||f["Data urmatoare schimbare"]||f.urmatorSchimb||"";
   let days="";if(next){const d=new Date(next);if(!isNaN(d))days=Math.ceil((d-new Date())/86400000)}
   const status=days===""?"":days<0?"DEPASIT":days<=15?"SCHIMBARE APROPIATA":"IN TERMEN";
-  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(r.Client||machineClient(r)||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(r["Tip aparat"]||r.Model||"")}</p><p><strong>Serie:</strong> ${esc(r["Serie Aparat"]||r.Serie||"")}</p><p><strong>Zona:</strong> ${esc(r.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||f.tipFiltru||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;
- }catch(e){document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Eroare</h2><p>Nu s-au putut incarca informatiile aparatului.</p></div></div>'}
+  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(r.Client||machineClient(r)||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(r["Tip aparat"]||r.Model||"")}</p><p><strong>Serie:</strong> ${esc(r["Serie Aparat"]||r.Serie||"")}</p><p><strong>Zona:</strong> ${esc(r.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||f.tipFiltru||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;document.body.classList.add("qr-ready");document.documentElement.classList.remove("ofreshQrPending");
+ }catch(e){document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Eroare</h2><p>Nu s-au putut incarca informatiile aparatului.</p></div></div>';document.body.classList.add("qr-ready")}
 }
 let adminSession=null;
 function showAccessPage(){
@@ -1998,9 +2002,12 @@ async function loginAdministrator(){
 }
 
 const publicParams=new URLSearchParams(location.search);
-restoreCachedData();
-if(publicParams.get("m")|| (publicParams.get("public")==="1"&&(publicParams.get("aparat")||publicParams.get("serie")))){publicMachinePage(publicParams.get("m")||publicParams.get("aparat")||publicParams.get("serie"));}
+const qrKeys=["m","aparat","serie","id","cod","codofresh","cod_aparat","aparatId","machine","machineId","qr"];
+let publicMachineKey="";for(const k of qrKeys){const z=publicParams.get(k);if(z){publicMachineKey=z;break}}
+const isPublicMachine=!!publicMachineKey || publicParams.get("public")==="1";
+if(isPublicMachine){document.documentElement.classList.add("ofreshQrPending");publicMachinePage(publicMachineKey||publicParams.get("aparat")||publicParams.get("serie")||"");}
 else {
+  restoreCachedData();
   if(false && "serviceWorker" in navigator && location.protocol!=="file:"){navigator.serviceWorker.register("ofresh-sw.js").catch(()=>{});}
   if(location.hash.includes("access_token=") || location.hash.includes("type=recovery") || location.hash.includes("error_code=")){ initPasswordRecovery(); }
   else if(publicParams.get("tehnician")==="1"){setTimeout(openTechLogin,50);}
@@ -2031,7 +2038,9 @@ else {
   try{
     var qs=new URLSearchParams(location.search);
     var isMobile=((window.matchMedia&&window.matchMedia("(max-width: 768px)").matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
-    if(isMobile && !qs.get("comercial") && !qs.get("administrator") && !qs.get("admin") && !qs.get("public")){
+    var qrKeyNames=["m","aparat","serie","id","cod","codofresh","cod_aparat","aparatId","machine","machineId","qr"];
+    var isQrLink=qrKeyNames.some(function(k){return !!qs.get(k)}) || qs.get("public")==="1";
+    if(isMobile && !isQrLink && !qs.get("comercial") && !qs.get("administrator") && !qs.get("admin")){
       window.setTimeout(function(){
         try{ if(typeof window.openTechLogin === "function") window.openTechLogin(); }catch(e){}
       },100);
