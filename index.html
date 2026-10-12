@@ -936,7 +936,7 @@ function render(){
   addAdminModuleBar();
 }
 function matches(r){return !searchTerm||Object.values(r||{}).join(" ").toLowerCase().includes(searchTerm.toLowerCase())}
-function machineId(m){return m["ID Aparat"]||m.id||m["Cod OFRESH"]||m.codOfresh||m["Serie Aparat"]||m.serie||""}
+function machineId(m){return String(m?.["ID Aparat"]||m?.idAparat||"").trim()}
 function machineCode(m){return m["Cod OFRESH"]||m.codOfresh||""}
 function machineClient(m){return m.Client||m.client||m.Locatie||m.locatie||m.numeLocatie||m["Nume locatie"]||clientNameById(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie)||""}
 function machineFloor(m){return m.Zona||m.zona||""}
@@ -1839,7 +1839,7 @@ async function saveIntervention(){
   msg("Se salveaza interventia...",true);
   const sel=document.getElementById("f_aparatId"),m=(db.Aparate||[]).find(x=>String(machineId(x))===String(sel?.value||""));
   const selectedClient=(db.Clienti||[]).find(x=>String(clientId(x))===String(v("clientInterv")));
-  if(!m||!selectedClient||!v("tipInterventie"))return msg("Selecteaza clientul, aparatul si tipul interventiei.",false);
+  if(!m||!selectedClient||!v("tipInterventie")){if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Salveaza";}return msg("Selecteaza clientul, aparatul si tipul interventiei.",false);}
   const selectedClientName=clientName(selectedClient);
   const tip=v("tipFiltru");
   const bill=document.getElementById("f_fact").checked;
@@ -1855,7 +1855,7 @@ async function saveIntervention(){
   const nextIntervention=interventionType==="Schimbare filtru"?"":(interventionType==="Mentenanta 6 luni"?plusMonths(v("data"),6):interventionType==="Mentenanta 1 an"?plusMonths(v("data"),12):v("urmatoare"));
   const interventionId=uid("INT");
   const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
-  const rec={"ID Interventie":interventionId,"ID Aparat":machineId(m),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
+  const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
   try{
     await rawSave("Interventii",rec,"ID Interventie","");
     if(interventionType==="Schimbare filtru"){
