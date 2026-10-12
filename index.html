@@ -1855,7 +1855,7 @@ async function saveIntervention(){
   const nextIntervention=interventionType==="Schimbare filtru"?"":(interventionType==="Mentenanta 6 luni"?plusMonths(v("data"),6):interventionType==="Mentenanta 1 an"?plusMonths(v("data"),12):v("urmatoare"));
   const interventionId=uid("INT");
   const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
-  const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||(typeof techSession!=="undefined"&&techSession?techSession.name:"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
+  const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||machineId(m)||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
   try{
     await rawSave("Interventii",rec,"ID Interventie","");
     if(interventionType==="Schimbare filtru"){
@@ -1870,7 +1870,7 @@ async function saveIntervention(){
       msg("Interventia este salvata. Se incarca fotografia 1 din "+photos.length+"...",true);
       for(let i=0;i<photos.length;i++){
         msg("Se incarca fotografia "+(i+1)+" din "+photos.length+"...",true);
-        await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:(v("tehnician")||(typeof techSession!=="undefined"&&techSession?techSession.name:"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),data:v("data")},i);
+        await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),data:v("data")},i);
       }
     }
     window.__ofreshInterventionPhotos=[];
@@ -2235,13 +2235,19 @@ else {
     if(isMobile && !explicitOtherMode && !publicQrRoute){
       var saved=null;
       try{saved=JSON.parse(localStorage.getItem("ofresh_tech_session")||"null");}catch(e){}
-      // A valid existing technician session stays in the technician-only app; otherwise show phone/PIN login.
-      if(!(saved && saved.id!==undefined && saved.name)){
-        document.documentElement.classList.add("ofreshMobileTechEntry");
-        window.setTimeout(function(){
-          try{ if(typeof window.openTechLogin === "function") window.openTechLogin(); }catch(e){}
-        },150);
-      }
+      // On mobile always enter the technician workflow: restore a valid technician session,
+      // otherwise show the phone/PIN login instead of leaving the full administrator dashboard visible.
+      document.documentElement.classList.add("ofreshMobileTechEntry");
+      window.setTimeout(function(){
+        try{
+          if(saved && saved.id!==undefined && saved.name && typeof window.showTechnicianHome === "function"){
+            if(typeof window.techSession === "undefined" || !window.techSession) window.techSession={id:saved.id,name:saved.name,phone:saved.phone||""};
+            window.showTechnicianHome();
+          } else if(typeof window.openTechLogin === "function") {
+            window.openTechLogin();
+          }
+        }catch(e){ try{ if(typeof window.openTechLogin === "function") window.openTechLogin(); }catch(e2){} }
+      },250);
     }
   }catch(e){}
 })();
