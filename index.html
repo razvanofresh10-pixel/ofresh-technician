@@ -1821,7 +1821,7 @@ async function uploadInterventionPhotoFile(file,meta,index){
   const prepared=await compressInterventionImage(file);
   const base64=prepared.dataUrl.split(",")[1]||"";
   const uploadId="UPL-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);
-  const chunkSize=3000;
+  const chunkSize=1000; // backend accepts max 1200 characters per fragment
   const totalChunks=Math.ceil(base64.length/chunkSize);
   for(let i=0;i<totalChunks;i++){
     const chunk=base64.slice(i*chunkSize,(i+1)*chunkSize);
