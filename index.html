@@ -384,6 +384,108 @@ input,select,textarea{font-size:16px;}
   .wrap{padding:9px!important;}
 }
 </style>
+<style id="ofresh-technician-mobile-layout-final">
+/* Pe telefon, modul tehnician ocupa tot ecranul; nu afisam navigatia administratorului. */
+@media (max-width: 768px) {
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .sidebar,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .topbar,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #sidebar,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #nav {
+    display: none !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .main,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) main.main,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .content {
+    display: block !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 12px !important;
+    box-sizing: border-box !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app {
+    display: block !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .techHome {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    max-width: 640px !important;
+    margin: 0 auto !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .techHome .welcome {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 16px !important;
+    margin: 0 !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .techHome .welcome h2 {
+    font-size: 22px !important;
+    line-height: 1.25 !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .quickGrid,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .quickGridV22 {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .quickGrid > button,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .quickGridV22 > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 76px !important;
+    text-align: left !important;
+    box-sizing: border-box !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app input,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app select,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app textarea,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app button {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app input,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app select,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) #app textarea {
+    font-size: 16px !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .panel,
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .techCard {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: 14px !important;
+    box-sizing: border-box !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .panelHeader {
+    align-items: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  html.ofreshMobileTechEntry body:not(.ofreshAdminExplicit) .locationGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+</style>
+
 </head>
 <body>
 <aside class="sidebar">
