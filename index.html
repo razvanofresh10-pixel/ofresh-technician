@@ -1802,11 +1802,11 @@ async function compressInterventionImage(file){
         };
         for(let attempt=0;attempt<12;attempt++){
           data=make();
-          if(data.length<=150000)break;
+          if(data.length<=90000)break;
           if(quality>.24)quality-=.08;
           else {max=Math.max(240,Math.round(max*.82));quality=.42;}
         }
-        if(!data||data.length>150000)return reject(new Error("Fotografia nu poate fi redusa suficient. Incearca o poza mai mica."));
+        if(!data||data.length>90000)return reject(new Error("Fotografia nu poate fi redusa suficient. Incearca o poza mai mica."));
         resolve({dataUrl:data,mimeType:"image/jpeg",fileName:(file.name||"interventie.jpg").replace(/\.[^.]+$/i,"")+".jpg"});
       };
       img.onerror=()=>reject(new Error("Nu am putut procesa fotografia."));
