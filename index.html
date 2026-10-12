@@ -936,7 +936,7 @@ function render(){
   addAdminModuleBar();
 }
 function matches(r){return !searchTerm||Object.values(r||{}).join(" ").toLowerCase().includes(searchTerm.toLowerCase())}
-function machineId(m){return String(m?.["ID Aparat"]||m?.idAparat||"").trim()}
+function machineId(m){return String(m?.["ID Aparat"]||m?.idAparat||m?.["Cod OFRESH"]||m?.codOfresh||m?.["Serie Aparat"]||m?.Serie||m?.serie||"").trim()}
 function machineCode(m){return m["Cod OFRESH"]||m.codOfresh||""}
 function machineClient(m){return m.Client||m.client||m.Locatie||m.locatie||m.numeLocatie||m["Nume locatie"]||clientNameById(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie)||""}
 function machineFloor(m){return m.Zona||m.zona||""}
@@ -1821,7 +1821,7 @@ async function uploadInterventionPhotoFile(file,meta,index){
   const prepared=await compressInterventionImage(file);
   const base64=prepared.dataUrl.split(",")[1]||"";
   const uploadId="UPL-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);
-  const chunkSize=1000;
+  const chunkSize=1200;
   const totalChunks=Math.ceil(base64.length/chunkSize);
   for(let i=0;i<totalChunks;i++){
     const chunk=base64.slice(i*chunkSize,(i+1)*chunkSize);
@@ -1855,7 +1855,7 @@ async function saveIntervention(){
   const nextIntervention=interventionType==="Schimbare filtru"?"":(interventionType==="Mentenanta 6 luni"?plusMonths(v("data"),6):interventionType==="Mentenanta 1 an"?plusMonths(v("data"),12):v("urmatoare"));
   const interventionId=uid("INT");
   const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
-  const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
+  const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||(typeof techSession!=="undefined"&&techSession?techSession.name:"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
   try{
     await rawSave("Interventii",rec,"ID Interventie","");
     if(interventionType==="Schimbare filtru"){
@@ -1870,7 +1870,7 @@ async function saveIntervention(){
       msg("Interventia este salvata. Se incarca fotografia 1 din "+photos.length+"...",true);
       for(let i=0;i<photos.length;i++){
         msg("Se incarca fotografia "+(i+1)+" din "+photos.length+"...",true);
-        await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:(v("tehnician")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),data:v("data")},i);
+        await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:(v("tehnician")||(typeof techSession!=="undefined"&&techSession?techSession.name:"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),data:v("data")},i);
       }
     }
     window.__ofreshInterventionPhotos=[];
@@ -2212,18 +2212,36 @@ else {
   },true);
 })();
 </script>
+<style id="ofresh-mobile-tech-entry-privacy">
+@media(max-width:768px){
+ html.ofreshMobileTechEntry body.techLoginActive .main,
+ html.ofreshMobileTechEntry body.techLoginActive #app,
+ html.ofreshMobileTechEntry body.techLoginActive .topbar{visibility:hidden!important;pointer-events:none!important}
+ body.techLoginActive #techLoginScreen{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;min-height:100dvh!important;overflow-y:auto!important;z-index:2147483647!important;background:#eef8f5!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:16px!important;box-sizing:border-box!important}
+ body.techLoginActive #techLoginScreen .techLoginCard{width:min(440px,100%)!important;max-width:440px!important;margin:auto!important}
+}
+</style>
 <script>
-/* OFRESH MOBILE BOOT GUARD: kept outside the main application script so a runtime error elsewhere cannot block phone login. */
+/* OFRESH MOBILE TECHNICIAN ENTRY: phone opens technician workflow unless an explicit admin/commercial/public/QR route was requested. */
 (function(){
   try{
     var qs=new URLSearchParams(location.search);
     var hs=new URLSearchParams(location.hash.replace(/^#/,""));
     var hasQrHash=!!hs.get("q");
     var isMobile=((window.matchMedia&&window.matchMedia("(max-width: 768px)").matches)||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
-    if(isMobile && !qs.get("comercial") && !qs.get("administrator") && !qs.get("admin") && !qs.get("public") && !qs.get("q") && !qs.get("m") && !hasQrHash && !(location.pathname.split("/").filter(Boolean).length>=2 && /^p$/i.test(location.pathname.split("/").filter(Boolean).slice(-2,-1)[0]))){
-      window.setTimeout(function(){
-        try{ if(typeof window.openTechLogin === "function") window.openTechLogin(); }catch(e){}
-      },100);
+    var explicitOtherMode=!!(qs.get("comercial")||qs.get("administrator")||qs.get("admin")||qs.get("public")||qs.get("q")||hasQrHash);
+    var pathParts=location.pathname.split("/").filter(Boolean);
+    var publicQrRoute=pathParts.length>=2 && /^p$/i.test(pathParts[pathParts.length-2]);
+    if(isMobile && !explicitOtherMode && !publicQrRoute){
+      var saved=null;
+      try{saved=JSON.parse(localStorage.getItem("ofresh_tech_session")||"null");}catch(e){}
+      // A valid existing technician session stays in the technician-only app; otherwise show phone/PIN login.
+      if(!(saved && saved.id!==undefined && saved.name)){
+        document.documentElement.classList.add("ofreshMobileTechEntry");
+        window.setTimeout(function(){
+          try{ if(typeof window.openTechLogin === "function") window.openTechLogin(); }catch(e){}
+        },150);
+      }
     }
   }catch(e){}
 })();
