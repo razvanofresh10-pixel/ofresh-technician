@@ -1347,7 +1347,26 @@ async function exportCommercialMachines(){
     XLSX.writeFile(wb,"OFRESH_Aparate_Comercial.xlsx");
   }catch(e){msg(e.message||"Nu am putut exporta aparatele.",false)}
 }
-async function exportCommercialInterventions(){try{await excelReady();const rows=commercialInterventionRows().map(i=>({...i}));if(!rows.length)return msg("Nu exista interventii pentru exportul curent.",false);const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Interventii Comercial");XLSX.writeFile(wb,"OFRESH_Interventii_Comercial.xlsx");}catch(e){msg(e.message||"Nu am putut exporta interventiile.",false)}}
+async function exportCommercialInterventions(){
+  try{
+    await excelReady();
+    const allRows=Array.isArray(commercialDb?.Interventii)?commercialDb.Interventii:[];
+    const filteredRows=commercialInterventionRows();
+    const rows=filteredRows.map(i=>({...i}));
+    if(!rows.length){
+      if(!allRows.length)return msg("Nu exista interventii incarcate pentru utilizatorul Comercial. Iesiti si autentificati-va din nou pentru reincarcarea datelor.",false);
+      return msg("Nu exista interventii pentru filtrele sau cautarea selectata. Sterge filtrele si incearca din nou.",false);
+    }
+    const ws=XLSX.utils.json_to_sheet(rows);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Interventii Comercial");
+    XLSX.writeFile(wb,"OFRESH_Interventii_Comercial.xlsx");
+    msg("Exportul interventiilor a fost pornit.",true);
+  }catch(e){
+    console.error("Export interventii Comercial:",e);
+    msg((e&&e.message)||"Nu am putut exporta interventiile. Verifica conexiunea la internet si incearca din nou.",false);
+  }
+}
 async function exportCommercialFilters(){try{await excelReady();const rows=commercialFilterRows().map(x=>({...x.f,Client:machineClient(x.machine),"Cod OFRESH":x.machine["Cod OFRESH"]||"","Serie Aparat":x.machine["Serie Aparat"]||"",Judet:commercialCountyForMachine(x.machine)}));if(!rows.length)return msg("Nu exista schimbari de filtre pentru exportul curent.",false);const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Schimbari filtre");XLSX.writeFile(wb,"OFRESH_Schimbari_Filtre_Comercial.xlsx");}catch(e){msg(e.message||"Nu am putut exporta schimbarile de filtre.",false)}}
 function commercialPage(){
   const navEl=document.getElementById("nav"),settingsEl=document.getElementById("settingsNav");
@@ -1616,9 +1635,12 @@ function clientOptions(selectedId="") {
   return source.map(c=>{const id=clientId(c); const name=clientName(c); const place=[c.Adresa,c.Zona,c.Oras,c.Judet].filter(Boolean).join(" - "); return `<option value="${esc(id)}" ${String(id)===String(selectedId)?"selected":""}>${esc(name)}${place?" — "+esc(place):""}</option>`}).join("");
 }
 function machineIsActiveForTechnician(m){
-  // Campurile goale raman active implicit, ca in formularul de aparat.
-  const status=String(m?.Status||m?.status||"Activ").trim().toLowerCase();
-  return !["inactiv","inactive","retras","retrasa","retrasă","dezactivat","dezactivata","dezactivată","inactive"].includes(status);
+  // Tehnicianul nu vede aparate inactive/dezactivate/retrase, inclusiv cele
+  // care au data retragerii completata chiar daca Status nu a fost actualizat.
+  const status=String(m?.Status||m?.status||m?.Situatie||m?.situatie||m?.["Status aparat"]||"Activ").trim().toLowerCase();
+  const inactive=["inactiv","inactiva","inactivă","inactive","retras","retrasa","retrasă","dezactivat","dezactivata","dezactivată","dezactivare","scos din uz","casat","0","false","nu"];
+  const retirementDate=String(m?.["Data retragere"]||m?.["Data Retragere"]||m?.["Data retragerii"]||m?.dataRetragere||m?.data_retragere||"").trim();
+  return !inactive.includes(status) && !retirementDate;
 }
 function machinesForClient(clientValue){
   const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(clientValue));
@@ -2038,7 +2060,19 @@ async function rawSave(sheet,rec,idField,old){const p={action:old?"update":"add"
 async function saveSheet(sheet,rec,idField,old){try{await rawSave(sheet,rec,idField,old);closeModal();msg("Salvat cu succes.");await load()}catch(e){msg(e.message,false)}}
 async function deleteRecord(sheet,idValue){if(!idValue)return;if(!confirm("Sigur vrei sa stergi aceasta inregistrare?"))return;const realSheet=sheet==="Clienti"?"Locatii":sheet;const realIdField=realSheet==="Locatii"?"ID Locatie":realSheet==="Aparate"?"Cod OFRESH":realSheet==="Filtre"?"ID Filtru":realSheet==="Stoc"?"ID Stoc":realSheet==="Tehnicieni"?"ID Tehnician":"ID Produs";try{const res=await api({action:"delete",sheet:realSheet,idField:realIdField,idValue});if(res&&res.success===false)throw new Error(res.error||"Eroare stergere");msg("Sters cu succes.");await load()}catch(e){msg(e.message,false)}}
 function loadScript(src,check){return new Promise((resolve,reject)=>{if(check())return resolve();const s=document.createElement("script");s.src=src;s.onload=()=>check()?resolve():reject(new Error("Modul indisponibil"));s.onerror=reject;document.head.appendChild(s)})}
-async function excelReady(){await loadScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",()=>!!window.XLSX)}
+async function excelReady(){
+  if(window.XLSX)return;
+  const sources=[
+    "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+    "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+  ];
+  let lastError;
+  for(const src of sources){
+    try{await loadScript(src,()=>!!window.XLSX);if(window.XLSX)return;}
+    catch(e){lastError=e;}
+  }
+  throw lastError||new Error("Nu s-a putut incarca modulul Excel. Verifica conexiunea la internet.");
+}
 async function exportSheet(sheet,filename){try{await excelReady();const rows=(db[sheet]||[]).map(r=>({...r}));const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Raport");XLSX.writeFile(wb,filename)}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
 async function exportInvoice(){try{await excelReady();const rows=(db.Interventii||[]).filter(i=>i.deFacturat===true||i.solicitareClient===true||i.SolicitareClient===true||i["Solicitare client"]===true||String(i["De facturat"]||"").toUpperCase()==="DA"||String(i["SolicitareClient"]||"").toUpperCase()==="DA"||String(i["Solicitare client"]||"").toUpperCase()==="DA");const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"De facturat");XLSX.writeFile(wb,"OFRESH_De_facturat.xlsx")}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
 async function prepareImport(input){try{await excelReady();const file=input.files[0];if(!file)return;const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
