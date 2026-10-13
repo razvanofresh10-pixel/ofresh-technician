@@ -220,7 +220,7 @@ img{max-width:100%;height:auto}
 <style id="commercial-dashboard-v35">
 .commercialDash{margin-bottom:18px}
 .commercialDashHeader{display:flex;align-items:center;justify-content:space-between;gap:18px;background:linear-gradient(135deg,#ffffff 0%,#f3fbf8 100%);border:1px solid #d7e7e2;border-radius:18px;padding:18px 20px;margin-bottom:16px;box-shadow:0 8px 24px rgba(22,77,64,.07)}
-.commercialDashBrand{display:flex;align-items:center;gap:16px}.commercialDashBrand img{width:150px;height:auto;display:block}.commercialDashBrand .commercialEyebrow{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#20977f;margin-bottom:4px}.commercialDashBrand h2{margin:0;color:#17352f;font-size:25px}.commercialDashBrand p{margin:4px 0 0;color:#70817c;font-size:13px}
+.commercialDashBrand{display:flex;align-items:center;gap:16px}.commercialDashBrand img{width:150px;height:auto;display:block}.commercialWordmark{display:flex;align-items:center;justify-content:center;flex:0 0 112px;width:112px;height:58px;border-radius:12px;background:#e9f7f2;color:#16836d;font-weight:950;font-size:27px;letter-spacing:-1.4px;border:1px solid #cde9df}.commercialDashBrand .commercialEyebrow{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#20977f;margin-bottom:4px}.commercialDashBrand h2{margin:0;color:#17352f;font-size:25px}.commercialDashBrand p{margin:4px 0 0;color:#70817c;font-size:13px}
 .commercialDashActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.commercialDashActions button{border:1px solid #cbded8;background:#fff;color:#176a58;border-radius:10px;padding:10px 13px;font-weight:800;cursor:pointer}.commercialDashActions button.primary{background:#20977f;color:#fff;border-color:#20977f}
 .commercialKpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.commercialKpi{border:1px solid #d9e7e3;background:#fff;border-radius:16px;padding:16px;display:flex;align-items:center;gap:13px;box-shadow:0 6px 18px rgba(22,77,64,.05);cursor:pointer;transition:.15s}.commercialKpi:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(22,77,64,.09);border-color:#8fcbbd}.commercialKpiIcon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:#e9f7f2}.commercialKpi:nth-child(2) .commercialKpiIcon{background:#eef5ff}.commercialKpi:nth-child(3) .commercialKpiIcon{background:#f2edff}.commercialKpi:nth-child(4) .commercialKpiIcon{background:#fff2e8}.commercialKpi strong{display:block;font-size:23px;color:#17352f;line-height:1}.commercialKpi span{display:block;font-size:12px;color:#71817d;margin-top:5px}
 .commercialInfoGrid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:12px;margin-bottom:16px}.commercialInfo{background:#fff;border:1px solid #d9e7e3;border-radius:16px;padding:16px;min-height:118px;box-shadow:0 6px 18px rgba(22,77,64,.04)}.commercialInfo h3{margin:0 0 4px;color:#17352f;font-size:15px}.commercialInfo p{margin:0;color:#71817d;font-size:12px}.commercialMiniRows{margin-top:12px;display:grid;gap:7px}.commercialMiniRow{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#40534e}.commercialMiniRow b{color:#17352f}.commercialTabsV35{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.commercialTabsV35 button{border:1px solid #cbded8;background:#fff;color:#31544c;border-radius:11px;padding:11px 17px;font-weight:900;cursor:pointer}.commercialTabsV35 button.active{background:#20977f;color:#fff;border-color:#20977f}.commercialTabCount{font-size:11px;opacity:.82;margin-left:4px}
@@ -1226,10 +1226,28 @@ function commercialMachineForIntervention(i){
   if(client)m=machines.find(x=>String(machineClient(x)||"").trim().toLowerCase()===client);
   return m||{};
 }
-function commercialFilteredRows(){const term=String(searchTerm||"").trim().toLowerCase();return (commercialDb.Aparate||[]).filter(r=>{const hay=Object.values(r||{}).join(" ").toLowerCase();const county=commercialCountyForMachine(r);return (!term||hay.includes(term))&&(!commercialCounty||normalizeCounty(county)===normalizeCounty(commercialCounty));});}
+function commercialMachineVisible(m){return !!adminSession || machineIsActiveForTechnician(m);}
+function commercialFilteredRows(){const term=String(searchTerm||"").trim().toLowerCase();return (commercialDb.Aparate||[]).filter(r=>commercialMachineVisible(r)).filter(r=>{const hay=Object.values(r||{}).join(" ").toLowerCase();const county=commercialCountyForMachine(r);return (!term||hay.includes(term))&&(!commercialCounty||normalizeCounty(county)===normalizeCounty(commercialCounty));});}
 function commercialMachineForIntervention(i){const machines=commercialDb.Aparate||[];const keys=[i&&i["ID Aparat"],i&&i.aparatId,i&&i.Aparat,i&&i.aparat,i&&i["Cod OFRESH"],i&&i.codOfresh,i&&i["Serie Aparat"],i&&i.Serie,i&&i.serie].map(v=>String(v||"").trim()).filter(Boolean);let m=machines.find(x=>keys.includes(String(x["ID Aparat"]||x.id||"").trim()));if(m)return m;m=machines.find(x=>keys.includes(String(machineCode(x)||"").trim())||keys.includes(String(x["Serie Aparat"]||x.Serie||x.serie||"").trim()));if(m)return m;const client=String(i&&(i.Client||i.client||i.Locatie||i.locatie)||"").trim().toLowerCase();return client?(machines.find(x=>String(machineClient(x)||"").trim().toLowerCase()===client)||{}):{};}
 function commercialInterventionRows(){const term=String(searchTerm||"").trim().toLowerCase();return (commercialDb.Interventii||[]).filter(i=>{const machine=commercialMachineForIntervention(i),loc=commercialFindLocationForMachine(machine);const hay=[i.Data||i.data||"",i.Aparat||i.aparat||i["ID Aparat"]||"",i.Client||i.client||i.Locatie||i.locatie||machineClient(machine),i.Tehnician||i.tehnician||"",i["Tip interventie"]||i.tipInterventie||"",i.Operatiuni||i.operatiuni||i["Operatiuni efectuate"]||"",i["Tip filtru"]||i.tipFiltru||"",machineCode(machine),machine["Serie Aparat"]||machine.Serie||machine.serie||""].join(" ").toLowerCase();const county=String(i.Judet||i.judet||i.County||i.county||commercialCountyForMachine(machine)||loc.Judet||loc.judet||"").trim();return (!term||hay.includes(term))&&(!commercialCounty||normalizeCounty(county)===normalizeCounty(commercialCounty));});}
-function commercialFilterRows(){const term=String(searchTerm||"").trim().toLowerCase();return (commercialDb.Filtre||[]).map(f=>{const machine=(commercialDb.Aparate||[]).find(m=>{const keys=[f["ID Aparat"],f.aparatId,f["Cod OFRESH"],f.codOfresh,f["Serie Aparat"],f.Serie,f.serie].map(v=>String(v||"").trim()).filter(Boolean);return keys.some(v=>v===String(m["ID Aparat"]||m.id||"").trim()||v===String(machineCode(m)||"").trim()||v===String(m["Serie Aparat"]||m.Serie||m.serie||"").trim());})||{};const loc=commercialFindLocationForMachine(machine);return {f,machine,loc};}).filter(x=>{const f=x.f||{},m=x.machine||{},loc=x.loc||{};const hay=[machineClient(m),machineType(m),m["Serie Aparat"]||m.Serie||m.serie||"",m["Cod OFRESH"]||"",f["Tip filtru"]||f.tipFiltru||"",f["Data montare"]||"",f["Data urmatoarei schimbari"]||"",m.Adresa||"",m.Zona||"",m.Oras||loc.Oras||"",commercialCountyForMachine(m)||loc.Judet||""].join(" ").toLowerCase();const county=commercialCountyForMachine(m)||String(f.Judet||f.judet||loc.Judet||loc.judet||"").trim();return (!term||hay.includes(term))&&(!commercialCounty||normalizeCounty(county)===normalizeCounty(commercialCounty));});}
+function commercialFilterRows(){
+  const term=String(searchTerm||"").trim().toLowerCase();
+  return (commercialDb.Filtre||[]).map(f=>{
+    const machine=(commercialDb.Aparate||[]).find(m=>{
+      if(!commercialMachineVisible(m)) return false;
+      const keys=[f["ID Aparat"],f.aparatId,f["Cod OFRESH"],f.codOfresh,f["Serie Aparat"],f.Serie,f.serie].map(v=>String(v||"").trim()).filter(Boolean);
+      return keys.some(v=>v===String(m["ID Aparat"]||m.id||"").trim()||v===String(machineCode(m)||"").trim()||v===String(m["Serie Aparat"]||m.Serie||m.serie||"").trim());
+    })||null;
+    const loc=machine?commercialFindLocationForMachine(machine):{};
+    return {f,machine,loc};
+  }).filter(x=>{
+    const f=x.f||{},m=x.machine||{},loc=x.loc||{};
+    if(!x.machine) return false;
+    const hay=[machineClient(m),machineType(m),m["Serie Aparat"]||m.Serie||m.serie||"",m["Cod OFRESH"]||"",f["Tip filtru"]||f.tipFiltru||"",f["Data montare"]||"",f["Data urmatoarei schimbari"]||"",m.Adresa||"",m.Zona||"",m.Oras||loc.Oras||"",commercialCountyForMachine(m)||loc.Judet||""].join(" ").toLowerCase();
+    const county=commercialCountyForMachine(m)||String(f.Judet||f.judet||loc.Judet||loc.judet||"").trim();
+    return (!term||hay.includes(term))&&(!commercialCounty||normalizeCounty(county)===normalizeCounty(commercialCounty));
+  });
+}
 function commercialInterventions(){
   const rows=commercialInterventionRows();
   return `<section class="panel">
@@ -1237,7 +1255,7 @@ function commercialInterventions(){
     <div class="toolbar"><div class="right">
       <input id="commercialSearchInput" class="search" value="${esc(searchTerm)}" placeholder="Cauta client, aparat, serie, tehnician, interventie..." oninput="commercialSearchInput(this)">
       <select class="search" style="width:180px" onchange="commercialCounty=this.value;commercialPage()"><option value="">Toate judetele</option>${commercialCounties().map(j=>`<option value="${esc(j)}" ${normalizeCounty(j)===normalizeCounty(commercialCounty)?'selected':''}>${esc(j)}</option>`).join("")}</select>
-      <button class="secondaryButton" onclick="commercialClearFilters()">Sterge filtrele</button><button class="secondaryButton" onclick="exportCommercialInterventions()">Export Interventii</button>
+      <button class="secondaryButton" onclick="commercialClearFilters()">Sterge filtrele</button>
     </div></div>
     ${rows.length?`<div class="tableWrap"><table class="machineTable"><thead><tr><th>Data</th><th>Client</th><th>Aparat</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th></tr></thead><tbody>${rows.map(i=>{const bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";return `<tr><td>${esc(i.Data||i.data||"")}</td><td>${esc(i.Client||i.client||i.Locatie||i.Locatie||"")}</td><td><strong>${esc(i.Aparat||i.aparat||i["ID Aparat"]||"")}</strong></td><td>${esc(i.Tehnician||i.tehnician||"")}</td><td>${esc(i["Tip interventie"]||i.tipInterventie||"")}</td><td>${esc(Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"")}</td><td>${esc(i["Tip filtru"]||i.tipFiltru||"")}</td><td>${esc(i["Urmatoarea interventie"]||i.urmatoareaInterventie||i["Urmator schimb"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru criteriile selectate.</div>'}
   </section>`;
@@ -1260,8 +1278,7 @@ function commercialMachines(){
          <option value="">Toate judetele</option>
          ${commercialCounties().map(j=>`<option value="${esc(j)}" ${normalizeCounty(j)===normalizeCounty(commercialCounty)?'selected':''}>${esc(j)}</option>`).join("")}
        </select>
-       <button class="secondaryButton" onclick="commercialClearFilters()">Sterge filtrele</button><button class="secondaryButton" onclick="exportCommercialFilters()">Export Schimbari filtre</button>
-       <button class="secondaryButton" onclick="exportCommercialMachines()">Export Aparate</button>
+       <button class="secondaryButton" onclick="commercialClearFilters()">Sterge filtrele</button>
      </div>
    </div>
    ${rows.length?`<div class="tableWrap"><table class="machineTable"><thead><tr>
@@ -1336,44 +1353,52 @@ async function loginCommercial(){
   }catch(e){msg(e.message||"Nu am putut valida accesul Comercial.",false)}
 }
 function logoutCommercial(){commercialSession=null;commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[]};commercialCounty="";searchTerm="";showAccessPage()}
-async function exportCommercialMachines(){
+function commercialActiveMachineRows(){
+  return (commercialDb.Aparate||[]).filter(machineIsActiveForTechnician).map(m=>({...m}));
+}
+function commercialExportFilterRows(){
+  const previousSearch=searchTerm, previousCounty=commercialCounty;
+  searchTerm=""; commercialCounty="";
+  const allRows=commercialFilterRows();
+  searchTerm=previousSearch; commercialCounty=previousCounty;
+  return allRows.map(x=>({
+    ...x.f,
+    Client: machineClient(x.machine),
+    "Cod OFRESH": x.machine["Cod OFRESH"]||"",
+    "Serie Aparat": x.machine["Serie Aparat"]||x.machine.Serie||x.machine.serie||"",
+    Judet: commercialCountyForMachine(x.machine),
+    Adresa: x.machine.Adresa||x.machine.adresa||x.loc.Adresa||x.loc.adresa||"",
+    Zona: x.machine.Zona||x.machine.zona||x.loc.Zona||x.loc.zona||""
+  }));
+}
+async function exportCommercialWorkbook(){
   try{
     await excelReady();
-    const rows=commercialFilteredRows().map(r=>({...r}));
-    if(!rows.length)return msg("Nu exista aparate pentru exportul curent.",false);
-    const ws=XLSX.utils.json_to_sheet(rows);
+    const aparate=commercialActiveMachineRows();
+    const filtre=commercialExportFilterRows();
+    const interventii=(commercialDb.Interventii||[]).map(i=>({...i}));
     const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Aparate Comercial");
-    XLSX.writeFile(wb,"OFRESH_Aparate_Comercial.xlsx");
-  }catch(e){msg(e.message||"Nu am putut exporta aparatele.",false)}
+    const wsA=XLSX.utils.json_to_sheet(aparate.length?aparate:[{"Informatii":"Nu exista aparate active."}]);
+    const wsF=XLSX.utils.json_to_sheet(filtre.length?filtre:[{"Informatii":"Nu exista inregistrari de filtre."}]);
+    const wsI=XLSX.utils.json_to_sheet(interventii.length?interventii:[{"Informatii":"Nu exista interventii returnate de server."}]);
+    XLSX.utils.book_append_sheet(wb,wsA,"Aparate active");
+    XLSX.utils.book_append_sheet(wb,wsF,"Schimbari filtre");
+    XLSX.utils.book_append_sheet(wb,wsI,"Istoric interventii");
+    XLSX.writeFile(wb,"OFRESH_Export_Complet.xlsx");
+    msg(`Export complet generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii.`);
+  }catch(e){msg(e?.message||"Nu am putut genera exportul complet. Verifica internetul si incearca din nou.",false)}
 }
-async function exportCommercialInterventions(){
-  try{
-    await excelReady();
-    const allRows=Array.isArray(commercialDb?.Interventii)?commercialDb.Interventii:[];
-    const filteredRows=commercialInterventionRows();
-    const rows=filteredRows.map(i=>({...i}));
-    if(!rows.length){
-      if(!allRows.length)return msg("Nu exista interventii incarcate pentru utilizatorul Comercial. Iesiti si autentificati-va din nou pentru reincarcarea datelor.",false);
-      return msg("Nu exista interventii pentru filtrele sau cautarea selectata. Sterge filtrele si incearca din nou.",false);
-    }
-    const ws=XLSX.utils.json_to_sheet(rows);
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,"Interventii Comercial");
-    XLSX.writeFile(wb,"OFRESH_Interventii_Comercial.xlsx");
-    msg("Exportul interventiilor a fost pornit.",true);
-  }catch(e){
-    console.error("Export interventii Comercial:",e);
-    msg((e&&e.message)||"Nu am putut exporta interventiile. Verifica conexiunea la internet si incearca din nou.",false);
-  }
-}
-async function exportCommercialFilters(){try{await excelReady();const rows=commercialFilterRows().map(x=>({...x.f,Client:machineClient(x.machine),"Cod OFRESH":x.machine["Cod OFRESH"]||"","Serie Aparat":x.machine["Serie Aparat"]||"",Judet:commercialCountyForMachine(x.machine)}));if(!rows.length)return msg("Nu exista schimbari de filtre pentru exportul curent.",false);const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Schimbari filtre");XLSX.writeFile(wb,"OFRESH_Schimbari_Filtre_Comercial.xlsx");}catch(e){msg(e.message||"Nu am putut exporta schimbarile de filtre.",false)}}
+// Pastreaza compatibilitatea cu eventuale apeluri vechi; toate exporta acelasi fisier complet.
+async function exportCommercialMachines(){return exportCommercialWorkbook()}
+async function exportCommercialInterventions(){return exportCommercialWorkbook()}
+async function exportCommercialFilters(){return exportCommercialWorkbook()}
+
 function commercialPage(){
   const navEl=document.getElementById("nav"),settingsEl=document.getElementById("settingsNav");
   if(navEl){ if(adminSession){ nav(); } else { navEl.innerHTML=`<button class="active" onclick="commercialPage()"><span class="navIcon">💼</span><span>Comercial</span></button>`; } }
   if(settingsEl)settingsEl.style.display="none";
 
-  const machines=Array.isArray(commercialDb.Aparate)?commercialDb.Aparate:[];
+  const machines=(Array.isArray(commercialDb.Aparate)?commercialDb.Aparate:[]).filter(commercialMachineVisible);
   const filters=Array.isArray(commercialDb.Filtre)?commercialDb.Filtre:[];
   const clients=new Set();
   machines.forEach(m=>{const c=String(machineClient(m)||"").trim(); if(c) clients.add(c.toLowerCase());});
@@ -1394,15 +1419,14 @@ function commercialPage(){
   document.getElementById("app").innerHTML=`
     <section class="commercialDash">
       <div class="commercialDashHeader">
-        <div class="commercialDashBrand">
-          <img src="data:image/png;base64,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' alt="OFRESH">
+        <div class="commercialDashBrand"><div class="commercialWordmark" aria-label="OFRESH">OFRESH</div>
           <div><div class="commercialEyebrow">PORTOFOLIU COMERCIAL</div><h2>Comercial</h2><p>Aparate, clienti si schimbari de filtre</p></div>
         </div>
         <div class="commercialDashActions">
           <button class="primary" onclick="commercialTab='aparate';commercialPage()">Aparate</button>
           <button onclick="commercialTab='filtre';commercialPage()">Schimbari filtre</button>
           <button onclick="commercialTab='interventii';commercialPage()">Istoric interventii</button>
-          <button onclick="exportCommercialMachines()">Export Aparate</button>
+          <button class="primary" onclick="exportCommercialWorkbook()">Export complet (Excel)</button>
           <button onclick="adminSession ? adminBackToModules() : logoutCommercial()">← Inapoi</button>
         </div>
       </div>
@@ -1416,7 +1440,7 @@ function commercialPage(){
       <div class="commercialInfoGrid">
         <div class="commercialInfo"><h3>Schimbari filtre</h3><p>Situatia actuala din portofoliu</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>In urmatoarele 30 zile</span><b>${dueSoon}</b></div><div class="commercialMiniRow"><span>Expirate</span><b>${expired}</b></div><div class="commercialMiniRow"><span>Fara scadenta</span><b>${withoutDate}</b></div></div></div>
         <div class="commercialInfo"><h3>Portofoliu pe judete</h3><p>Primele judete dupa numarul de aparate</p><div class="commercialMiniRows">${topCounties.length?topCounties.map(([j,n])=>`<div class="commercialMiniRow"><span>${esc(j)}</span><b>${n}</b></div>`).join(""): '<div class="commercialMiniRow"><span>Nu exista date</span><b>0</b></div>'}</div></div>
-        <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="commercialTab='interventii';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Export aparate</span><b style="cursor:pointer" onclick="exportCommercialMachines()">Export →</b></div></div></div>
+        <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="commercialTab='interventii';commercialPage()">Deschide →</b></div></div></div>
       </div>
     </section>
     ${commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialInterventions()}`;
@@ -1635,12 +1659,11 @@ function clientOptions(selectedId="") {
   return source.map(c=>{const id=clientId(c); const name=clientName(c); const place=[c.Adresa,c.Zona,c.Oras,c.Judet].filter(Boolean).join(" - "); return `<option value="${esc(id)}" ${String(id)===String(selectedId)?"selected":""}>${esc(name)}${place?" — "+esc(place):""}</option>`}).join("");
 }
 function machineIsActiveForTechnician(m){
-  // Tehnicianul nu vede aparate inactive/dezactivate/retrase, inclusiv cele
-  // care au data retragerii completata chiar daca Status nu a fost actualizat.
-  const status=String(m?.Status||m?.status||m?.Situatie||m?.situatie||m?.["Status aparat"]||"Activ").trim().toLowerCase();
-  const inactive=["inactiv","inactiva","inactivă","inactive","retras","retrasa","retrasă","dezactivat","dezactivata","dezactivată","dezactivare","scos din uz","casat","0","false","nu"];
-  const retirementDate=String(m?.["Data retragere"]||m?.["Data Retragere"]||m?.["Data retragerii"]||m?.dataRetragere||m?.data_retragere||"").trim();
-  return !inactive.includes(status) && !retirementDate;
+  // Tehnicianul nu vede aparatele inactive/retrase si nici aparatele cu data retragerii completata.
+  const status=String(m?.Status||m?.status||m?.Activ||m?.activ||"Activ").trim().toLowerCase();
+  const withdrawn=String(m?.["Data retragere"]||m?.["Data Retragere"]||m?.dataRetragere||m?.data_retragere||"").trim();
+  const inactive=["inactiv","inactiva","inactivă","inactive","retras","retrasa","retrasă","dezactivat","dezactivata","dezactivată","dezactivat(a)","suspendat","suspendata","suspendată","0","false","nu"];
+  return !inactive.includes(status) && !withdrawn;
 }
 function machinesForClient(clientValue){
   const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(clientValue));
@@ -2060,19 +2083,7 @@ async function rawSave(sheet,rec,idField,old){const p={action:old?"update":"add"
 async function saveSheet(sheet,rec,idField,old){try{await rawSave(sheet,rec,idField,old);closeModal();msg("Salvat cu succes.");await load()}catch(e){msg(e.message,false)}}
 async function deleteRecord(sheet,idValue){if(!idValue)return;if(!confirm("Sigur vrei sa stergi aceasta inregistrare?"))return;const realSheet=sheet==="Clienti"?"Locatii":sheet;const realIdField=realSheet==="Locatii"?"ID Locatie":realSheet==="Aparate"?"Cod OFRESH":realSheet==="Filtre"?"ID Filtru":realSheet==="Stoc"?"ID Stoc":realSheet==="Tehnicieni"?"ID Tehnician":"ID Produs";try{const res=await api({action:"delete",sheet:realSheet,idField:realIdField,idValue});if(res&&res.success===false)throw new Error(res.error||"Eroare stergere");msg("Sters cu succes.");await load()}catch(e){msg(e.message,false)}}
 function loadScript(src,check){return new Promise((resolve,reject)=>{if(check())return resolve();const s=document.createElement("script");s.src=src;s.onload=()=>check()?resolve():reject(new Error("Modul indisponibil"));s.onerror=reject;document.head.appendChild(s)})}
-async function excelReady(){
-  if(window.XLSX)return;
-  const sources=[
-    "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
-    "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
-  ];
-  let lastError;
-  for(const src of sources){
-    try{await loadScript(src,()=>!!window.XLSX);if(window.XLSX)return;}
-    catch(e){lastError=e;}
-  }
-  throw lastError||new Error("Nu s-a putut incarca modulul Excel. Verifica conexiunea la internet.");
-}
+async function excelReady(){await loadScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",()=>!!window.XLSX)}
 async function exportSheet(sheet,filename){try{await excelReady();const rows=(db[sheet]||[]).map(r=>({...r}));const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Raport");XLSX.writeFile(wb,filename)}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
 async function exportInvoice(){try{await excelReady();const rows=(db.Interventii||[]).filter(i=>i.deFacturat===true||i.solicitareClient===true||i.SolicitareClient===true||i["Solicitare client"]===true||String(i["De facturat"]||"").toUpperCase()==="DA"||String(i["SolicitareClient"]||"").toUpperCase()==="DA"||String(i["Solicitare client"]||"").toUpperCase()==="DA");const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"De facturat");XLSX.writeFile(wb,"OFRESH_De_facturat.xlsx")}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
 async function prepareImport(input){try{await excelReady();const file=input.files[0];if(!file)return;const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
@@ -2448,6 +2459,20 @@ else {
   setInterval(tick,1000);
 })();
 </script>
+
+<script>
+// Fallback pentru logo-uri care nu se pot incarca; nu lasa pictograma de imagine lipsa.
+window.addEventListener("error",function(ev){
+  const img=ev.target;
+  if(!(img instanceof HTMLImageElement))return;
+  const alt=(img.getAttribute("alt")||"").toUpperCase();
+  if(!alt.includes("OFRESH") && !img.className.toString().toLowerCase().includes("logo") && !img.closest(".commercialDashBrand"))return;
+  const fallback=document.createElement("span");
+  fallback.className="ofreshLogoFallback";fallback.textContent="OFRESH";fallback.setAttribute("aria-label","OFRESH");
+  fallback.style.cssText="display:inline-flex;align-items:center;justify-content:center;min-width:90px;min-height:42px;padding:8px 12px;border-radius:10px;background:#e9f7f2;color:#16836d;font-weight:950;font-size:22px;letter-spacing:-1px;border:1px solid #cde9df";
+  img.replaceWith(fallback);
+},true);
+</script>
 </body></html>
 <style id="ofresh-final-dashboard-map">
 /* Final dashboard layout: no duplicate module cards above the map. */
@@ -2516,4 +2541,11 @@ body.ofreshAccess .accessVisualFinal::before,body.ofreshAccess .accessVisualFina
   #techLoginScreen .techLoginCard{padding:24px 18px!important;border-radius:18px!important}
   #techLoginScreen h2{font-size:22px}
 }
+/* OFRESH Comercial - aliniere corecta a celor 5 indicatori */
+.commercialKpis{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important}
+.commercialKpi{min-width:0;padding:15px!important}
+.commercialKpi strong{font-size:clamp(19px,1.5vw,25px)!important}
+@media(max-width:1100px){.commercialKpis{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:700px){.commercialKpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.commercialKpi{padding:12px!important;gap:9px!important}.commercialKpiIcon{width:38px;height:38px;font-size:20px}}
+@media(max-width:420px){.commercialKpis{grid-template-columns:1fr!important}}
 </style>
