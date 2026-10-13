@@ -1889,10 +1889,9 @@ async function compressInterventionImage(file){
     reader.onload=()=>{
       const img=new Image();
       img.onload=()=>{
-        // Keep the same proven 4-chunk upload batches. Reduce image payload
-        // before upload to cut the number of Apps Script round-trips on mobile.
-        // The backend limit remains 180,000 Base64 characters; target 90,000.
-        let max=560, quality=.46, data="";
+        // Apps Script accepts max 180,000 base64 characters and 100 chunks.
+        // Keep each mobile photo safely below that limit.
+        let max=640, quality=.55, data="";
         const canvas=document.createElement("canvas");
         const ctx=canvas.getContext("2d");
         const make=()=>{
@@ -1905,11 +1904,11 @@ async function compressInterventionImage(file){
         };
         for(let attempt=0;attempt<12;attempt++){
           data=make();
-          if(data.length<=90000)break;
+          if(data.length<=150000)break;
           if(quality>.24)quality-=.08;
           else {max=Math.max(240,Math.round(max*.82));quality=.42;}
         }
-        if(!data||data.length>90000)return reject(new Error("Fotografia nu poate fi redusa suficient. Incearca o poza mai mica."));
+        if(!data||data.length>150000)return reject(new Error("Fotografia nu poate fi redusa suficient. Incearca o poza mai mica."));
         resolve({dataUrl:data,mimeType:"image/jpeg",fileName:(file.name||"interventie.jpg").replace(/\.[^.]+$/i,"")+".jpg"});
       };
       img.onerror=()=>reject(new Error("Nu am putut procesa fotografia."));
@@ -1988,13 +1987,13 @@ async function saveIntervention(){
     }
     window.__ofreshInterventionPhotos=[];
     closeModal();
-    // Intervention and every photo are confirmed saved before closing.
-    // Do not wait for a full database reload to release the technician UI.
+    // Reload data, then return technicians to their home screen so they can
+    // immediately start a new intervention for another apparatus.
+    await load();
     if(techSession && !adminSession){
       showTechnicianHome();
     }
     msg(photos.length?`Interventia si ${photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
-    load(true).catch(err=>console.warn("Reimprospatarea datelor in fundal a esuat:",err));
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Incearca din nou";}
