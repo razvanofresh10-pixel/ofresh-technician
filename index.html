@@ -1377,15 +1377,42 @@ async function exportCommercialWorkbook(){
     const aparate=commercialActiveMachineRows();
     const filtre=commercialExportFilterRows();
     const interventii=(commercialDb.Interventii||[]).map(i=>({...i}));
+    // Fotografiile sunt salvate separat in Drive; includem linkuri clicabile in Excel.
+    const photoUrlsFor = row => {
+      const found=[];
+      Object.keys(row||{}).forEach(k=>{
+        if(!/(fotografii|fotografie|poze|poza|photos?|image.?urls?)/i.test(k)) return;
+        const value=row[k];
+        const values=Array.isArray(value)?value:[value];
+        values.forEach(v=>String(v||'').split(/[\n\r;,]+/).map(x=>x.trim()).filter(Boolean).forEach(url=>{
+          if(/^https?:\/\//i.test(url)&&!found.includes(url))found.push(url);
+        }));
+      });
+      return found;
+    };
+    const intRows=interventii.map(row=>{const clean={...row};delete clean.Fotografii;delete clean.Fotografie;delete clean.Poze;delete clean.Poza;delete clean.Photos;delete clean.Photo;return {...clean,__photoUrls:photoUrlsFor(row)};});
+    const maxPhotos=Math.max(0,...intRows.map(r=>r.__photoUrls.length));
+    const excelInterventii=intRows.map(r=>{const out={};Object.keys(r).filter(k=>k!=='__photoUrls').forEach(k=>out[k]=r[k]);for(let p=0;p<maxPhotos;p++)out['Fotografie '+(p+1)]=r.__photoUrls[p]?'Deschide fotografia '+(p+1):'';return out;});
     const wb=XLSX.utils.book_new();
     const wsA=XLSX.utils.json_to_sheet(aparate.length?aparate:[{"Informatii":"Nu exista aparate active."}]);
     const wsF=XLSX.utils.json_to_sheet(filtre.length?filtre:[{"Informatii":"Nu exista inregistrari de filtre."}]);
-    const wsI=XLSX.utils.json_to_sheet(interventii.length?interventii:[{"Informatii":"Nu exista interventii returnate de server."}]);
+    const wsI=XLSX.utils.json_to_sheet(excelInterventii.length?excelInterventii:[{"Informatii":"Nu exista interventii returnate de server."}]);
+    if(excelInterventii.length&&maxPhotos){
+      const headers=Object.keys(excelInterventii[0]);
+      for(let r=0;r<intRows.length;r++){
+        for(let p=0;p<maxPhotos;p++){
+          const url=intRows[r].__photoUrls[p]; if(!url)continue;
+          const col=headers.indexOf('Fotografie '+(p+1)); if(col<0)continue;
+          const addr=XLSX.utils.encode_cell({r:r+1,c:col});
+          if(wsI[addr])wsI[addr].l={Target:url,Tooltip:'Deschide fotografia salvata in Google Drive'};
+        }
+      }
+    }
     XLSX.utils.book_append_sheet(wb,wsA,"Aparate active");
     XLSX.utils.book_append_sheet(wb,wsF,"Schimbari filtre");
     XLSX.utils.book_append_sheet(wb,wsI,"Istoric interventii");
     XLSX.writeFile(wb,"OFRESH_Export_Complet.xlsx");
-    msg(`Export complet generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii.`);
+    msg(`Export generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii. Fotografiile sunt incluse ca linkuri clicabile.`);
   }catch(e){msg(e?.message||"Nu am putut genera exportul complet. Verifica internetul si incearca din nou.",false)}
 }
 // Pastreaza compatibilitatea cu eventuale apeluri vechi; toate exporta acelasi fisier complet.
@@ -1426,7 +1453,7 @@ function commercialPage(){
           <button class="primary" onclick="commercialTab='aparate';commercialPage()">Aparate</button>
           <button onclick="commercialTab='filtre';commercialPage()">Schimbari filtre</button>
           <button onclick="commercialTab='interventii';commercialPage()">Istoric interventii</button>
-          <button class="primary" onclick="exportCommercialWorkbook()">Export complet (Excel)</button>
+          <button class="primary" onclick="exportCommercialWorkbook()">Export</button>
           <button onclick="adminSession ? adminBackToModules() : logoutCommercial()">← Inapoi</button>
         </div>
       </div>
