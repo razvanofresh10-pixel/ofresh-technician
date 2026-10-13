@@ -865,9 +865,17 @@ function showTechnicianHome(){
   <div class="quickGrid"><button type="button" onclick="openInterventionForTechnician();return false;"><span>🔧 INTERVENTIE</span><strong>Inregistreaza interventie</strong><small>Completeaza lucrarea din teren</small></button><button type="button" onclick="goTechLocations();return false;"><span>📍 CLIENTI</span><strong>Gaseste un client</strong><small>Adresa, Waze, Maps si GPS curent</small></button><button type="button" onclick="openMachineScanner();return false;"><span>📷 QR APARAT</span><strong>Scaneaza aparatul</strong><small>Deschide automat aparatul din QR</small></button></div>
   </div>`;
 }
+function clientIsActiveForTechnician(c){
+  const raw=String(c?.Status||c?.status||c?.Estado||c?.estado||c?.Activ||c?.activ||"").trim().toLowerCase();
+  if(!raw)return true;
+  return !["inactiv","inactiva","inactive","dezactivat","dezactivata","dezactivată","suspendat","suspendata","suspendată","inchis","inchisa","închis","închisă","retras","retrasa","retrasă","0","false","nu"].includes(raw);
+}
+function technicianVisibleClients(){
+  return (db.Clienti||[]).filter(c=>clientIsActiveForTechnician(c));
+}
 function goTechLocations(){
   techView="clients";
-  const rows=(db.Clienti||[]);
+  const rows=technicianVisibleClients();
   document.getElementById("app").innerHTML=`<section class="panel"><div class="panelHeader"><div><h3>Clienti OFRESH</h3><p id="techClientCount">${rows.length} clienti disponibili. Cauta clientul dupa nume, oras sau adresa.</p></div><button class="secondaryButton" onclick="showTechnicianHome()">Inapoi</button></div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 16px">
     <input id="techClientSearch" type="search" placeholder="Cauta client..." autocomplete="off" style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px">
@@ -896,7 +904,7 @@ function renderTechClientCards(rows){
 }
 function filterTechClients(){
   const q=String(document.getElementById("techClientSearch")?.value||"").trim().toLowerCase();
-  const rows=(db.Clienti||[]).filter(l=>{
+  const rows=technicianVisibleClients().filter(l=>{
     if(!q)return true;
     const hay=[clientName(l),l.Adresa||l.adresa||"",l.Oras||l.oras||"",l.Judet||l.judet||"",l.Zona||l.zona||""].join(" ").toLowerCase();
     return hay.includes(q);
@@ -1604,7 +1612,13 @@ function openMachine(r={}){
   if(cs){cs.addEventListener("input",fillClientData);cs.addEventListener("change",fillClientData);}
 }
 function clientOptions(selectedId="") {
-  return (db.Clienti||[]).map(c=>{const id=clientId(c); const name=clientName(c); const place=[c.Adresa,c.Zona,c.Oras,c.Judet].filter(Boolean).join(" - "); return `<option value="${esc(id)}" ${String(id)===String(selectedId)?"selected":""}>${esc(name)}${place?" — "+esc(place):""}</option>`}).join("");
+  const source=(typeof techSession!=="undefined"&&techSession&&!techSession.adminBypass)?technicianVisibleClients():(db.Clienti||[]);
+  return source.map(c=>{const id=clientId(c); const name=clientName(c); const place=[c.Adresa,c.Zona,c.Oras,c.Judet].filter(Boolean).join(" - "); return `<option value="${esc(id)}" ${String(id)===String(selectedId)?"selected":""}>${esc(name)}${place?" — "+esc(place):""}</option>`}).join("");
+}
+function machineIsActiveForTechnician(m){
+  // Campurile goale raman active implicit, ca in formularul de aparat.
+  const status=String(m?.Status||m?.status||"Activ").trim().toLowerCase();
+  return !["inactiv","inactive","retras","retrasa","retrasă","dezactivat","dezactivata","dezactivată","inactive"].includes(status);
 }
 function machinesForClient(clientValue){
   const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(clientValue));
@@ -1613,11 +1627,14 @@ function machinesForClient(clientValue){
   return (db.Aparate||[]).filter(m=>{
     const mid=String(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie||"").trim().toLowerCase();
     const mn=machineClient(m).trim().toLowerCase();
-    return (mid && mid===cid) || (mn && mn===name);
+    const belongs=(mid && mid===cid) || (mn && mn===name);
+    // Administratorul vede toate aparatele; tehnicianul vede doar aparatele active.
+    const roleAllows=!(techSession && !techSession.adminBypass) || machineIsActiveForTechnician(m);
+    return belongs && roleAllows;
   });
 }
 function openInterventionClientSearch(){
-  const clients=(db.Clienti||[]);
+  const clients=technicianVisibleClients();
   const rows=clients.map(c=>({id:clientId(c),name:clientName(c),address:[c.Adresa||"",c.Oras||"",c.Judet||""].filter(Boolean).join(", ")}));
   modal("Cauta client pentru interventie",`
     <div class="field wide">
@@ -1740,7 +1757,7 @@ function openIntervention(existing={}){
     const list=machinesForClient(cs.value);
     const root=document.getElementById("apparatusChooser");
     if(!list.length){
-      root.innerHTML='<div class="notice">Nu exista aparat asociat acestui client.</div>';
+      root.innerHTML=techSession&&!techSession.adminBypass?'<div class="notice">Nu exista aparate active asociate acestui client.</div>':'<div class="notice">Nu exista aparat asociat acestui client.</div>';
       return;
     }
 
