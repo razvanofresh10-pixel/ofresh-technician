@@ -1923,12 +1923,21 @@ async function uploadInterventionPhotoFile(file,meta,index){
   const prepared=await compressInterventionImage(file);
   const base64=prepared.dataUrl.split(",")[1]||"";
   const uploadId="UPL-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);
-  const chunkSize=1200;
+  // Backend Apps Script accepts chunks up to 2800 characters. Send 2600-char
+  // chunks in small batches to reduce sequential round-trips on mobile networks.
+  const chunkSize=2600;
   const totalChunks=Math.ceil(base64.length/chunkSize);
-  for(let i=0;i<totalChunks;i++){
-    const chunk=base64.slice(i*chunkSize,(i+1)*chunkSize);
-    const r=await api({action:"uploadPhotoChunk",uploadId,chunkIndex:i,totalChunks,chunk});
-    if(r&&r.success===false)throw new Error(r.error||"Eroare la incarcarea fotografiei.");
+  const batchSize=4;
+  for(let start=0;start<totalChunks;start+=batchSize){
+    const batch=[];
+    for(let i=start;i<Math.min(start+batchSize,totalChunks);i++){
+      const chunk=base64.slice(i*chunkSize,(i+1)*chunkSize);
+      batch.push(api({action:"uploadPhotoChunk",uploadId,chunkIndex:i,totalChunks,chunk}).then(r=>{
+        if(r&&r.success===false)throw new Error(r.error||"Eroare la incarcarea fotografiei.");
+        return r;
+      }));
+    }
+    await Promise.all(batch);
   }
   const standardFileName=`OFRESH_${meta.interventionId}_FOTO_${String(index+1).padStart(2,"0")}.jpg`;
   const result=await api({action:"finalizePhotoUpload",uploadId,totalChunks,interventionId:meta.interventionId,client:meta.client,aparat:meta.aparat,tehnician:meta.tehnician,data:meta.data,photoIndex:index+1,fileName:standardFileName,mimeType:prepared.mimeType});
@@ -1978,8 +1987,13 @@ async function saveIntervention(){
     }
     window.__ofreshInterventionPhotos=[];
     closeModal();
-    msg(photos.length?`Interventia si ${photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.");
+    // Reload data, then return technicians to their home screen so they can
+    // immediately start a new intervention for another apparatus.
     await load();
+    if(techSession && !adminSession){
+      showTechnicianHome();
+    }
+    msg(photos.length?`Interventia si ${photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Incearca din nou";}
