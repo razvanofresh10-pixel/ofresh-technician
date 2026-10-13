@@ -1930,7 +1930,8 @@ async function uploadInterventionPhotoFile(file,meta,index){
     const r=await api({action:"uploadPhotoChunk",uploadId,chunkIndex:i,totalChunks,chunk});
     if(r&&r.success===false)throw new Error(r.error||"Eroare la incarcarea fotografiei.");
   }
-  const result=await api({action:"finalizePhotoUpload",uploadId,totalChunks,interventionId:meta.interventionId,client:meta.client,aparat:meta.aparat,tehnician:meta.tehnician,data:meta.data,photoIndex:index+1,fileName:prepared.fileName,mimeType:prepared.mimeType});
+  const standardFileName=`OFRESH_${meta.interventionId}_FOTO_${String(index+1).padStart(2,"0")}.jpg`;
+  const result=await api({action:"finalizePhotoUpload",uploadId,totalChunks,interventionId:meta.interventionId,client:meta.client,aparat:meta.aparat,tehnician:meta.tehnician,data:meta.data,photoIndex:index+1,fileName:standardFileName,mimeType:prepared.mimeType});
   if(!result||result.success===false)throw new Error(result?.error||"Fotografia nu a putut fi salvata.");
   return result;
 }
@@ -1992,7 +1993,8 @@ async function saveStoc(old){
   const rec={"ID Stoc":old||uid("STK"),"Cod produs":v("codProdus"),Produs:v("tip"),Categorie:v("categorie")||"Filtre",Locatie:v("loc"),Cantitate:Number(v("cant")||0),Consum:Number(v("cons")||0),"Prag minim":Number(v("prag")||0),Unitate:v("unitate")||"buc","Data actualizare":new Date().toISOString().slice(0,10),Observatii:v("obs")};
   if(!rec.Produs||rec.Cantitate<0)return msg("Completeaza tipul filtrului si cantitatea.",false);
   if(!old){
-    const existing=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").trim().toLowerCase()===String(rec.Produs).trim().toLowerCase());
+    const normStock=x=>String(x||"").trim().toLowerCase().replace(/\s+/g," ");
+    const existing=(db.Stoc||[]).find(x=>normStock(x.Produs||x.produs)===normStock(rec.Produs)&&normStock(x.Locatie||x.locatie)===normStock(rec.Locatie||""));
     if(existing){
       const merged={...existing,Cantitate:Number(existing.Cantitate||existing.cantitate||0)+rec.Cantitate,Consum:Number(existing.Consum||existing.consum||existing.Consumat||0), "Prag minim":rec["Prag minim"]||existing["Prag minim"]||0,Unitate:rec.Unitate||existing.Unitate||"buc","Data actualizare":rec["Data actualizare"],Observatii:[existing.Observatii,rec.Observatii].filter(Boolean).join(" | ")};
       await saveSheet("Stoc",merged,"ID Stoc",existing["ID Stoc"]||existing.id||"");
