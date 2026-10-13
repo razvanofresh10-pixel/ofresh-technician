@@ -1927,7 +1927,7 @@ async function uploadInterventionPhotoFile(file,meta,index){
   // chunks in small batches to reduce sequential round-trips on mobile networks.
   const chunkSize=2600;
   const totalChunks=Math.ceil(base64.length/chunkSize);
-  const batchSize=4;
+  const batchSize=8; // Mai multe fragmente in paralel, cu limita backend de 2800 caractere pastrata.
   for(let start=0;start<totalChunks;start+=batchSize){
     const batch=[];
     for(let i=start;i<Math.min(start+batchSize,totalChunks);i++){
