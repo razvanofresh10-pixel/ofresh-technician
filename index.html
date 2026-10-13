@@ -1978,31 +1978,22 @@ async function saveIntervention(){
       const fr={"ID Filtru":old?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":c?clientId(c):"","Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
       await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
     }
-    // Actualizeaza local lista si inchide formularul imediat ce interventia
-    // (si eventualele actualizari de stoc/filtru) au fost confirmate de backend.
-    // Fotografiile continua in fundal, astfel incat tehnicianul poate incepe
-    // imediat urmatorul aparat fara sa astepte finalizarea uploadului.
-    db.Interventii=db.Interventii||[];
-    db.Interventii.unshift(rec);
-    saveCachedData();
+    if(photos.length){
+      msg("Interventia este salvata. Se incarca fotografia 1 din "+photos.length+"...",true);
+      for(let i=0;i<photos.length;i++){
+        msg("Se incarca fotografia "+(i+1)+" din "+photos.length+"...",true);
+        await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),data:v("data")},i);
+      }
+    }
     window.__ofreshInterventionPhotos=[];
     closeModal();
-    if(techSession && !adminSession){ showTechnicianHome(); }
-    msg(photos.length?`Interventia este salvata. Se incarca ${photos.length} fotografie/fotografii in fundal.`:"Interventia a fost salvata.",true);
-    if(photos.length){
-      (async()=>{
-        try{
-          const photoTech=(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||"");
-          for(let i=0;i<photos.length;i++){
-            msg(`Fotografii in curs: ${i+1}/${photos.length}. Poti continua cu urmatorul aparat.`,true);
-            await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:photoTech,data:rec.Data},i);
-          }
-          msg(`Interventia si toate cele ${photos.length} fotografii au fost salvate.`,true);
-        }catch(photoError){
-          msg(`Interventia este salvata, dar o fotografie nu s-a incarcat: ${photoError?.message||photoError}. Verifica foaia Poze Interventii inainte sa reincarci.`,false);
-        }
-      })();
+    // Reload data, then return technicians to their home screen so they can
+    // immediately start a new intervention for another apparatus.
+    await load();
+    if(techSession && !adminSession){
+      showTechnicianHome();
     }
+    msg(photos.length?`Interventia si ${photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Incearca din nou";}
