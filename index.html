@@ -1986,14 +1986,14 @@ async function saveIntervention(){
       }
     }
     window.__ofreshInterventionPhotos=[];
+    // Inchidem imediat dupa confirmarea salvarii interventiei si a tuturor fotografiilor.
+    // Reincarcarea intregii baze poate dura; o pornim in fundal ca sa nu tina tehnicianul blocat.
     closeModal();
-    // Reload data, then return technicians to their home screen so they can
-    // immediately start a new intervention for another apparatus.
-    await load();
     if(techSession && !adminSession){
       showTechnicianHome();
     }
     msg(photos.length?`Interventia si ${photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
+    load(true).catch(err=>console.warn("Reimprospatarea datelor in fundal a esuat:",err));
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Incearca din nou";}
