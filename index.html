@@ -2266,7 +2266,53 @@ async function saveStoc(old){
 }
 async function rawSave(sheet,rec,idField,old){const p={action:old?"update":"add",sheet,record:JSON.stringify(rec)};if(old){p.idField=idField;p.idValue=old}const res=await api(p);if(!res)throw new Error("Google Sheets nu a confirmat salvarea. Verifica conexiunea si incearca din nou.");if(res.success===false)throw new Error(res.error||"Eroare salvare");return res;}
 async function saveSheet(sheet,rec,idField,old){try{await rawSave(sheet,rec,idField,old);closeModal();msg("Salvat cu succes.");await load()}catch(e){msg(e.message,false)}}
-async function deleteRecord(sheet,idValue){if(!idValue)return;if(!confirm("Sigur vrei sa stergi aceasta inregistrare?"))return;const realSheet=sheet==="Clienti"?"Locatii":sheet;const realIdField=realSheet==="Locatii"?"ID Locatie":realSheet==="Aparate"?"Cod OFRESH":realSheet==="Filtre"?"ID Filtru":realSheet==="Stoc"?"ID Stoc":realSheet==="Tehnicieni"?"ID Tehnician":"ID Produs";try{const res=await api({action:"delete",sheet:realSheet,idField:realIdField,idValue});if(res&&res.success===false)throw new Error(res.error||"Eroare stergere");msg("Sters cu succes.");await load()}catch(e){msg(e.message,false)}}
+async function deleteRecord(sheet,idValue){
+  if(!idValue)return;
+  const realSheet=sheet==="Clienti"?"Locatii":sheet;
+  const realIdField=realSheet==="Locatii"?"ID Locatie":realSheet==="Aparate"?"Cod OFRESH":realSheet==="Filtre"?"ID Filtru":realSheet==="Stoc"?"ID Stoc":realSheet==="Tehnicieni"?"ID Tehnician":"ID Produs";
+  const apiDelete=async(sh,field,value)=>{const res=await api({action:"delete",sheet:sh,idField:field,idValue:value});if(!res||res.success===false)throw new Error((res&&res.error)||("Nu s-a confirmat stergerea din "+sh+"."));return res};
+  try{
+    if(sheet==="Clienti"){
+      const client=(db.Clienti||[]).find(c=>String(clientId(c))===String(idValue))||(db.Locatii||[]).find(c=>String(clientId(c))===String(idValue));
+      if(!client)throw new Error("Clientul nu mai exista in lista incarcata. Reincarca aplicatia si incearca din nou.");
+      if(isVirtualClient(client))throw new Error("Clientul este generat automat din aparate. Sterge clientul din inregistrarile reale sau verifica asocierea acestuia.");
+      const norm=v=>String(v==null?"":v).trim().toLocaleLowerCase("ro-RO").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+      const name=norm(clientName(client));
+      const clientCity=norm(client.Oras||client.oras||"");
+      const clientCounty=norm(client.Judet||client.judet||"");
+      const clientAddress=norm(client.Adresa||client.adresa||"");
+      const associated=(db.Aparate||[]).filter(m=>{
+        const mid=String(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie||"").trim();
+        if(mid && mid===String(idValue))return true;
+        if(norm(machineClient(m))!==name)return false;
+        const mc=norm(m.Oras||m.oras||"");
+        const mj=norm(m.Judet||m.judet||"");
+        const ma=norm(m.Adresa||m.adresa||"");
+        if(clientCity&&mc&&clientCity!==mc)return false;
+        if(clientCounty&&mj&&clientCounty!==mj)return false;
+        if(!clientCity&&!clientCounty&&!mc&&!mj&&clientAddress&&ma&&clientAddress!==ma)return false;
+        return true;
+      });
+      const machinesToDelete=[];
+      for(const m of associated){
+        const code=String(m["Cod OFRESH"]||m.codOfresh||"").trim();
+        if(!code)throw new Error("Nu am sters nimic: exista un aparat asociat clientului fara Cod OFRESH. Completeaza codul sau verifica aparatul inainte de stergere.");
+        machinesToDelete.push(code);
+      }
+      const promptText="Stergi clientul "+clientName(client)+"?\n\nVor fi sterse si "+machinesToDelete.length+" aparate asociate din foaia Aparate. Istoricul interventiilor si fotografiile NU vor fi sterse.";
+      if(!confirm(promptText))return;
+      for(const code of machinesToDelete)await apiDelete("Aparate","Cod OFRESH",code);
+      await apiDelete("Locatii","ID Locatie",String(idValue));
+      msg("Clientul si aparatele asociate au fost sterse. Istoricul interventiilor si fotografiile au fost pastrate.");
+      await load();
+      return;
+    }
+    if(!confirm("Sigur vrei sa stergi aceasta inregistrare?"))return;
+    await apiDelete(realSheet,realIdField,idValue);
+    msg("Sters cu succes.");
+    await load();
+  }catch(e){msg(e.message||"Eroare stergere",false);try{await load()}catch(_){}}
+}
 function loadScript(src,check){return new Promise((resolve,reject)=>{if(check())return resolve();const s=document.createElement("script");s.src=src;s.onload=()=>check()?resolve():reject(new Error("Modul indisponibil"));s.onerror=reject;document.head.appendChild(s)})}
 async function excelReady(){await loadScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",()=>!!window.XLSX)}
 async function exportAllClients(){
