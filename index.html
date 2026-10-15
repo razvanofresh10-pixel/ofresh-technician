@@ -1168,7 +1168,7 @@ function clientsPage(){
    </div>
    <div class="small" style="margin-top:8px">${rows.length} clienti gasiti din ${(db.Clienti||[]).length}.</div>
  </section>
- <section class="locationGrid">${rows.map(l=>`<div class="locationCard"><div class="locationCardTop"><span class="locationIcon">C</span><span class="statusDot">${esc(l.Status||"Activ")}</span></div><h3>${esc(clientName(l))}</h3><p>${esc(l.Adresa||l.adresa||"Adresa nespecificata")}</p><p>${esc(l.Zona||l.Oras||"")} ${esc(l.Judet||"")}</p><p>${esc(l["Persoana contact"]||l.contact||"")} ${esc(l.Telefon||l.telefon||"")}</p><div class="locationFooter"><div><strong>${machineCount(l)}</strong><span>aparate</span></div><div class="right"><button class="secondaryButton" onclick='openClient(${JSON.stringify(l)})'>Modifica</button>${isVirtualClient(l)?"":`<button class="dangerButton" onclick='deleteRecord("Clienti",${JSON.stringify(clientId(l))})'>Sterge</button>`}</div></div>${locationNavLinks(l)}<button class="secondaryButton" style="margin-top:8px" onclick='saveClientGPS(${JSON.stringify(clientId(l))})'>📌 Salveaza pozitia mea aici</button></div>`).join("")||'<div class="emptyState">Nu exista clienti care corespund cautarii.</div>'}</section>`;
+ <section class="locationGrid">${rows.map(l=>`<div class="locationCard"><div class="locationCardTop"><span class="locationIcon">C</span><span class="statusDot">${esc(l.Status||"Activ")}</span></div><h3>${esc(clientName(l))}</h3><p>${esc(l.Adresa||l.adresa||"Adresa nespecificata")}</p><p>${esc(l.Zona||l.Oras||"")} ${esc(l.Judet||"")}</p><p>${esc(l["Persoana contact"]||l.contact||"")} ${esc(l.Telefon||l.telefon||"")}</p><div class="locationFooter"><div><strong>${machineCount(l)}</strong><span>aparate</span></div><div class="right"><button class="secondaryButton" onclick='openClient(${JSON.stringify(l)})'>Modifica</button><button class="dangerButton" onclick='deleteRecord("Clienti",${JSON.stringify(clientId(l))})'>Sterge</button></div></div>${locationNavLinks(l)}<button class="secondaryButton" style="margin-top:8px" onclick='saveClientGPS(${JSON.stringify(clientId(l))})'>📌 Salveaza pozitia mea aici</button></div>`).join("")||'<div class="emptyState">Nu exista clienti care corespund cautarii.</div>'}</section>`;
  const inp=document.getElementById("clientSearchInput"); if(inp){inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length)}catch(e){}}
 }
 function clientPageSearch(el){searchTerm=String(el?.value||"");clientsPage()}
@@ -1183,10 +1183,28 @@ function ofreshExcelDetails(r){
 }
 function ofreshProducer(r){const d=ofreshExcelDetails(r);return d&&d.producer?d.producer:(r?.Producator||r?.producator||"");}
 function ofreshEquipmentType(r){const d=ofreshExcelDetails(r);return d&&d.equipment?d.equipment:(r?.["Tip Echipament"]||r?.tipEchipament||"");}
-function machinesPage(){
- const rows=(db.Aparate||[]).filter(matches);
- document.getElementById("app").innerHTML=pageHero("GESTIONARE ECHIPAMENTE","Aparate","",`<button class="secondaryButton" onclick="document.getElementById('excelFile').click()">Import Excel</button><button class="secondaryButton" onclick="exportSheet('Aparate','OFRESH_Aparate.xlsx')">Export Excel</button><button class="primaryButton" onclick="openMachine()">+ Adauga aparat</button><input id="excelFile" class="hidden" type="file" accept=".xlsx,.xls,.csv" onchange="prepareImport(this)">`)+`<section class="panel"><div class="panelHeader"><div><h3>Lista aparate</h3><p><strong>${rows.length}</strong> aparate afisate din ${db.Aparate.length} in baza de date. Sunt afisate toate campurile din Google Sheets.</p></div><span class="countBadge">${db.Aparate.length===961?'961 APARATE':'VERIFICA BAZA: '+db.Aparate.length}</span></div>${rows.length?`<div class="tableWrap"><table class="machineTable"><thead><tr><th>Cod OFRESH</th><th>Tip Echipament</th><th>Producator</th><th>Tip aparat</th><th>Serie Aparat</th><th>Client</th><th>Adresa</th><th>Zona</th><th>Data instalare</th><th>Data retragere</th><th>Status</th><th>Actiuni</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(machineCode(r))||'<span class="small">-</span>'}</td><td>${esc(ofreshEquipmentType(r))}</td><td>${esc(ofreshProducer(r))}</td><td><strong>${esc(machineType(r))}</strong></td><td><strong>${esc(r["Serie Aparat"]||r.Serie||r.serie||"")}</strong></td><td>${esc(machineClient(r))}</td><td>${esc(r.Adresa||r.adresa||"")}</td><td>${esc(r.Zona||r.zona||"")}</td><td>${esc(r["Data instalare"]||r.dataInstalare||"")}</td><td>${esc(r["Data retragere"]||r["Data Retragere"]||r.dataRetragere||"")}</td><td><span class="badge ${String(r.Status||r.status||"Activ").toLowerCase()==='retras'?'warningBadge':''}">${esc(r.Status||r.status||"Activ")}</span></td><td><div class="right"><button class="secondaryButton" onclick='openMachine(${JSON.stringify(r)})'>Modifica</button><button class="secondaryButton" onclick='qrMachine(${JSON.stringify(r)})'>QR</button></div></td></tr>`).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista aparate.</div>'}</section>`
+function machineSearchNormalize(value){return String(value==null?"":value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("ro-RO").replace(/\s+/g," ").trim();}
+function machineSearchFields(machine){
+ return [machineCode(machine),ofreshEquipmentType(machine),ofreshProducer(machine),machineType(machine),machine&&machine["Serie Aparat"],machine&&machine.Serie,machine&&machine.serie,machineClient(machine),machine&&machine.Adresa,machine&&machine.adresa,machine&&machine.Oras,machine&&machine.oras,machine&&machine.Judet,machine&&machine.judet,machine&&machine.Zona,machine&&machine.zona].map(machineSearchNormalize).filter(Boolean);
 }
+function machineSearchMatches(machine){
+ const term=machineSearchNormalize(searchTerm);
+ if(!term)return true;
+ return machineSearchFields(machine).some(value=>value.includes(term));
+}
+function machinesPage(){
+ const allMachines=db.Aparate||[];
+ const term=machineSearchNormalize(searchTerm);
+ // Prioritate potrivire exacta: cautarea "test" nu trebuie sa returneze "Pitesti" doar fiindca include literele t-e-s-t.
+ const exactRows=term?allMachines.filter(machine=>machineSearchFields(machine).some(value=>value===term)):[];
+ const rows=exactRows.length?exactRows:allMachines.filter(machineSearchMatches);
+ document.getElementById("app").innerHTML=pageHero("GESTIONARE ECHIPAMENTE","Aparate","Cauta dupa cod, serie, client, oras, judet, adresa, zona sau model. Meciurile sunt filtrate dupa campurile aparatului afisate in lista.",`<button class="secondaryButton" onclick="document.getElementById('excelFile').click()">Import Excel</button><button class="secondaryButton" onclick="exportSheet('Aparate','OFRESH_Aparate.xlsx')">Export Excel</button><button class="primaryButton" onclick="openMachine()">+ Adauga aparat</button><input id="excelFile" class="hidden" type="file" accept=".xlsx,.xls,.csv" onchange="prepareImport(this)">`)+`<section class="panel"><div class="clientSearchRow" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:15px"><div class="clientSearchBox" style="display:flex;gap:8px;align-items:center;flex:1;min-width:260px;border:1px solid #ccd8d5;border-radius:9px;padding:0 12px;background:#fff"><span>🔎</span><input id="machineSearchInput" value="${esc(searchTerm||"")}" placeholder="Cauta aparat: cod OFRESH, serie, client, oras, adresa..." autocomplete="off" style="width:100%;padding:11px 0;border:0;outline:0" oninput="machinePageSearch(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();applyMachinePageSearch()}"></div><button class="secondaryButton" onclick="clearMachinePageSearch()">Sterge cautarea</button><button class="primaryButton" onclick="applyMachinePageSearch()">Cauta aparat</button></div><div class="panelHeader"><div><h3>Lista aparate</h3><p><strong>${rows.length}</strong> aparate gasite din ${(db.Aparate||[]).length} in baza de date.</p></div><span class="countBadge">${(db.Aparate||[]).length} APARATE</span></div>${rows.length?`<div class="tableWrap"><table class="machineTable"><thead><tr><th>Cod OFRESH</th><th>Tip Echipament</th><th>Producator</th><th>Tip aparat</th><th>Serie Aparat</th><th>Client</th><th>Adresa</th><th>Zona</th><th>Data instalare</th><th>Data retragere</th><th>Status</th><th>Actiuni</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(machineCode(r))||'<span class="small">-</span>'}</td><td>${esc(ofreshEquipmentType(r))}</td><td>${esc(ofreshProducer(r))}</td><td><strong>${esc(machineType(r))}</strong></td><td><strong>${esc(r["Serie Aparat"]||r.Serie||r.serie||"")}</strong></td><td>${esc(machineClient(r))}</td><td>${esc(r.Adresa||r.adresa||"")}</td><td>${esc(r.Zona||r.zona||"")}</td><td>${esc(r["Data instalare"]||r.dataInstalare||"")}</td><td>${esc(r["Data retragere"]||r["Data Retragere"]||r.dataRetragere||"")}</td><td><span class="badge ${String(r.Status||r.status||"Activ").toLowerCase()==='retras'?'warningBadge':''}">${esc(r.Status||r.status||"Activ")}</span></td><td><div class="right"><button class="secondaryButton" onclick='openMachine(${JSON.stringify(r)})'>Modifica</button><button class="secondaryButton" onclick='qrMachine(${JSON.stringify(r)})'>QR</button></div></td></tr>`).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista aparate care corespund cautarii. Daca ai creat doar clientul, trebuie sa adaugi si un aparat asociat acestuia.</div>'}</section>`;
+ const input=document.getElementById("machineSearchInput");if(input){input.focus();try{input.setSelectionRange(input.value.length,input.value.length)}catch(e){}}
+}
+function machinePageSearch(el){searchTerm=String(el?.value||"");machinesPage()}
+function applyMachinePageSearch(){searchTerm=String(document.getElementById("machineSearchInput")?.value||"");machinesPage()}
+function clearMachinePageSearch(){searchTerm="";machinesPage()}
+
 function commercialSearchInput(el){
   const pos=el && typeof el.selectionStart === "number" ? el.selectionStart : String(el?.value||"").length;
   searchTerm=String(el?.value||"");
@@ -1681,16 +1699,35 @@ function machineClientOptions(selectedId=""){
   return `<option value="">Selecteaza clientul</option>`+clientOptions(selectedId);
 }
 function machineClientOptions(selectedId=""){
-  const selected=(db.Clienti||[]).find(c=>String(clientId(c))===String(selectedId));
-  const selectedName=selected?clientName(selected):"";
-  const clients=(db.Clienti||[]).map(c=>({id:clientId(c),name:clientName(c),place:[c.Adresa,c.Zona,c.Oras,c.Judet].filter(Boolean).join(" - ")})).filter(x=>x.name);
-  return `<label class="field"><span>Client</span><input id="f_clientSearch" list="machineClientList" value="${esc(selectedName)}" autocomplete="off" placeholder="Scrie primele litere ale clientului..."><datalist id="machineClientList">${clients.map(c=>`<option value="${esc(c.name)}">${esc(c.place)}</option>`).join("")}</datalist><input type="hidden" id="f_client" value="${esc(selectedId||"")}"><small style="display:block;margin-top:5px;color:#6b7c78">Scrie cateva litere si alege clientul din lista.</small></label>`;
+  // Afisam locatia complet pentru a distinge clientii cu acelasi nume.
+  const source=[...(Array.isArray(db.Clienti)?db.Clienti:[]),...(Array.isArray(db.Locatii)?db.Locatii:[]),...buildClientsFromMachines(db.Aparate||[])];
+  const map=new Map();
+  for(const c of source){
+    const name=String(clientName(c)||c.Client||c.client||c["Nume locatie"]||c["Nume client"]||"").trim();
+    if(!name)continue;
+    const id=String(c["ID Locatie"]||c["ID Client"]||c.id||"").trim();
+    const city=String(c.Oras||c.oras||"").trim();
+    const county=String(c.Judet||c.judet||"").trim();
+    const address=String(c.Adresa||c.adresa||"").trim();
+    const zone=String(c.Zona||c.zona||"").trim();
+    const place=[city,county,address,zone].filter(Boolean).join(" · ");
+    const display=name+(place?" — "+place:"");
+    const key=(name+"|"+city+"|"+county+"|"+address).toLocaleLowerCase("ro-RO");
+    if(!map.has(key))map.set(key,{id,name,city,county,address,zone,place,display});
+    else{const x=map.get(key);if(!x.id&&id)x.id=id;if(!x.place&&place){x.place=place;x.display=name+" — "+place;}}
+  }
+  const clients=[...map.values()].sort((a,b)=>a.name.localeCompare(b.name,"ro")||a.city.localeCompare(b.city,"ro")||a.address.localeCompare(b.address,"ro"));
+  const selected=clients.find(c=>String(c.id)===String(selectedId));
+  const selectedName=selected?selected.display:"";
+  return `<label class="field"><span>Client</span><input id="f_clientSearch" list="machineClientList" value="${esc(selectedName)}" autocomplete="off" placeholder="Cauta dupa nume, oras sau adresa..."><datalist id="machineClientList">${clients.map(c=>`<option value="${esc(c.display)}"></option>`).join("")}</datalist><input type="hidden" id="f_client" value="${esc(selectedId||"")}"><small style="display:block;margin-top:5px;color:#6b7c78">Alege clientul dupa nume si verifica orasul/adresa afisate.</small></label>`;
 }
 async function saveMachine(old){
   const existing=(db.Aparate||[]).find(x=>String(machineId(x)).trim()===String(old||'').trim())||{};
   const selectedClientId=String(v("client")).trim();
-  const client=(db.Clienti||[]).find(c=>String(clientId(c)).trim()===selectedClientId)||null;
-  const clientNameValue=client?clientName(client):String(document.getElementById("f_clientSearch")?.value||"").trim();
+  const clientSources=[...(db.Clienti||[]),...(db.Locatii||[]),...buildClientsFromMachines(db.Aparate||[])];
+  const client=clientSources.find(c=>[c["ID Locatie"],c["ID Client"],c.id,c.idLocatie,c.idClient].some(k=>String(k||"").trim()===selectedClientId))||null;
+  const typedClientDisplay=String(document.getElementById("f_clientSearch")?.value||"").trim();
+  const clientNameValue=client?clientName(client):typedClientDisplay.split(" — ")[0].trim();
   const serie=v("serie").trim();
   const tip=v("tipAparat").trim();
   const cod=v("cod").trim();
@@ -1709,8 +1746,8 @@ async function saveMachine(old){
     "Model":tip,
     "Serie Aparat":serie,
     "Serie":serie,
-    "Adresa":v("adresa"),
-    "Zona":v("zona"),
+    "Adresa":v("adresa")||(client?(client.Adresa||client.adresa||""):""),
+    "Zona":v("zona")||(client?(client.Zona||client.zona||client.Oras||client.oras||""):""),
     "Producator":v("prod"),
     "Data instalare":v("instalare"),
     "Data Retragere":v("retragere"),
@@ -1767,13 +1804,22 @@ function openMachine(r={}){
   const cs=document.getElementById("f_clientSearch");
   const hidden=document.getElementById("f_client");
   const fillClientData=()=>{
-    const typed=String(cs?.value||"").trim().toLowerCase();
-    const c=(db.Clienti||[]).find(x=>clientName(x).trim().toLowerCase()===typed);
-    if(hidden) hidden.value=c?clientId(c):"";
+    const typed=String(cs?.value||"").trim().toLocaleLowerCase("ro-RO");
+    const sources=[...(db.Clienti||[]),...(db.Locatii||[]),...buildClientsFromMachines(db.Aparate||[])];
+    const normalized=sources.map(c=>{
+      const name=String(clientName(c)||c.Client||c.client||c["Nume locatie"]||c["Nume client"]||"").trim();
+      const city=String(c.Oras||c.oras||"").trim(), county=String(c.Judet||c.judet||"").trim(), address=String(c.Adresa||c.adresa||"").trim(), zone=String(c.Zona||c.zona||"").trim();
+      const place=[city,county,address,zone].filter(Boolean).join(" · ");
+      return {c,name,display:(name+(place?" — "+place:" ")).trim()};
+    });
+    const matches=normalized.filter(x=>x.display.toLocaleLowerCase("ro-RO")===typed);
+    const match=matches.find(x=>String(x.c["ID Locatie"]||x.c["ID Client"]||x.c.id||"").trim())||matches[0];
+    const c=match?.c;
+    if(hidden) hidden.value=c?String(c["ID Locatie"]||c["ID Client"]||c.id||""):"";
     if(!c)return;
     const a=document.getElementById("f_adresa"), z=document.getElementById("f_zona");
-    if(a)a.value=c.Adresa||"";
-    if(z)z.value=c.Zona||c.Oras||"";
+    if(a)a.value=c.Adresa||c.adresa||"";
+    if(z)z.value=c.Zona||c.zona||c.Oras||c.oras||"";
   };
   if(cs){cs.addEventListener("input",fillClientData);cs.addEventListener("change",fillClientData);}
   const eqEl=document.getElementById("f_tipEchipament"), modelEl=document.getElementById("f_tipAparat"), prodEl=document.getElementById("f_prod");
@@ -2268,19 +2314,24 @@ async function rawSave(sheet,rec,idField,old){const p={action:old?"update":"add"
 async function saveSheet(sheet,rec,idField,old){try{await rawSave(sheet,rec,idField,old);closeModal();msg("Salvat cu succes.");await load()}catch(e){msg(e.message,false)}}
 async function deleteRecord(sheet,idValue){
   if(!idValue)return;
-  const realSheet=sheet==="Clienti"?"Locatii":sheet;
-  const realIdField=realSheet==="Locatii"?"ID Locatie":realSheet==="Aparate"?"Cod OFRESH":realSheet==="Filtre"?"ID Filtru":realSheet==="Stoc"?"ID Stoc":realSheet==="Tehnicieni"?"ID Tehnician":"ID Produs";
-  const apiDelete=async(sh,field,value)=>{const res=await api({action:"delete",sheet:sh,idField:field,idValue:value});if(!res||res.success===false)throw new Error((res&&res.error)||("Nu s-a confirmat stergerea din "+sh+"."));return res};
+  const apiDelete=async(sh,field,value)=>{
+    const res=await api({action:"delete",sheet:sh,idField:field,idValue:value});
+    if(!res||res.success!==true)throw new Error((res&&res.error)||("Nu s-a confirmat stergerea din "+sh+"."));
+    return res;
+  };
   try{
     if(sheet==="Clienti"){
-      const client=(db.Clienti||[]).find(c=>String(clientId(c))===String(idValue))||(db.Locatii||[]).find(c=>String(clientId(c))===String(idValue));
-      if(!client)throw new Error("Clientul nu mai exista in lista incarcata. Reincarca aplicatia si incearca din nou.");
-      if(isVirtualClient(client))throw new Error("Clientul este generat automat din aparate. Sterge clientul din inregistrarile reale sau verifica asocierea acestuia.");
       const norm=v=>String(v==null?"":v).trim().toLocaleLowerCase("ro-RO").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+      const candidates=[...(db.Clienti||[]),...(db.Locatii||[])];
+      let client=candidates.find(c=>String(c["ID Locatie"]||"")===String(idValue));
+      if(!client)client=candidates.find(c=>String(c["ID Client"]||c.id||"")===String(idValue));
+      if(!client)client=candidates.find(c=>String(clientId(c))===String(idValue));
+      if(!client)throw new Error("Nu am identificat clientul in datele incarcate. Reincarca aplicatia si incearca din nou.");
       const name=norm(clientName(client));
-      const clientCity=norm(client.Oras||client.oras||"");
-      const clientCounty=norm(client.Judet||client.judet||"");
-      const clientAddress=norm(client.Adresa||client.adresa||"");
+      if(!name)throw new Error("Clientul nu are nume. Nu am sters nimic.");
+      const city=norm(client.Oras||client.oras||"");
+      const county=norm(client.Judet||client.judet||"");
+      const address=norm(client.Adresa||client.adresa||"");
       const associated=(db.Aparate||[]).filter(m=>{
         const mid=String(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie||"").trim();
         if(mid && mid===String(idValue))return true;
@@ -2288,26 +2339,39 @@ async function deleteRecord(sheet,idValue){
         const mc=norm(m.Oras||m.oras||"");
         const mj=norm(m.Judet||m.judet||"");
         const ma=norm(m.Adresa||m.adresa||"");
-        if(clientCity&&mc&&clientCity!==mc)return false;
-        if(clientCounty&&mj&&clientCounty!==mj)return false;
-        if(!clientCity&&!clientCounty&&!mc&&!mj&&clientAddress&&ma&&clientAddress!==ma)return false;
+        if(city&&mc&&city!==mc)return false;
+        if(county&&mj&&county!==mj)return false;
+        if(!city&&!county&&!mc&&!mj&&address&&ma&&address!==ma)return false;
         return true;
       });
-      const machinesToDelete=[];
+      const codes=[];
       for(const m of associated){
         const code=String(m["Cod OFRESH"]||m.codOfresh||"").trim();
-        if(!code)throw new Error("Nu am sters nimic: exista un aparat asociat clientului fara Cod OFRESH. Completeaza codul sau verifica aparatul inainte de stergere.");
-        machinesToDelete.push(code);
+        if(!code)throw new Error("Nu am sters nimic: un aparat asociat nu are Cod OFRESH. Completeaza codul inainte de stergere.");
+        if(!codes.includes(code))codes.push(code);
       }
-      const promptText="Stergi clientul "+clientName(client)+"?\n\nVor fi sterse si "+machinesToDelete.length+" aparate asociate din foaia Aparate. Istoricul interventiilor si fotografiile NU vor fi sterse.";
+      const isVirtual=!!client._virtualFromMachines;
+      const locationField=client["ID Locatie"]!==undefined&&String(client["ID Locatie"]).trim()!==""?"ID Locatie":client["ID Client"]!==undefined&&String(client["ID Client"]).trim()!==""?"ID Client":client.id!==undefined&&String(client.id).trim()!==""?"id":"";
+      const locationValue=locationField?String(client[locationField]).trim():"";
+      const promptText="Stergi clientul "+clientName(client)+"?\n\nVor fi sterse "+codes.length+" aparate asociate. "+(isVirtual?"Clientul este generat din aparate si va disparea dupa stergerea acestora.":"Inregistrarea clientului va fi stearsa din Locatii.")+"\nIstoricul interventiilor si fotografiile vor fi pastrate.";
       if(!confirm(promptText))return;
-      for(const code of machinesToDelete)await apiDelete("Aparate","Cod OFRESH",code);
-      await apiDelete("Locatii","ID Locatie",String(idValue));
+      for(const code of codes)await apiDelete("Aparate","Cod OFRESH",code);
+      if(!isVirtual){
+        if(!locationField||!locationValue)throw new Error("Aparatele au fost sterse, dar nu am gasit ID-ul clientului din foaia Locatii. Verifica foaia Locatii inainte de o noua incercare.");
+        await apiDelete("Locatii",locationField,locationValue);
+      }
+      // Scoatem imediat clientul si aparatele asociate din memoria locala, apoi confirmam prin recitirea bazei.
+      db.Aparate=(db.Aparate||[]).filter(m=>!codes.includes(String(m["Cod OFRESH"]||m.codOfresh||"").trim()));
+      db.Locatii=(db.Locatii||[]).filter(c=>String(c["ID Locatie"]||c["ID Client"]||c.id||"")!==String(locationValue));
+      db.Clienti=(db.Clienti||[]).filter(c=>norm(clientName(c))!==name || (city&&norm(c.Oras||c.oras||"")&&norm(c.Oras||c.oras||"")!==city) || (county&&norm(c.Judet||c.judet||"")&&norm(c.Judet||c.judet||"")!==county));
+      saveCachedData();
       msg("Clientul si aparatele asociate au fost sterse. Istoricul interventiilor si fotografiile au fost pastrate.");
       await load();
       return;
     }
     if(!confirm("Sigur vrei sa stergi aceasta inregistrare?"))return;
+    const realSheet=sheet;
+    const realIdField=realSheet==="Locatii"?"ID Locatie":realSheet==="Aparate"?"Cod OFRESH":realSheet==="Filtre"?"ID Filtru":realSheet==="Stoc"?"ID Stoc":realSheet==="Tehnicieni"?"ID Tehnician":"ID Produs";
     await apiDelete(realSheet,realIdField,idValue);
     msg("Sters cu succes.");
     await load();
