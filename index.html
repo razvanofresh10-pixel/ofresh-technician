@@ -919,8 +919,27 @@ async function saveClientGPS(id){
   if(!navigator.geolocation)return msg("Browserul nu suporta localizarea GPS. Deschide OFRESH in Chrome/Safari, nu intr-un preview blocat.",false);
   const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(id))||(db.Locatii||[]).find(x=>String(clientId(x))===String(id));
   if(!c)return msg("Clientul nu a fost gasit.",false);
-  msg("Obtin pozitia ta GPS... accepta permisiunea de localizare daca apare.",true);
+  msg("Obtin pozitia GPS si adresa corespunzatoare...",true);
   const norm=v=>String(v==null?"":v).trim().toLocaleLowerCase("ro-RO").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+  const reverseGeocode=async(lat,lon)=>{
+    // Serviciu public de reverse geocoding; daca nu raspunde, pastram adresa existenta.
+    const url="https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat="+encodeURIComponent(lat)+"&lon="+encodeURIComponent(lon)+"&zoom=18&addressdetails=1&accept-language=ro";
+    const controller=typeof AbortController!=="undefined"?new AbortController():null;
+    const timer=controller?setTimeout(()=>controller.abort(),7000):null;
+    try{
+      const response=await fetch(url,{method:"GET",headers:{Accept:"application/json"},signal:controller?controller.signal:undefined});
+      if(!response.ok)throw new Error("Serviciul de adrese nu a raspuns.");
+      const data=await response.json(),a=data&&data.address||{};
+      const road=a.road||a.pedestrian||a.residential||a.footway||a.path||a.neighbourhood||"";
+      const house=a.house_number||"";
+      const street=[road,house].filter(Boolean).join(" ");
+      const city=a.city||a.town||a.village||a.municipality||a.suburb||a.city_district||"";
+      const county=(a.county||a.state_district||a.state||"").replace(/^Jude[tț]ul\s+/i,"");
+      const postcode=a.postcode||"";
+      const address=[street,a.suburb&&a.suburb!==city?a.suburb:"",postcode].filter(Boolean).join(", ");
+      return {address:address||data.display_name||"",city,county,display:data.display_name||""};
+    }finally{if(timer)clearTimeout(timer)}
+  };
   const savePosition=async(pos)=>{
     try{
       const lat=Number(pos.coords.latitude),lon=Number(pos.coords.longitude),accuracy=Number(pos.coords.accuracy||0);
@@ -929,27 +948,44 @@ async function saveClientGPS(id){
       let real=(db.Locatii||[]).find(x=>String(x["ID Locatie"]||"")===String(id));
       if(!real)real=(db.Locatii||[]).find(x=>String(clientId(x))===String(id));
       if(!real)real=(db.Locatii||[]).find(x=>norm(clientName(x))===name&&norm(x.Oras||x.oras||"")===city&&norm(x.Judet||x.judet||"")===county&&norm(x.Adresa||x.adresa||"")===address);
-      const locationId=String(real?.["ID Locatie"]||real?.id||"").trim()||String(id||uid("LOC"));
+      if(!real)throw new Error("Nu am identificat sigur randul locatiei in Google Sheets. Nu am salvat pozitia ca sa evit modificarea clientului gresit sau crearea unui duplicat.");
+      const locationId=String(real["ID Locatie"]||real.id||"").trim();
+      if(!locationId)throw new Error("Locatia nu are ID Locatie. Nu am salvat GPS-ul pentru a evita crearea unei inregistrari duplicate.");
+      let geo=null;
+      try{geo=await reverseGeocode(lat,lon)}catch(e){console.warn("Nu s-a putut determina adresa din GPS; se pastreaza adresa existenta.",e)}
+      const newAddress=geo?.address||c.Adresa||c.adresa||real?.Adresa||"";
+      const newCity=geo?.city||c.Oras||c.oras||real?.Oras||"";
+      const newCounty=geo?.county||c.Judet||c.judet||real?.Judet||"";
       const stamp=new Date().toISOString();
-      const rec={...(real||{}),"ID Locatie":locationId,Client:clientName(c),"Nume locatie":clientName(c),Adresa:c.Adresa||c.adresa||real?.Adresa||"",Zona:c.Zona||c.zona||real?.Zona||"",Oras:c.Oras||c.oras||real?.Oras||"",Judet:c.Judet||c.judet||real?.Judet||"",Latitudine:lat,Longitudine:lon,"GPS actualizat":stamp,"GPS precizie":accuracy,Status:real?.Status||real?.status||"Activ"};
-      // Update an existing Locatii row by its actual ID Locatie; otherwise add a new row.
-      const response=await rawSave("Locatii",rec,"ID Locatie",real?locationId:"");
-      if(!response || response.success===false)throw new Error(response?.error||"Google Sheets nu a confirmat salvarea coordonatelor.");
+      const rec={...(real||{}),"ID Locatie":locationId,Client:clientName(c),"Nume locatie":clientName(c),Adresa:newAddress,Zona:c.Zona||c.zona||real?.Zona||"",Oras:newCity,Judet:newCounty,Latitudine:lat,Longitudine:lon,"GPS actualizat":stamp,"GPS precizie":accuracy,Status:real?.Status||real?.status||"Activ"};
+      const response=await rawSave("Locatii",rec,"ID Locatie",locationId);
+      if(!response||response.success!==true)throw new Error(response?.error||"Google Sheets nu a confirmat actualizarea locatiei. Adresa si coordonatele nu au fost confirmate ca salvate.");
       if(!Array.isArray(db.Locatii))db.Locatii=[];
       const localIndex=db.Locatii.findIndex(x=>String(x["ID Locatie"]||x.id||"")===locationId);
       if(localIndex>=0)db.Locatii[localIndex]={...db.Locatii[localIndex],...rec};else db.Locatii.push(rec);
+      // Actualizeaza si randul din Clienti, pentru ca adresa folosita de carduri sa se schimbe peste tot.
+      const matchingClients=(db.Clienti||[]).filter(x=>String(clientId(x))===String(id));
+      for(const x of matchingClients){
+        const updated={...x,Adresa:newAddress,Oras:newCity,Judet:newCounty,Latitudine:lat,Longitudine:lon,"GPS actualizat":stamp,"GPS precizie":accuracy};
+        const clientKey=String(x["ID Client"]||"").trim();
+        if(clientKey){
+          const cr=await rawSave("Clienti",updated,"ID Client",clientKey);
+          if(!cr||cr.success!==true)throw new Error("Locatia a fost salvata, dar Google Sheets nu a confirmat actualizarea adresei in Clienti. Reincarca datele si verifica foaia Clienti.");
+        }
+        Object.assign(x,updated);
+      }
+      // Actualizeaza si alte in-memory client cards legate de aceeasi locatie.
       for(const x of (db.Clienti||[])){
         if(String(clientId(x))===String(id)||(norm(clientName(x))===name&&norm(x.Oras||x.oras||"")===city&&norm(x.Judet||x.judet||"")===county&&norm(x.Adresa||x.adresa||"")===address)){
-          x.Latitudine=lat;x.Longitudine=lon;x["GPS actualizat"]=stamp;x["GPS precizie"]=accuracy;
+          x.Adresa=newAddress;x.Oras=newCity;x.Judet=newCounty;x.Latitudine=lat;x.Longitudine=lon;x["GPS actualizat"]=stamp;x["GPS precizie"]=accuracy;
         }
       }
       saveCachedData();
-      // Refresh the technician's visible cards from the updated in-memory records.
       const input=document.getElementById("techClientSearch"),q=String(input?.value||"").trim().toLowerCase();
       const rows=technicianVisibleClients().filter(l=>!q||[clientName(l),l.Adresa||l.adresa||"",l.Oras||l.oras||"",l.Judet||l.judet||"",l.Zona||l.zona||""].join(" ").toLowerCase().includes(q));
       renderTechClientCards(rows);
-      msg("Pozitia GPS a fost salvata si aplicatia a fost actualizata: "+lat.toFixed(6)+", "+lon.toFixed(6)+" (precizie ~"+Math.round(accuracy)+" m).",true);
-    }catch(e){msg(e?.message||"Nu am putut salva pozitia GPS.",false)}
+      msg("Pozitia GPS a fost salvata."+(geo?.address?" Adresa actualizata: "+newAddress+(newCity?", "+newCity:"")+(newCounty?", "+newCounty:"")+".":" Coordonatele au fost salvate, dar adresa nu a putut fi identificata automat; am pastrat adresa existenta.")+" Precizie GPS ~"+Math.round(accuracy)+" m.",true);
+    }catch(e){msg(e?.message||"Nu am putut salva pozitia GPS si adresa.",false)}
   };
   const retry=(err)=>{
     if(err&&err.code===1){msg("Localizarea este blocata pentru acest site. In Chrome: lacatul din bara de adresa → Permisiuni → Localizare → Permite, apoi apasa din nou.",false);return;}
