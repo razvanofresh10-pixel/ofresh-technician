@@ -251,7 +251,7 @@ img{max-width:100%;height:auto}
 
 /* OFRESH FINAL DESIGN — visual layer only. Existing functionality is untouched. */
 .accessPageFinal{min-height:calc(100vh - 1px);width:100%;display:flex;align-items:center;justify-content:center;padding:34px 28px;box-sizing:border-box;background:linear-gradient(135deg,#f4faf8 0%,#edf7f4 48%,#eef8fb 100%)}
-.accessShellFinal{width:min(920px,100%);min-height:500px;background:#fff;border:1px solid #d8e7e3;border-radius:24px;box-shadow:0 22px 60px rgba(24,73,63,.12);overflow:hidden;display:grid;grid-template-columns:1.02fr .98fr}
+.accessShellFinal{position:relative;width:min(920px,100%);min-height:500px;background:#fff;border:1px solid #d8e7e3;border-radius:24px;box-shadow:0 22px 60px rgba(24,73,63,.12);overflow:hidden;display:grid;grid-template-columns:1.02fr .98fr}
 .accessLeftFinal{padding:36px 42px 38px;display:flex;flex-direction:column;justify-content:center;min-width:0}
 .accessLogoFinal{width:190px;height:auto;display:block;object-fit:contain;margin:0 auto 8px}
 .accessEyebrowFinal{text-align:center;color:#118b79;font-size:10px;font-weight:900;letter-spacing:1.8px;margin:2px 0 8px}
@@ -280,6 +280,7 @@ img{max-width:100%;height:auto}
 .ofreshSideStack{display:grid;gap:14px}.ofreshSideCard .dashPanelV36{box-shadow:none;border:0;border-radius:0;margin:0}.ofreshSideCard .dashPanelTitleV36{padding:15px 17px}.ofreshMapFallback{height:420px;display:grid;place-items:center;padding:30px;text-align:center;color:#71817d;font-size:13px}
 /* The dashboard intentionally has no old quick-actions/control panels. */
 .dashboardV36 .dashPanelsV36{display:none}
+.accessCloseButton{position:absolute;top:12px;right:12px;z-index:5;width:38px;height:38px;border:1px solid #d8e7e3;border-radius:50%;background:rgba(255,255,255,.94);color:#263a35;font-size:26px;line-height:1;cursor:pointer;display:grid;place-items:center;box-shadow:0 3px 12px rgba(0,0,0,.08)}.accessCloseButton:hover{background:#e8f7f1;color:#176a58}.techLoginCard{position:relative}.techLoginClose{position:absolute;top:10px;right:10px;width:36px;height:36px;border:1px solid #d8e7e3;border-radius:50%;background:#fff;color:#263a35;font-size:25px;line-height:1;cursor:pointer;display:grid;place-items:center}.techLoginClose:hover{background:#e8f7f1;color:#176a58}
 @media(max-width:950px){.accessShellFinal{grid-template-columns:1fr}.accessVisualFinal{min-height:260px;order:-1}.accessLeftFinal{padding:28px 24px}.ofreshDashMapGrid{grid-template-columns:1fr}.ofreshMapCard #ofreshLocationsMap,.ofreshMapFallback{height:360px}}
 @media(max-width:650px){.accessPageFinal{padding:16px}.accessVisualFinal{min-height:210px}.accessVisualOverlayFinal{right:22px;bottom:22px;font-size:16px}.accessLeftFinal h1{font-size:26px}.accessRolesFinal button{min-height:58px}}
 
@@ -747,6 +748,7 @@ function openTechLogin(){
   const screen=document.createElement("div");
   screen.id="techLoginScreen";
   screen.innerHTML=`<div class="techLoginCard" role="dialog" aria-modal="true" aria-label="Acces tehnician">
+    <button type="button" class="techLoginClose" aria-label="Inchide accesul tehnician" title="Inchide" onclick="closeTechLogin()">×</button>
     <div class="techLoginLogo">OFRESH</div>
     <div class="techLoginEyebrow">OFRESH ONLINE</div>
     <h2>Acces tehnician</h2>
@@ -2658,6 +2660,28 @@ function logoutApplication(){
   searchTerm="";
   try{localStorage.removeItem("ofresh_tech_session");}catch(e){}
   closeModal();
+  showAccessPage();
+}
+function closeAccessPage(){
+  // Inchide selectorul de rol si revine la interfata precedenta, fara a modifica datele.
+  document.querySelector(".accessPageFinal")?.remove();
+  document.body.classList.remove("ofreshAccess");
+  document.querySelector(".sidebar")?.classList.remove("accessHiddenForce");
+  document.querySelector(".topbar")?.classList.remove("accessHiddenForce");
+  const sidebar=document.querySelector(".sidebar");
+  const topbar=document.querySelector(".topbar");
+  if(sidebar) sidebar.style.removeProperty("display");
+  if(topbar) topbar.style.removeProperty("display");
+}
+function closeTechLogin(){
+  document.getElementById("techLoginScreen")?.remove();
+  document.body.classList.remove("techLoginActive");
+  const sidebar=document.querySelector(".sidebar");
+  const main=document.querySelector(".main");
+  const topbar=document.querySelector(".topbar");
+  if(sidebar){sidebar.style.removeProperty("display");sidebar.style.removeProperty("visibility");sidebar.style.removeProperty("pointer-events");}
+  if(main){main.style.removeProperty("margin-left");main.style.removeProperty("width");}
+  if(topbar)topbar.style.removeProperty("display");
   showAccessPage();
 }
 function showAccessPage(){
