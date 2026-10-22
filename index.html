@@ -505,7 +505,7 @@ input,select,textarea{font-size:16px;}
 <button onclick="go('utilizatori')"><span class="navIcon">U</span><span>Utilizatori</span></button>
 </nav>
   <div class="sidebarBottom">
-    <div class="userCard"><div class="avatar">O</div><div class="userInfo"><strong>OFRESH</strong><span>Administrator</span></div><button class="logoutButton" type="button" onclick="logoutApplication()" title="Iesire din aplicatie">Iesire</button></div>
+    <div class="userCard" role="button" tabindex="0" title="Setari administrator" onclick="openHiddenSyncMenu(event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHiddenSyncMenu(event)}"><div class="avatar">O</div><div class="userInfo"><strong>OFRESH</strong><span>Administrator</span></div><button class="logoutButton" type="button" onclick="event.stopPropagation();logoutApplication()" title="Iesire din aplicatie">Iesire</button></div>
   </div>
 </aside>
 <main class="main">
@@ -1224,6 +1224,56 @@ function ofreshExcelDetails(r){
 }
 function ofreshProducer(r){const d=ofreshExcelDetails(r);return d&&d.producer?d.producer:(r?.Producator||r?.producator||"");}
 function ofreshEquipmentType(r){const d=ofreshExcelDetails(r);return d&&d.equipment?d.equipment:(r?.["Tip Echipament"]||r?.tipEchipament||"");}
+
+// Acces ascuns la sincronizare: caseta OFRESH din partea de jos a meniului.
+async function openHiddenSyncMenu(event){
+  if(event){event.preventDefault();event.stopPropagation();}
+  if(!adminSession)return;
+  const password=prompt("Acces administrator\nIntrodu parola pentru sincronizarea Google Sheets:");
+  if(password===null)return;
+  if(password!=="1234"){alert("Parola incorecta.");return;}
+  if(!confirm("Esti sigur ca vrei sa deschizi functia de sincronizare?\nApasa Anuleaza sau X pentru a renunta."))return;
+  if(!confirm("CONFIRMARE FINALA\nSe vor actualiza in Google Sheets producatorul, tipul echipamentului si modelul aparatelor recunoscute. Continui?"))return;
+  await syncOfreshExcelToSheets();
+}
+
+// Sincronizeaza in Google Sheets valorile de producator, tip echipament si model din mapping-ul Excel OFRESH.
+async function syncOfreshExcelToSheets(){
+  if(!adminSession)return msg("Sincronizarea este disponibila doar pentru administrator.",false);
+  const machines=db.Aparate||[];
+  const updates=[];
+  for(const m of machines){
+    const d=ofreshExcelDetails(m);
+    if(!d)continue;
+    const serial=String(m["Serie Aparat"]||m.Serie||m.serie||m["ID Purificator"]||m.idPurificator||"").trim();
+    const cod=String(m["Cod OFRESH"]||m.codOfresh||"").trim();
+    const rowNumber=String(m.__row||"").trim();
+    const idField=rowNumber?"__row":(cod?"Cod OFRESH":"Serie Aparat");
+    const idValue=rowNumber||(cod||serial);
+    if(!idValue)continue;
+    const rec={...m,"Producator":d.producer||m.Producator||"","Tip Echipament":d.equipment||m["Tip Echipament"]||"","Tip aparat":d.model||m["Tip aparat"]||m.Model||"","Model":d.model||m.Model||m["Tip aparat"]||""};
+    updates.push({rec,idField,idValue});
+  }
+  if(!updates.length)return msg("Nu am gasit aparate care corespund mapping-ului Excel OFRESH.",false);
+  const btn=document.getElementById("syncOfreshExcelBtn");
+  if(btn){btn.disabled=true;btn.textContent="Sincronizare 0 / "+updates.length+"...";}else{msg("Sincronizare in curs: 0 / "+updates.length+" aparate...");}
+  let done=0,failed=0;const errors=[];
+  try{
+    for(const item of updates){
+      try{await rawSave("Aparate",item.rec,item.idField,item.idValue);done++;}
+      catch(e){failed++;if(errors.length<3)errors.push(String(e&&e.message||e));}
+      if(btn)btn.textContent="Sincronizare "+(done+failed)+" / "+updates.length+"...";else if((done+failed)%25===0)msg("Sincronizare in curs: "+(done+failed)+" / "+updates.length+" aparate...");
+    }
+    if(done){
+      for(const item of updates){const idx=machines.findIndex(m=>item.idField==="__row"?String(m.__row||"").trim()===item.idValue:item.idField==="Cod OFRESH"?String(m["Cod OFRESH"]||m.codOfresh||"").trim()===item.idValue:String(m["Serie Aparat"]||m.Serie||m.serie||"").trim()===item.idValue);if(idx>=0)machines[idx]={...machines[idx],...item.rec};}
+      saveCachedData();
+    }
+    await load();
+    if(failed)msg("Sincronizare terminata partial: "+done+" actualizate, "+failed+" erori. "+errors.join(" | "),false);
+    else msg("Sincronizare terminata: "+done+" aparate actualizate in Google Sheets.");
+  }catch(e){msg("Eroare la sincronizare: "+String(e&&e.message||e),false)}
+  finally{if(btn){btn.disabled=false;btn.textContent="Sincronizeaza Excel in Google Sheets";}}
+}
 function machineSearchNormalize(value){return String(value==null?"":value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("ro-RO").replace(/\s+/g," ").trim();}
 function machineSearchFields(machine){
  return [machineCode(machine),ofreshEquipmentType(machine),ofreshProducer(machine),machineType(machine),machine&&machine["Serie Aparat"],machine&&machine.Serie,machine&&machine.serie,machineClient(machine),machine&&machine.Adresa,machine&&machine.adresa,machine&&machine.Oras,machine&&machine.oras,machine&&machine.Judet,machine&&machine.judet,machine&&machine.Zona,machine&&machine.zona].map(machineSearchNormalize).filter(Boolean);
