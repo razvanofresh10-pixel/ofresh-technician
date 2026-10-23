@@ -1452,8 +1452,8 @@ function openCommercial(){
   if(adminSession){ openCommercialFromAdmin(); return; }
   if(commercialSession){commercialTab='aparate';commercialPage();document.getElementById("pageTitle").textContent="Comercial";document.getElementById("crumb").textContent="Comercial";return;}
   modal("Acces Comercial",`<div>
-    ${inputField("Telefon","commercialTelefon","","tel")}
-    ${inputField("PIN","commercialPin","","password")}
+    ${inputField("Adresa de e-mail","commercialEmail","","email")}
+    ${inputField("Parola (PIN-ul existent)","commercialPin","","password")}
   </div>`,`Intra in Comercial`,`loginCommercial()`);
   setTimeout(()=>{
     const submit=ev=>{
@@ -1465,7 +1465,7 @@ function openCommercial(){
         Promise.resolve(loginCommercial()).finally(()=>window.__ofreshCommercialLoginBusy=false);
       }
     };
-    const tel=document.getElementById("f_commercialTelefon"), pin=document.getElementById("f_commercialPin");
+    const tel=document.getElementById("f_commercialEmail"), pin=document.getElementById("f_commercialPin");
     tel?.addEventListener("keydown",submit,true);
     tel?.addEventListener("keypress",submit,true);
     pin?.addEventListener("keydown",submit,true);
@@ -1474,13 +1474,13 @@ function openCommercial(){
   },50);
 }
 async function loginCommercial(){
-  const telefon=v("commercialTelefon").replace(/\s+/g,"").replace(/-/g,"");
+  const email=v("commercialEmail").trim().toLowerCase();
   const pin=v("commercialPin").trim();
-  if(!telefon||!pin)return msg("Completeaza telefonul si PIN-ul.",false);
+  if(!email||!pin)return msg("Completeaza adresa de e-mail si parola.",false);
   try{
-    const r=await api({action:"commercialData",telefon:telefon,pin:pin});
-    if(!r||!r.success)throw new Error(r?.error||"Telefonul sau PIN-ul este gresit.");
-    commercialSession=r.user||{Telefon:telefon,Rol:"comercial"};
+    const r=await api({action:"commercialData",email:email,user:email,username:email,pin:pin});
+    if(!r||!r.success)throw new Error(r?.error||"E-mailul sau parola este gresita.");
+    commercialSession=r.user||{Email:email,Rol:"comercial"};
     commercialDb={Aparate:Array.isArray(r.data?.Aparate)?r.data.Aparate:[],Filtre:Array.isArray(r.data?.Filtre)?r.data.Filtre:[],Interventii:Array.isArray(r.data?.Interventii)?r.data.Interventii:[],Clienti:Array.isArray(r.data?.Clienti)?r.data.Clienti:[],Locatii:Array.isArray(r.data?.Locatii)?r.data.Locatii:[]};
     closeModal();commercialTab='aparate';commercialCounty='';commercialPageNum=1;searchTerm='';commercialPage();
     document.getElementById("pageTitle").textContent="Comercial";document.getElementById("crumb").textContent="Comercial";
@@ -2759,8 +2759,8 @@ function showAccessPage(){
 
 function openAdminLogin(){
   modal("Acces Administrator",`<div>
-    ${inputField("User / Telefon","adminTelefon","","text")}
-    ${inputField("PIN / Parola","adminPin","","password")}
+    ${inputField("Adresa de e-mail","adminTelefon","","email")}
+    ${inputField("Parola (PIN-ul existent)","adminPin","","password")}
   </div>`,`Intra in Administrator`,`loginAdministrator()`);
   setTimeout(()=>{
     const submit=ev=>{
@@ -2779,32 +2779,23 @@ function openAdminLogin(){
   },50);
 }
 async function loginAdministrator(){
-  const rawTelefon=String(document.getElementById("f_adminTelefon")?.value||"").trim();
+  const email=String(document.getElementById("f_adminTelefon")?.value||"").trim().toLowerCase();
   const pin=String(document.getElementById("f_adminPin")?.value||"").trim();
-  const normalizePhone=x=>{let n=String(x??"").trim().replace(/\s+/g,"").replace(/-/g,"");if(/^0040/.test(n))n="0"+n.slice(4);else if(/^\+40/.test(n))n="0"+n.slice(3);return n;};
-  const telefon=normalizePhone(rawTelefon);
-  if(!rawTelefon||!pin)return msg("Completeaza userul/telefonul si PIN-ul.",false);
+  if(!email||!pin)return msg("Completeaza adresa de e-mail si parola.",false);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
   const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
-  const matchesAdmin=x=>{
-    if(!x||!isActive(x)||!userIsAdmin(x))return false;
-    const storedPhone=normalizePhone(x.Telefon||x.telefon||"");
-    const loginNames=[x.Username,x.username,x.User,x.user,x.Nume,x.nume,x["Nume utilizator"],x["ID Utilizator"]].map(z=>String(z??"").trim().toLowerCase()).filter(Boolean);
-    const login=rawTelefon.toLowerCase();
-    return ((storedPhone&&storedPhone===telefon)||loginNames.includes(login)||loginNames.includes(telefon.toLowerCase())) && userPin(x)===pin;
-  };
+  const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
   const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;closeModal();enterAdminCleanMode();current="dashboard";render();load(true);};
-  const localUser=(db.Utilizatori||[]).find(matchesAdmin);
-  if(localUser){openAdmin(localUser);return;}
-  if(rawTelefon.toLowerCase()==="admin" && pin==="1234"){openAdmin({"ID Utilizator":"ADMIN","Nume":"Administrator","Telefon":"admin","Rol":"administrator","Status":"Activ"});return;}
   try{
-    const r=await api({action:"loginUser",telefon:telefon,user:rawTelefon,username:rawTelefon,pin:pin});
+    const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");openAdmin(r.user);return;}
-    if(r?.error)throw new Error(r.error);
+    throw new Error(r?.error||"E-mailul sau parola este gresita.");
   }catch(e){
-    try{const data=await api({action:"read"});const users=Array.isArray(data?.Utilizatori)?data.Utilizatori:[];const found=users.find(matchesAdmin);if(found){openAdmin(found);return;}}catch(ignore){}
-    msg(e.message||"User sau PIN incorect.",false);return;
+    // Cache fallback permits login only when a matching active administrator exists locally.
+    const localUser=(db.Utilizatori||[]).find(matchesAdmin);
+    if(localUser){openAdmin(localUser);return;}
+    msg(e.message||"E-mailul sau parola este gresita.",false);return;
   }
-  msg("User sau PIN incorect.",false);
 }
 
 const publicParams=new URLSearchParams(location.search);
