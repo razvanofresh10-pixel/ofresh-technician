@@ -633,6 +633,7 @@ function saveCachedData(){
 
 const ofreshLoadedSheets = new Set();
 let ofreshNavigationToken = 0;
+let ofreshAdminPrefetchPromise = null;
 
 function mergeClientDataFromLoadedSheets(){
   const realLocatii = Array.isArray(db.Locatii) ? db.Locatii : [];
@@ -668,15 +669,46 @@ async function loadAdminDashboard(background=true){
     const data = await api({action:"dashboardData"});
     if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele Dashboard-ului.");
     db = {Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...db,...data};
-    for(const name of ["Locatii","Aparate","Interventii","Filtre","Stoc","Tehnicieni"]) ofreshLoadedSheets.add(name);
+    // Dashboard-ul aduce doar ultimele 6 interventii, nu istoricul complet.
+    // Nu marcam Interventii ca foaie incarcata integral.
+    for(const name of ["Locatii","Aparate","Filtre","Stoc","Tehnicieni"]) ofreshLoadedSheets.add(name);
     mergeClientDataFromLoadedSheets();
     saveCachedData();
     if(adminSession && !commercialSession && !techSession && current==="dashboard") render();
+    // Incarcam in fundal foile necesare modulelor, astfel incat prima deschidere
+    // a Clienti / Interventii / Rapoarte / Utilizatori sa nu mai astepte un apel separat.
+    prefetchAdminModuleSheets();
     return true;
   }catch(e){
     if(!background) msg(e.message || "Nu am putut incarca Dashboard-ul.",false);
     return false;
   }
+}
+
+function prefetchAdminModuleSheets(){
+  if(!adminSession) return Promise.resolve(false);
+  if(ofreshAdminPrefetchPromise) return ofreshAdminPrefetchPromise;
+  const sessionRef=adminSession;
+  const names=["Clienti","Interventii","Utilizatori"].filter(name=>!ofreshLoadedSheets.has(name));
+  if(!names.length) return Promise.resolve(true);
+  ofreshAdminPrefetchPromise=(async()=>{
+    try{
+      const data=await api({action:"readSheets",sheets:JSON.stringify(names)});
+      if(!data || data.success===false) throw new Error(data?.error||"Prefetch indisponibil");
+      if(adminSession!==sessionRef) return false;
+      Object.assign(db,data);
+      names.forEach(name=>ofreshLoadedSheets.add(name));
+      if(names.includes("Clienti")) mergeClientDataFromLoadedSheets();
+      saveCachedData();
+      return true;
+    }catch(e){
+      console.warn("OFRESH prefetch module, se va incarca la cerere:",e);
+      return false;
+    }finally{
+      ofreshAdminPrefetchPromise=null;
+    }
+  })();
+  return ofreshAdminPrefetchPromise;
 }
 
 function adminSheetsForModule(page){
@@ -696,8 +728,13 @@ function adminSheetsForModule(page){
 
 async function ensureAdminModuleSheets(page, token){
   const required = adminSheetsForModule(page);
-  const missing = required.filter(name => !ofreshLoadedSheets.has(name));
+  let missing = required.filter(name => !ofreshLoadedSheets.has(name));
   if(!missing.length) return true;
+  // Daca preincarcarea din fundal ruleaza deja, asteptam acelasi apel in loc
+  // sa pornim o a doua citire simultana a acelorasi foi.
+  if(ofreshAdminPrefetchPromise) await ofreshAdminPrefetchPromise;
+  missing = required.filter(name => !ofreshLoadedSheets.has(name));
+  if(!missing.length) return token === ofreshNavigationToken;
   const data = await api({action:"readSheets",sheets:JSON.stringify(missing)});
   if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele modulului.");
   Object.assign(db,data);
@@ -1543,6 +1580,7 @@ let commercialPageNum=1;
 const COMMERCIAL_PAGE_SIZE=50;
 let commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};
 let commercialAuthPin="";
+let commercialDataLoading=false;
 function openCommercial(){
   // Din interiorul Administratorului, Comercialul se deschide fara o a doua autentificare.
   if(adminSession){ openCommercialFromAdmin(); return; }
@@ -1560,12 +1598,20 @@ async function loginCommercial(){
   if(!email||!pin)return msg("Completeaza adresa de email si PIN-ul.",false);
   window.__ofreshCommercialLoginBusy=true;
   try{
-    const r=await api({action:"commercialData",email:email,pin:pin});
+    const r=await api({action:"commercialLogin",email:email,pin:pin});
     if(!r||!r.success)throw new Error(r?.error||"Emailul sau PIN-ul este gresit.");
     commercialSession=r.user||{Email:email,Rol:"comercial"};commercialAuthPin=pin;
-    commercialDb={Aparate:Array.isArray(r.data?.Aparate)?r.data.Aparate:[],Filtre:Array.isArray(r.data?.Filtre)?r.data.Filtre:[],Interventii:Array.isArray(r.data?.Interventii)?r.data.Interventii:[],Clienti:Array.isArray(r.data?.Clienti)?r.data.Clienti:[],Locatii:Array.isArray(r.data?.Locatii)?r.data.Locatii:[],InterventiiLoaded:!!r.data?.InterventiiLoaded};
+    commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};
+    commercialDataLoading=true;
     closeModal();commercialTab='aparate';commercialCounty='';commercialPageNum=1;searchTerm='';commercialPage();
     document.getElementById("pageTitle").textContent="Comercial";document.getElementById("crumb").textContent="Comercial";
+    // Datele portofoliului se incarca dupa afisarea interfetei, fara sa tina utilizatorul pe login.
+    api({action:"commercialData",email:email,pin:pin}).then(data=>{
+      if(!data||!data.success)throw new Error(data?.error||"Nu am putut incarca datele Comerciale.");
+      commercialDb={Aparate:Array.isArray(data.data?.Aparate)?data.data.Aparate:[],Filtre:Array.isArray(data.data?.Filtre)?data.data.Filtre:[],Interventii:Array.isArray(data.data?.Interventii)?data.data.Interventii:[],Clienti:Array.isArray(data.data?.Clienti)?data.data.Clienti:[],Locatii:Array.isArray(data.data?.Locatii)?data.data.Locatii:[],InterventiiLoaded:!!data.data?.InterventiiLoaded};
+      commercialDataLoading=false;
+      if(commercialSession)commercialPage();
+    }).catch(e=>{commercialDataLoading=false;msg(e?.message||"Nu am putut incarca datele Comerciale.",false);if(commercialSession)commercialPage();});
   }catch(e){msg(e.message||"Nu am putut valida accesul Comercial.",false)}
   finally{window.__ofreshCommercialLoginBusy=false;}
 }
@@ -1603,7 +1649,7 @@ async function ensureCommercialHistory(){
       const norm=v=>String(v==null?"":v).trim();
       photos.forEach(p=>{
         const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId);
-        const url=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);
+        const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);const saved=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);const url=fileId?('https://drive.google.com/file/d/'+encodeURIComponent(fileId)+'/view'):saved;
         if(id && /^https?:\/\//i.test(url)){if(!photoMap[id])photoMap[id]=[];if(!photoMap[id].includes(url))photoMap[id].push(url);}
       });
       commercialDb.Interventii=all.Interventii.map(i=>{
@@ -1622,7 +1668,7 @@ async function openCommercialHistory(){
   if(!await ensureCommercialHistory()) return;
   commercialTab="interventii"; commercialPage();
 }
-function logoutCommercial(){commercialSession=null;commercialAuthPin="";commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};commercialCounty="";searchTerm="";showAccessPage()}
+function logoutCommercial(){commercialSession=null;commercialAuthPin="";commercialDataLoading=false;commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};commercialCounty="";searchTerm="";showAccessPage()}
 function commercialActiveMachineRows(){
   return (commercialDb.Aparate||[]).filter(machineIsActiveForTechnician).map(m=>({...m}));
 }
@@ -1666,7 +1712,7 @@ async function exportCommercialWorkbook(){
     };
     const intRows=interventii.map(row=>{const clean={...row};delete clean.Fotografii;delete clean.Fotografie;delete clean.Poze;delete clean.Poza;delete clean.Photos;delete clean.Photo;return {...clean,__photoUrls:photoUrlsFor(row)};});
     const maxPhotos=Math.max(0,...intRows.map(r=>r.__photoUrls.length));
-    const excelInterventii=intRows.map(r=>{const out={};Object.keys(r).filter(k=>k!=='__photoUrls').forEach(k=>out[k]=r[k]);for(let p=0;p<maxPhotos;p++)out['Fotografie '+(p+1)]=r.__photoUrls[p]?'Deschide fotografia '+(p+1):'';return out;});
+    const excelInterventii=intRows.map(r=>{const out={};Object.keys(r).filter(k=>k!=='__photoUrls').forEach(k=>out[k]=r[k]);for(let p=0;p<maxPhotos;p++)out['Fotografie '+(p+1)]=r.__photoUrls[p]?'Deschide poza':'';return out;});
     const wb=XLSX.utils.book_new();
     const wsA=XLSX.utils.json_to_sheet(aparate.length?aparate:[{"Informatii":"Nu exista aparate active."}]);
     const wsF=XLSX.utils.json_to_sheet(filtre.length?filtre:[{"Informatii":"Nu exista inregistrari de filtre."}]);
@@ -1678,7 +1724,7 @@ async function exportCommercialWorkbook(){
           const url=intRows[r].__photoUrls[p]; if(!url)continue;
           const col=headers.indexOf('Fotografie '+(p+1)); if(col<0)continue;
           const addr=XLSX.utils.encode_cell({r:r+1,c:col});
-          if(wsI[addr])wsI[addr].l={Target:url,Tooltip:'Deschide fotografia in Google Drive'};
+          if(wsI[addr])wsI[addr].l={Target:url,Tooltip:'Deschide poza in Google Drive'};
         }
       }
     }
@@ -1744,7 +1790,7 @@ function commercialPage(){
         <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="openCommercialHistory()">Deschide →</b></div></div></div>
       </div>
     </section>
-    ${commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialInterventions()}`;
+    ${commercialDataLoading?'<section class="panel"><div class="emptyState">Se incarca datele portofoliului Comercial. Poti ramane in aceasta pagina; datele vor aparea automat.</div></section>':(commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialInterventions())}`;
 }
 
 function interventionsPage(){const rows=(db.Interventii||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("SERVICE","Interventii","Istoricul lucrarilor si interventiilor tehnice",`<button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${rows.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th></tr></thead><tbody>${rows.map(i=>{const bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";const sf=i.tipFiltru||i["Tip filtru"]||"";const next=i.urmatorSchimbFiltru||i["Urmator schimb"]||"";return `<tr><td>${esc(i.data||i.Data||"")}</td><td><strong>${esc(i.aparat||i.Aparat||i["ID Aparat"]||"")}</strong></td><td>${esc(i.Client||i.client||i.locatie||i.Locatie||"")}</td><td>${esc(i.tehnician||i.Tehnician||"")}</td><td>${esc(i.tipInterventie||i["Tip interventie"]||"")}</td><td>${esc(Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"")}</td><td>${esc(sf)}${next?`<div class="small">Urmator: ${esc(next)}</div>`:""}</td><td>${esc(i.urmatoareaInterventie||i["Urmatoarea interventie"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii.</div>'}</section>`}
@@ -2687,8 +2733,46 @@ async function exportAllClients(){
     XLSX.writeFile(wb,"OFRESH_Clienti.xlsx");
   }catch(e){msg("Exportul clientilor nu a putut fi generat. Verifica conexiunea la internet.",false)}
 }
-async function exportSheet(sheet,filename){try{await excelReady();const sourceRows=sheet==="Stoc"?stockGroups():(db[sheet]||[]);const rows=sourceRows.map(r=>{const x={...r};delete x.__groupRows;return x});const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Raport");XLSX.writeFile(wb,filename)}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
-async function exportInvoice(){try{await excelReady();const rows=(db.Interventii||[]).filter(i=>i.deFacturat===true||i.solicitareClient===true||i.SolicitareClient===true||i["Solicitare client"]===true||String(i["De facturat"]||"").toUpperCase()==="DA"||String(i["SolicitareClient"]||"").toUpperCase()==="DA"||String(i["Solicitare client"]||"").toUpperCase()==="DA");const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"De facturat");XLSX.writeFile(wb,"OFRESH_De_facturat.xlsx")}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
+function ofreshPhotoUrls(row){
+  const found=[];
+  Object.keys(row||{}).forEach(k=>{
+    if(!/(fotografii|fotografie|poze|poza|photos?|image.?urls?)/i.test(k))return;
+    const value=row[k],values=Array.isArray(value)?value:[value];
+    values.forEach(v=>{
+      const raw=(v&&typeof v==="object")?(v["URL poza"]||v.url||v.URL||""):v;
+      String(raw||"").split(/[\n\r;,]+/).map(x=>x.trim()).filter(Boolean).forEach(url=>{if(/^https?:\/\//i.test(url)&&!found.includes(url))found.push(url)});
+    });
+  });
+  return found;
+}
+function ofreshInterventionWorksheet(rows){
+  const prepared=(rows||[]).map(row=>{const clean={...row};const urls=ofreshPhotoUrls(clean);["Fotografii","Fotografie","Poze","Poza","Photos","Photo"].forEach(k=>delete clean[k]);return {clean,urls}});
+  const maxPhotos=Math.max(0,...prepared.map(x=>x.urls.length));
+  const output=prepared.map(x=>{const row={...x.clean};for(let i=0;i<maxPhotos;i++)row["Fotografie "+(i+1)]=x.urls[i]?"Deschide poza":"";return row});
+  const ws=XLSX.utils.json_to_sheet(output);
+  if(maxPhotos){const headers=Object.keys(output[0]||{});prepared.forEach((item,r)=>item.urls.forEach((url,i)=>{const c=headers.indexOf("Fotografie "+(i+1));if(c<0)return;const cell=XLSX.utils.encode_cell({r:r+1,c});if(ws[cell])ws[cell].l={Target:url,Tooltip:"Deschide fotografia in Google Drive"};}));}
+  return ws;
+}
+async function exportSheet(sheet,filename){try{
+  await excelReady();
+  let sourceRows;
+  if(sheet==="Interventii"){
+    const response=await api({action:"interventionExportData"});
+    if(!response||response.success===false)throw new Error(response?.error||"Nu am putut incarca interventiile si fotografiile.");
+    sourceRows=response.data?.Interventii||[];
+  }else sourceRows=sheet==="Stoc"?stockGroups():(db[sheet]||[]);
+  const rows=sourceRows.map(r=>{const x={...r};delete x.__groupRows;return x});
+  const ws=sheet==="Interventii"?ofreshInterventionWorksheet(rows):XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Raport");XLSX.writeFile(wb,filename);
+  if(sheet==="Interventii")msg("Export interventii generat. Fotografiile sunt disponibile prin linkurile Deschide poza.",true);
+}catch(e){msg(e?.message||"Export Excel necesita conexiune la internet.",false)}}
+async function exportInvoice(){try{
+  await excelReady();
+  const response=await api({action:"interventionExportData"});
+  if(!response||response.success===false)throw new Error(response?.error||"Nu am putut incarca interventiile.");
+  const rows=(response.data?.Interventii||[]).filter(i=>i.deFacturat===true||i.solicitareClient===true||i.SolicitareClient===true||i["Solicitare client"]===true||String(i["De facturat"]||"").toUpperCase()==="DA"||String(i["SolicitareClient"]||"").toUpperCase()==="DA"||String(i["Solicitare client"]||"").toUpperCase()==="DA");
+  const ws=ofreshInterventionWorksheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"De facturat");XLSX.writeFile(wb,"OFRESH_De_facturat.xlsx");
+}catch(e){msg(e?.message||"Export Excel necesita conexiune la internet.",false)}}
 async function prepareImport(input){try{await excelReady();const file=input.files[0];if(!file)return;const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
 const norm=v=>String(v??"").trim();
 const get=(r,names)=>{for(const n of names){if(Object.prototype.hasOwnProperty.call(r,n)&&norm(r[n]))return norm(r[n]);}const keys=Object.keys(r);for(const n of names){const k=keys.find(x=>norm(x).toLowerCase()===norm(n).toLowerCase());if(k&&norm(r[k]))return norm(r[k]);}return ""};
@@ -2973,7 +3057,7 @@ async function loginAdministrator(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
   const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
   const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;ofreshLoadedSheets.clear();closeModal();enterAdminCleanMode();current="dashboard";render();loadAdminDashboard(true);};
+  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;ofreshLoadedSheets.clear();ofreshAdminPrefetchPromise=null;closeModal();enterAdminCleanMode();current="dashboard";render();loadAdminDashboard(true);};
   try{
     const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");openAdmin(r.user);return;}
