@@ -630,6 +630,83 @@ function saveCachedData(){
     if(raw.length<4500000)localStorage.setItem("ofresh_db_cache_v23",raw);
   }catch(e){}
 }
+
+const ofreshLoadedSheets = new Set();
+let ofreshNavigationToken = 0;
+
+function mergeClientDataFromLoadedSheets(){
+  const realLocatii = Array.isArray(db.Locatii) ? db.Locatii : [];
+  const autoClients = buildClientsFromMachines(db.Aparate || []);
+  const clientMap = new Map();
+  for(const c of [...realLocatii, ...autoClients]){
+    const name = clientName(c).trim();
+    if(!name) continue;
+    const city = String(c.Oras||c.oras||"").trim().toLowerCase();
+    const county = String(c.Judet||c.judet||"").trim().toLowerCase();
+    const address = String(c.Adresa||c.adresa||"").trim().toLowerCase();
+    const key = name.toLowerCase()+"|"+city+"|"+county+(city||county?"":"|"+address);
+    if(!clientMap.has(key)) clientMap.set(key,c);
+    else {
+      const x = clientMap.get(key);
+      for(const k of ["Adresa","Zona","Oras","Judet","Telefon","Email","Latitudine","Longitudine"]){ if(!x[k] && c[k]) x[k]=c[k]; }
+    }
+  }
+  for(const c of (Array.isArray(db.Clienti)?db.Clienti:[])){
+    const name = clientName(c).trim();
+    if(!name) continue;
+    const city = String(c.Oras||c.oras||"").trim().toLowerCase();
+    const county = String(c.Judet||c.judet||"").trim().toLowerCase();
+    const address = String(c.Adresa||c.adresa||"").trim().toLowerCase();
+    const key = name.toLowerCase()+"|"+city+"|"+county+(city||county?"":"|"+address);
+    if(!clientMap.has(key)) clientMap.set(key,c);
+  }
+  db.Clienti = [...clientMap.values()];
+}
+
+async function loadAdminDashboard(background=true){
+  try{
+    const data = await api({action:"dashboardData"});
+    if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele Dashboard-ului.");
+    db = {Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...db,...data};
+    for(const name of ["Locatii","Aparate","Interventii","Filtre","Stoc","Tehnicieni"]) ofreshLoadedSheets.add(name);
+    mergeClientDataFromLoadedSheets();
+    saveCachedData();
+    if(adminSession && !commercialSession && !techSession && current==="dashboard") render();
+    return true;
+  }catch(e){
+    if(!background) msg(e.message || "Nu am putut incarca Dashboard-ul.",false);
+    return false;
+  }
+}
+
+function adminSheetsForModule(page){
+  const map = {
+    clienti:["Locatii","Aparate","Clienti"],
+    aparate:["Aparate","Locatii","Clienti"],
+    interventii:["Interventii","Aparate","Locatii"],
+    filtre:["Filtre","Aparate","Locatii"],
+    stoc:["Stoc"],
+    tehnicieni:["Tehnicieni"],
+    rapoarte:["Locatii","Aparate","Interventii","Filtre","Stoc"],
+    utilizatori:["Utilizatori"],
+    comercial:["Aparate","Filtre","Locatii","Clienti"]
+  };
+  return map[page] || [];
+}
+
+async function ensureAdminModuleSheets(page, token){
+  const required = adminSheetsForModule(page);
+  const missing = required.filter(name => !ofreshLoadedSheets.has(name));
+  if(!missing.length) return true;
+  const data = await api({action:"readSheets",sheets:JSON.stringify(missing)});
+  if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele modulului.");
+  Object.assign(db,data);
+  missing.forEach(name => ofreshLoadedSheets.add(name));
+  if(missing.includes("Locatii") || missing.includes("Aparate") || missing.includes("Clienti")) mergeClientDataFromLoadedSheets();
+  saveCachedData();
+  return token === ofreshNavigationToken;
+}
+
 async function load(background=false){
   try{
     const data=await api({action:"read"});
@@ -682,7 +759,25 @@ async function load(background=false){
   }
 }
 function nav(){document.getElementById("nav").innerHTML=Object.entries(pages).filter(([k])=>k!=="setari").map(([k,v])=>`<button class="${k===current?"active":""}" onclick="go('${k}')"><span class="navIcon">${icons[k]}</span><span>${v}</span></button>`).join("");}
-function go(p){current=p;if(adminSession)enterAdminCleanMode();document.getElementById("pageTitle").textContent=pages[p]||"";document.getElementById("crumb").textContent=pages[p]||"";render()}
+async function go(p){
+  current=p;
+  const token=++ofreshNavigationToken;
+  if(adminSession) enterAdminCleanMode();
+  document.getElementById("pageTitle").textContent=pages[p]||"";
+  document.getElementById("crumb").textContent=pages[p]||"";
+  if(adminSession && !commercialSession && p!=="dashboard"){
+    const app=document.getElementById("app");
+    if(app) app.innerHTML='<section class="panel"><div class="emptyState">Se incarca datele modulului...</div></section>';
+    try{
+      const currentToken=await ensureAdminModuleSheets(p,token);
+      if(!currentToken || token!==ofreshNavigationToken || current!==p) return;
+    }catch(e){
+      if(token===ofreshNavigationToken) msg(e.message||"Nu am putut incarca modulul.",false);
+      return;
+    }
+  }
+  if(token===ofreshNavigationToken) render();
+}
 
 const TECH_KEY="ofresh_tehnicieni";
 let techSession=null;
@@ -2878,7 +2973,7 @@ async function loginAdministrator(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
   const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
   const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;closeModal();enterAdminCleanMode();current="dashboard";render();load(true);};
+  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;ofreshLoadedSheets.clear();closeModal();enterAdminCleanMode();current="dashboard";render();loadAdminDashboard(true);};
   try{
     const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");openAdmin(r.user);return;}
