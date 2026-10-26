@@ -2092,6 +2092,7 @@ function selectInterventionClientFromSearch(id){
 }
 
 function openIntervention(existing={}){
+  window.__ofreshPendingIntervention=null;
   const clients=db.Clienti||[];
   const existingClient=clients.find(c=>clientName(c).toLowerCase()===(existing.Client||"").toLowerCase()) ||
                        clients.find(c=>String(clientId(c))===String(existing["ID Client"]||""));
@@ -2392,54 +2393,76 @@ async function saveIntervention(){
   const saveBtn=document.getElementById("modalSaveBtn");
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent="Se salveaza...";}
   msg("Se salveaza interventia...",true);
-  const sel=document.getElementById("f_aparatId"),selectedMachineId=String(sel?.value||"").trim(),m=selectedMachineId?(db.Aparate||[]).find(x=>String(machineId(x)).trim()===selectedMachineId):null;
-  const selectedClient=(db.Clienti||[]).find(x=>String(clientId(x))===String(v("clientInterv")));
-  if(!m||!selectedMachineId||!machineId(m)||!selectedClient||!v("tipInterventie")){if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Salveaza";}return msg("Selecteaza clientul, un aparat cu ID/serie valida si tipul interventiei. Nu am salvat interventia deoarece ID Aparat lipseste.",false);}
-  const selectedClientName=clientName(selectedClient);
-  const tip=v("tipFiltru");
-  const bill=document.getElementById("f_fact").checked;
-  const next=v("urmatorSchimb")||plusMonths(v("data"),Number(v("intervalFiltru"))||12);
-  if(v("tipInterventie")==="Schimbare filtru"){
-    if(!tip)return msg("Selecteaza tipul filtrului.",false);
-    const s=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
-    if(!s)return msg(`Filtrul "${tip}" nu exista in stoc.`,false);
-    if(stockAvailable(s)<=0)return msg(`Filtrul "${tip}" nu mai exista in stoc.`,false);
-  }
-  const ops=[...document.querySelectorAll('.checkList input:checked')].map(x=>x.value);
-  const interventionType=v("tipInterventie");
-  const nextIntervention=interventionType==="Schimbare filtru"?"":(interventionType==="Mentenanta 6 luni"?plusMonths(v("data"),6):interventionType==="Mentenanta 1 an"?plusMonths(v("data"),12):v("urmatoare"));
-  const interventionId=uid("INT");
-  const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
-  const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||m.id||m.ID||m["ID Purificator"]||machineId(m)||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
   try{
-    await rawSave("Interventii",rec,"ID Interventie","");
+    const sel=document.getElementById("f_aparatId");
+    const selectedMachineId=String(sel?.value||"").trim();
+    const m=selectedMachineId?(db.Aparate||[]).find(x=>String(machineId(x)).trim()===selectedMachineId):null;
+    const selectedClient=(db.Clienti||[]).find(x=>String(clientId(x))===String(v("clientInterv")));
+    if(!m||!selectedMachineId||!machineId(m)||!selectedClient||!v("tipInterventie"))
+      throw new Error("Selecteaza clientul, un aparat cu ID/serie valida si tipul interventiei. Nu am salvat interventia deoarece ID Aparat lipseste.");
+
+    const tip=v("tipFiltru");
+    const bill=document.getElementById("f_fact")?.checked||false;
+    const next=v("urmatorSchimb")||plusMonths(v("data"),Number(v("intervalFiltru"))||12);
+    const interventionType=v("tipInterventie");
     if(interventionType==="Schimbare filtru"){
-      const s=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
-      const updated={...s,Consum:Number(s.Consum||s.consum||s.Consumat||s.consumat||0)+1};
-      await rawSave("Stoc",updated,"ID Stoc",s["ID Stoc"]||s.id||"");
-      const c=selectedClient;const old=(db.Filtre||[]).find(f=>String(f["ID Aparat"]||"")===String(machineId(m)));
-      const fr={"ID Filtru":old?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":c?clientId(c):"","Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
-      await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
+      if(!tip)throw new Error("Selecteaza tipul filtrului.");
+      const stock=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
+      if(!stock)throw new Error(`Filtrul "${tip}" nu exista in stoc.`);
+      if(stockAvailable(stock)<=0)throw new Error(`Filtrul "${tip}" nu mai exista in stoc.`);
     }
-    if(photos.length){
-      msg("Interventia este salvata. Se incarca fotografia 1 din "+photos.length+"...",true);
-      for(let i=0;i<photos.length;i++){
-        msg("Se incarca fotografia "+(i+1)+" din "+photos.length+"...",true);
-        await uploadInterventionPhotoFile(photos[i],{interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||""),data:v("data")},i);
-      }
+
+    const selectedClientName=clientName(selectedClient);
+    const ops=[...document.querySelectorAll('.checkList input:checked')].map(x=>x.value);
+    const nextIntervention=interventionType==="Schimbare filtru"?"":(interventionType==="Mentenanta 6 luni"?plusMonths(v("data"),6):(interventionType==="Mentenanta 1 an"?plusMonths(v("data"),12):v("urmatoare")));
+    const technician=(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||"");
+    let pending=window.__ofreshPendingIntervention;
+    // Pastreaza acelasi ID si progresul fotografiilor daca utilizatorul reincearca
+    // dupa o eroare de conexiune/poza. Nu creeaza o interventie noua la retry.
+    if(!pending || pending.formKey!==[selectedMachineId,clientId(selectedClient),v("data"),interventionType].join("|")){
+      const interventionId=uid("INT");
+      const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
+      const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||m.id||m.ID||m["ID Purificator"]||machineId(m)||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":technician,"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
+      pending={formKey:[selectedMachineId,clientId(selectedClient),v("data"),interventionType].join("|"),interventionId,rec,photos,photoIndex:0,interventionSaved:false,stockUpdated:false,filterUpdated:false};
+      window.__ofreshPendingIntervention=pending;
+    }
+
+    if(!pending.interventionSaved){
+      await rawSave("Interventii",pending.rec,"ID Interventie","");
+      pending.interventionSaved=true;
+    }
+    if(interventionType==="Schimbare filtru"&&!pending.stockUpdated){
+      const stock=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
+      if(!stock)throw new Error("Interventia este salvata, dar nu am gasit produsul in stoc pentru actualizarea consumului. Nu repeta interventia; apasa din nou Salveaza dupa verificare.");
+      const updated={...stock,Consum:Number(stock.Consum||stock.consum||stock.Consumat||stock.consumat||0)+1};
+      await rawSave("Stoc",updated,"ID Stoc",stock["ID Stoc"]||stock.id||"");
+      pending.stockUpdated=true;
+    }
+    if(interventionType==="Schimbare filtru"&&!pending.filterUpdated){
+      const old=(db.Filtre||[]).find(f=>String(f["ID Aparat"]||"")===String(machineId(m)));
+      const fr={"ID Filtru":old?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":clientId(selectedClient),"Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
+      await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
+      pending.filterUpdated=true;
+    }
+    for(let i=pending.photoIndex;i<pending.photos.length;i++){
+      msg("Interventia este salvata. Se incarca fotografia "+(i+1)+" din "+pending.photos.length+"...",true);
+      await uploadInterventionPhotoFile(pending.photos[i],{interventionId:pending.interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:technician,data:v("data")},i);
+      pending.photoIndex=i+1;
     }
     window.__ofreshInterventionPhotos=[];
+    window.__ofreshPendingIntervention=null;
     closeModal();
-    // Reload data, then return technicians to their home screen so they can
-    // immediately start a new intervention for another apparatus.
     await load();
-    if(techSession && !adminSession){
-      showTechnicianHome();
-    }
-    msg(photos.length?`Interventia si ${photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
+    if(techSession && !adminSession)showTechnicianHome();
+    msg(pending.photos.length?`Interventia si ${pending.photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
-    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent="Incearca din nou";}
+  }finally{
+    // Daca fereastra este inca deschisa, utilizatorul poate corecta/reincerca.
+    if(saveBtn && document.getElementById("modalSaveBtn")){
+      saveBtn.disabled=false;
+      saveBtn.textContent=window.__ofreshPendingIntervention?.interventionSaved?"Reincearca salvarea":"Salveaza";
+    }
   }
 }
 
