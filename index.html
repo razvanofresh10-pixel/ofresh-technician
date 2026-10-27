@@ -630,6 +630,15 @@ function restoreCachedData(user){
     const cacheFresh=savedAt>0 && (Date.now()-savedAt)<10*60*1000;
     if(!cacheFresh)return false;
     db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...cached};
+    // Refolosim dupa relogare foile complete salvate local. Dashboard-ul contine
+    // doar ultimele 6 interventii, deci Interventii nu este considerata completa.
+    const savedSheets=Array.isArray(cached._ofreshLoadedSheets)?cached._ofreshLoadedSheets:[];
+    const safeDefault=["Locatii","Aparate","Filtre","Stoc","Tehnicieni"];
+    for(const name of safeDefault){if(Array.isArray(db[name]))ofreshLoadedSheets.add(name);}
+    for(const name of savedSheets){
+      if(name!=="Interventii" && name!=="Utilizatori" && Array.isArray(db[name]))ofreshLoadedSheets.add(name);
+      if((name==="Interventii"||name==="Utilizatori") && Array.isArray(db[name]) && db[name].length>0)ofreshLoadedSheets.add(name);
+    }
     delete db._ofreshLoadedSheets; delete db._ofreshSavedAt;
     return true;
   }catch(e){return false;}
@@ -638,7 +647,7 @@ function saveCachedData(){
   try{
     const key=ofreshAdminCacheKey(adminSession);
     if(!key)return;
-    const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],_ofreshSavedAt:Date.now()};
+    const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],_ofreshLoadedSheets:[...ofreshLoadedSheets],_ofreshSavedAt:Date.now()};
     const raw=JSON.stringify(payload);
     if(raw.length<4500000)localStorage.setItem(key,raw);
   }catch(e){}
@@ -681,7 +690,7 @@ async function loadAdminDashboard(background=true){
     const data = await api({action:"dashboardData"});
     if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele Dashboard-ului.");
     db = {Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...db,...data};
-    for(const name of ["Locatii","Aparate","Filtre","Tehnicieni"]) ofreshLoadedSheets.add(name);
+    for(const name of ["Locatii","Aparate","Filtre","Stoc","Tehnicieni"]) ofreshLoadedSheets.add(name);
     // Dashboard-ul aduce doar ultimele 6 interventii; modulul Interventii trebuie sa incarce lista completa.
     mergeClientDataFromLoadedSheets();
     saveCachedData();
