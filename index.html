@@ -613,27 +613,39 @@ function buildClientsFromMachines(machines){
   }
   return [...map.values()];
 }
-function restoreCachedData(){
+function ofreshAdminCacheKey(user){
+  const email=String(user?.Email||user?.email||user?.Telefon||user?.telefon||"").trim().toLowerCase();
+  if(!email)return "";
+  return "ofresh_db_cache_v24_admin_"+encodeURIComponent(email);
+}
+function restoreCachedData(user){
   try{
-    const raw=localStorage.getItem("ofresh_db_cache_v23");
+    const key=ofreshAdminCacheKey(user);
+    if(!key)return false;
+    const raw=localStorage.getItem(key);
     if(!raw)return false;
     const cached=JSON.parse(raw);
     if(!cached || typeof cached!=="object")return false;
-    db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[],...cached};
+    const savedAt=Number(cached._ofreshSavedAt||0);
+    const cacheFresh=savedAt>0 && (Date.now()-savedAt)<10*60*1000;
+    if(!cacheFresh)return false;
+    db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...cached};
+    delete db._ofreshLoadedSheets; delete db._ofreshSavedAt;
     return true;
   }catch(e){return false;}
 }
 function saveCachedData(){
   try{
-    const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],Utilizatori:db.Utilizatori||[]};
+    const key=ofreshAdminCacheKey(adminSession);
+    if(!key)return;
+    const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],_ofreshSavedAt:Date.now()};
     const raw=JSON.stringify(payload);
-    if(raw.length<4500000)localStorage.setItem("ofresh_db_cache_v23",raw);
+    if(raw.length<4500000)localStorage.setItem(key,raw);
   }catch(e){}
 }
 
 const ofreshLoadedSheets = new Set();
 let ofreshNavigationToken = 0;
-let ofreshAdminPrefetchPromise = null;
 
 function mergeClientDataFromLoadedSheets(){
   const realLocatii = Array.isArray(db.Locatii) ? db.Locatii : [];
@@ -669,46 +681,16 @@ async function loadAdminDashboard(background=true){
     const data = await api({action:"dashboardData"});
     if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele Dashboard-ului.");
     db = {Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...db,...data};
-    // Dashboard-ul aduce doar ultimele 6 interventii, nu istoricul complet.
-    // Nu marcam Interventii ca foaie incarcata integral.
-    for(const name of ["Locatii","Aparate","Filtre","Stoc","Tehnicieni"]) ofreshLoadedSheets.add(name);
+    for(const name of ["Locatii","Aparate","Filtre","Tehnicieni"]) ofreshLoadedSheets.add(name);
+    // Dashboard-ul aduce doar ultimele 6 interventii; modulul Interventii trebuie sa incarce lista completa.
     mergeClientDataFromLoadedSheets();
     saveCachedData();
     if(adminSession && !commercialSession && !techSession && current==="dashboard") render();
-    // Incarcam in fundal foile necesare modulelor, astfel incat prima deschidere
-    // a Clienti / Interventii / Rapoarte / Utilizatori sa nu mai astepte un apel separat.
-    prefetchAdminModuleSheets();
     return true;
   }catch(e){
     if(!background) msg(e.message || "Nu am putut incarca Dashboard-ul.",false);
     return false;
   }
-}
-
-function prefetchAdminModuleSheets(){
-  if(!adminSession) return Promise.resolve(false);
-  if(ofreshAdminPrefetchPromise) return ofreshAdminPrefetchPromise;
-  const sessionRef=adminSession;
-  const names=["Clienti","Interventii","Utilizatori"].filter(name=>!ofreshLoadedSheets.has(name));
-  if(!names.length) return Promise.resolve(true);
-  ofreshAdminPrefetchPromise=(async()=>{
-    try{
-      const data=await api({action:"readSheets",sheets:JSON.stringify(names)});
-      if(!data || data.success===false) throw new Error(data?.error||"Prefetch indisponibil");
-      if(adminSession!==sessionRef) return false;
-      Object.assign(db,data);
-      names.forEach(name=>ofreshLoadedSheets.add(name));
-      if(names.includes("Clienti")) mergeClientDataFromLoadedSheets();
-      saveCachedData();
-      return true;
-    }catch(e){
-      console.warn("OFRESH prefetch module, se va incarca la cerere:",e);
-      return false;
-    }finally{
-      ofreshAdminPrefetchPromise=null;
-    }
-  })();
-  return ofreshAdminPrefetchPromise;
 }
 
 function adminSheetsForModule(page){
@@ -728,13 +710,8 @@ function adminSheetsForModule(page){
 
 async function ensureAdminModuleSheets(page, token){
   const required = adminSheetsForModule(page);
-  let missing = required.filter(name => !ofreshLoadedSheets.has(name));
+  const missing = required.filter(name => !ofreshLoadedSheets.has(name));
   if(!missing.length) return true;
-  // Daca preincarcarea din fundal ruleaza deja, asteptam acelasi apel in loc
-  // sa pornim o a doua citire simultana a acelorasi foi.
-  if(ofreshAdminPrefetchPromise) await ofreshAdminPrefetchPromise;
-  missing = required.filter(name => !ofreshLoadedSheets.has(name));
-  if(!missing.length) return token === ofreshNavigationToken;
   const data = await api({action:"readSheets",sheets:JSON.stringify(missing)});
   if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele modulului.");
   Object.assign(db,data);
@@ -746,11 +723,30 @@ async function ensureAdminModuleSheets(page, token){
 
 async function load(background=false){
   try{
-    const data=await api({action:"read"});
-    db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...data};
+    let data={};
+    if(techSession && !adminSession && !commercialSession){
+      // Tehnicianul nu mai descarca toate foile (interventii, poze, stoc, utilizatori etc.).
+      data=await api({action:"technicianData"});
+      if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele tehnicianului.");
+      Object.assign(db,data);
+    }else if(adminSession && !commercialSession && !techSession){
+      // Dashboard-ul foloseste endpoint-ul dedicat; modulele cer doar foile de care au nevoie.
+      if(current==="dashboard") data=await api({action:"dashboardData"});
+      else {
+        const names=adminSheetsForModule(current);
+        data=names.length?await api({action:"readSheets",sheets:JSON.stringify(names)}):{};
+      }
+      if(!data || data.success===false) throw new Error(data?.error || "Nu am putut reincarca datele modulului.");
+      Object.assign(db,data);
+      if(current==="dashboard")["Locatii","Aparate","Filtre","Stoc","Tehnicieni"].forEach(name=>ofreshLoadedSheets.add(name));
+      else adminSheetsForModule(current).forEach(name=>ofreshLoadedSheets.add(name));
+    }else{
+      data=await api({action:"read"});
+      db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...data};
+    }
     /* Clientii reali sunt in Locatii. Daca Locatii este goala, ii construim automat din Aparate. */
-    const realLocatii=Array.isArray(data.Locatii)?data.Locatii:[];
-    const autoClients=buildClientsFromMachines(data.Aparate||[]);
+    const realLocatii=Array.isArray(db.Locatii)?db.Locatii:[];
+    const autoClients=buildClientsFromMachines(db.Aparate||[]);
     db.Locatii=realLocatii;
     // Nu alegem intre Locatii si Aparate: combinam ambele surse, astfel incat
     // tehnicianul sa vada clientii chiar daca foaia Locatii este incompleta.
@@ -919,7 +915,6 @@ async function loginTechnician(){
     techView="home";
     document.getElementById("techLoginScreen")?.remove();
     document.body.classList.remove("techLoginActive");
-    const hadCache=restoreCachedData();
     showTechnicianHome();
     load(true);
     return true;
@@ -3057,7 +3052,7 @@ async function loginAdministrator(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
   const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
   const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;ofreshLoadedSheets.clear();ofreshAdminPrefetchPromise=null;closeModal();enterAdminCleanMode();current="dashboard";render();loadAdminDashboard(true);};
+  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();loadAdminDashboard(true);};
   try{
     const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");openAdmin(r.user);return;}
@@ -3077,7 +3072,6 @@ const publicPathToken="";
 const publicHashToken=publicHashParams.get("q")||"";
 const publicQueryToken=publicParams.get("q")||"";
 const isPublicQr=!!(publicQueryToken||publicHashToken);
-restoreCachedData();
 if(publicPathToken){publicMachinePage(publicPathToken,true);}
 else if(publicQueryToken){publicMachinePage(publicQueryToken,true);}
 else if(publicHashToken){publicMachinePage(publicHashToken,true);}
