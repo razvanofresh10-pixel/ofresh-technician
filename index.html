@@ -655,6 +655,8 @@ function saveCachedData(){
 
 const ofreshLoadedSheets = new Set();
 let ofreshNavigationToken = 0;
+// Evita cereri paralele: modulele Administrator asteapta finalizarea incarcarii initiale Dashboard.
+let ofreshDashboardLoadPromise = null;
 
 function mergeClientDataFromLoadedSheets(){
   const realLocatii = Array.isArray(db.Locatii) ? db.Locatii : [];
@@ -811,6 +813,10 @@ async function go(p){
     const app=document.getElementById("app");
     if(app) app.innerHTML='<section class="panel"><div class="emptyState">Se incarca datele modulului...</div></section>';
     try{
+      // Login-ul porneste Dashboard-ul fara sa blocheze interfata. Daca utilizatorul
+      // deschide imediat un modul, asteptam acelasi request in loc sa cerem din nou foile.
+      if(ofreshDashboardLoadPromise) await ofreshDashboardLoadPromise;
+      if(token!==ofreshNavigationToken || current!==p) return;
       const currentToken=await ensureAdminModuleSheets(p,token);
       if(!currentToken || token!==ofreshNavigationToken || current!==p) return;
     }catch(e){
@@ -3061,7 +3067,7 @@ async function loginAdministrator(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
   const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
   const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();loadAdminDashboard(true);};
+  const openAdmin=(u)=>{adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();ofreshDashboardLoadPromise=loadAdminDashboard(true).finally(()=>{ofreshDashboardLoadPromise=null;});};
   try{
     const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");openAdmin(r.user);return;}
