@@ -665,21 +665,35 @@ let ofreshAdminPrefetchPromise = null;
 // Pregateste in fundal datele modulelor mari, fara sa blocheze Dashboard-ul.
 async function prefetchAdminModuleSheets(){
   if(!adminSession || commercialSession || techSession) return;
-  const names=["Interventii"].filter(name=>!ofreshLoadedSheets.has(name));
-  if(!names.length) return;
+  // Incarcam intr-un singur apel foile folosite de modulele care altfel
+  // ar porni cereri separate la prima deschidere.
+  const names=["Interventii","Stoc","Utilizatori","Clienti"].filter(name=>!ofreshLoadedSheets.has(name));
+  if(!names.length) return true;
   if(ofreshAdminPrefetchPromise) return ofreshAdminPrefetchPromise;
-  ofreshAdminPrefetchPromise=(async()=>{
+
+  let requestPromise;
+  requestPromise=(async()=>{
     try{
       const data=await api({action:"readSheets",sheets:JSON.stringify(names)});
-      if(!data || data.success===false) return false;
+      if(!data || data.success===false) throw new Error(data?.error || "Prefetch module esuat.");
       Object.assign(db,data);
       names.forEach(name=>ofreshLoadedSheets.add(name));
+      if(names.includes("Clienti")) mergeClientDataFromLoadedSheets();
       saveCachedData();
       return true;
-    }catch(e){ console.warn("[OFRESH] Prefetch module sheets failed:",e); return false; }
-    finally{ ofreshAdminPrefetchPromise=null; }
+    }catch(e){
+      console.warn("[OFRESH] Prefetch module sheets failed:",e);
+      return false;
+    }finally{
+      names.forEach(name=>{
+        if(ofreshSheetLoadPromises.get(name)===requestPromise) ofreshSheetLoadPromises.delete(name);
+      });
+      ofreshAdminPrefetchPromise=null;
+    }
   })();
-  return ofreshAdminPrefetchPromise;
+  ofreshAdminPrefetchPromise=requestPromise;
+  names.forEach(name=>ofreshSheetLoadPromises.set(name,requestPromise));
+  return requestPromise;
 }
 
 function mergeClientDataFromLoadedSheets(){
@@ -722,6 +736,8 @@ async function loadAdminDashboard(background=true){
     saveCachedData();
     if(adminSession && !commercialSession && !techSession){
       if(current==="dashboard") render();
+      // Incarcam in fundal foile comune ale modulelor; Dashboard-ul nu asteapta.
+      if(!ofreshAdminPrefetchPromise) prefetchAdminModuleSheets();
     }
     return true;
   }catch(e){
