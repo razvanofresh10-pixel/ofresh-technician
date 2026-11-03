@@ -3314,30 +3314,87 @@ function filerStartVisit(row){
   const checks=tasks.map((t,i)=>`<label class="checkRow"><input type="checkbox" id="filerTask${i}" value="${esc(t)}">${esc(t)}</label>`).join('');
   modal('Interventie service espressor',`<div class="grid"><div class="field"><span>Client</span><div class="notice">${esc(found.location.Client||'')}</div></div><div class="field"><span>Espressor</span><div class="notice">${esc(found.machine['Tip aparat']||found.machine.Model||'')} · ${esc(found.machine['Serie Aparat']||'Fara serie')}</div></div>${inputField('Data interventiei','filerDate',new Date().toISOString().slice(0,10),'date')}<label class="field wide"><span>Operatiuni efectuate</span><div class="checkList">${checks}</div></label>
   <div class="field wide"><span>Aviz marfa (maximum 1 fotografie)</span><label class="secondaryButton" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">📄 Adauga aviz<input id="filerAvizInput" type="file" accept="image/*" capture="environment" style="display:none"></label><div id="filerAvizPreview" class="small" style="margin-top:6px">Nicio fotografie selectata.</div></div>
-  <div class="field wide"><span>Fotografii aparat dupa curatare (maximum 4)</span><label class="secondaryButton" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">📷 Adauga fotografii<input id="filerAfterInput" type="file" accept="image/*" multiple style="display:none"></label><div id="filerAfterPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:8px"></div><small class="hint">Apasa din nou „Adauga fotografii” pentru a adauga alte poze; cele deja selectate se pastreaza. Maximum 4 fotografii dupa curatare.</small></div>
+  <div class="field wide"><span>Fotografii aparat dupa curatare (maximum 4)</span><button id="filerOpenCameraBtn" class="secondaryButton" type="button" onclick="filerOpenAfterCamera()" style="display:inline-flex;align-items:center;gap:8px">📷 Deschide camera si fa poza</button><div id="filerAfterPhotoCount" class="small" style="margin-top:6px">0/4 fotografii facute</div><div id="filerAfterPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:8px"></div><small class="hint">Se deschide direct camera din telefon. Nu se poate selecta din galerie. Poti face fotografiile succesiv, pana la maximum 4.</small></div>
   ${inputField('Observatii','filerObs','','text',true)}</div>`,`Salveaza interventia`,`filerSaveVisit(${Number(row)})`);
   window.__filerAvizPhoto=null;window.__filerAfterPhotos=[];
   const aviz=document.getElementById('filerAvizInput');
   aviz?.addEventListener('change',()=>{const f=aviz.files?.[0]||null;window.__filerAvizPhoto=f&&String(f.type||'').startsWith('image/')?f:null;document.getElementById('filerAvizPreview').textContent=window.__filerAvizPhoto?window.__filerAvizPhoto.name:'Nicio fotografie selectata.';});
-  const after=document.getElementById('filerAfterInput');
-  after?.addEventListener('change',()=>{
-    const incoming=[...(after.files||[])].filter(f=>String(f.type||'').startsWith('image/'));
-    const current=window.__filerAfterPhotos||[];
-    const seen=new Set(current.map(f=>[f.name,f.size,f.lastModified].join('|')));
-    const additions=incoming.filter(f=>!seen.has([f.name,f.size,f.lastModified].join('|')));
-    const room=Math.max(0,4-current.length);
-    window.__filerAfterPhotos=current.concat(additions.slice(0,room));
-    after.value='';
-    if(additions.length>room)msg('Poti adauga maximum 4 fotografii dupa curatare. Fotografiile deja selectate au fost pastrate.',false);
-    filerRenderAfterPhotoPreviews();
-  });
+  // Fotografiile dupa curatare se fac direct cu camera telefonului (getUserMedia),
+  // fara selector de galerie/fisiere. Fiecare captura se adauga listei existente.
+  const afterCount=document.getElementById('filerAfterPhotoCount');
+  if(afterCount)afterCount.textContent='0/4 fotografii facute';
 }
+async function filerOpenAfterCamera(){
+  const current=window.__filerAfterPhotos||[];
+  if(current.length>=4){msg('Ai deja 4 fotografii dupa curatare. Elimina una daca doresti sa o refaci.',false);return;}
+  if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='function'){
+    msg('Camera directa nu este disponibila in acest browser. Deschide OFRESH prin HTTPS intr-un browser actual si permite accesul la camera.',false);return;
+  }
+  if(document.getElementById('filerCameraOverlay'))return;
+  const overlay=document.createElement('div');
+  overlay.id='filerCameraOverlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(7,12,18,.96);display:flex;align-items:center;justify-content:center;padding:12px;';
+  overlay.innerHTML=`<section style="width:min(680px,100%);max-height:96dvh;overflow:auto;background:#fff;border-radius:18px;padding:14px;box-shadow:0 20px 70px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px"><div><strong style="font-size:18px;color:#17212b">Fotografie dupa curatare</strong><div id="filerCameraCounter" style="font-size:12px;color:#64748b;margin-top:3px">${current.length}/4 fotografii</div></div><button type="button" class="secondaryButton" onclick="filerCloseAfterCamera()">Inchide</button></div>
+    <div style="position:relative;background:#080b0e;border-radius:12px;overflow:hidden"><video id="filerAfterCameraVideo" autoplay playsinline muted style="display:block;width:100%;max-height:65dvh;min-height:220px;object-fit:cover"></video><canvas id="filerAfterCameraCanvas" style="display:none"></canvas></div>
+    <div id="filerCameraMessage" class="small" style="padding:9px 2px;color:#64748b">Se porneste camera din spatele telefonului...</div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px"><button id="filerCaptureAfterPhotoBtn" type="button" class="primaryButton" disabled onclick="filerCaptureAfterPhoto()" style="min-width:190px;min-height:48px">📸 Fa fotografia</button><button type="button" class="secondaryButton" onclick="filerCloseAfterCamera()" style="min-height:48px">Gata</button></div>
+    <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px">Camera ramane deschisa pentru fotografii succesive. Maximum 4.</div>
+  </section>`;
+  document.body.appendChild(overlay);
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+    // Daca utilizatorul a inchis overlay-ul cat timp browserul cerea permisiunea,
+    // oprim imediat camera si nu lasam indicatorul camerei aprins.
+    const liveOverlay=document.getElementById('filerCameraOverlay');
+    if(!liveOverlay){stream.getTracks().forEach(t=>t.stop());return;}
+    window.__filerAfterCameraStream=stream;
+    const video=document.getElementById('filerAfterCameraVideo');
+    video.srcObject=stream;
+    await video.play();
+    const capture=document.getElementById('filerCaptureAfterPhotoBtn');if(capture)capture.disabled=false;
+    const message=document.getElementById('filerCameraMessage');if(message)message.textContent='Camera este pregatita. Incadreaza aparatul si apasa „Fa fotografia”.';
+  }catch(error){
+    filerCloseAfterCamera();
+    const detail=error?.name==='NotAllowedError'?'Ai blocat accesul la camera. Permite accesul la camera pentru site-ul OFRESH.':error?.name==='NotFoundError'?'Nu a fost gasita o camera disponibila pe acest dispozitiv.':error?.name==='NotReadableError'?'Camera este folosita de alta aplicatie. Inchide acea aplicatie si incearca din nou.':'Nu am putut porni camera: '+(error?.message||'eroare necunoscuta');
+    msg(detail,false);
+  }
+}
+function filerCaptureAfterPhoto(){
+  const video=document.getElementById('filerAfterCameraVideo');
+  const canvas=document.getElementById('filerAfterCameraCanvas');
+  if(!video||!canvas||!video.videoWidth||!video.videoHeight){msg('Camera nu este pregatita inca. Incearca din nou.',false);return;}
+  const current=window.__filerAfterPhotos||[];
+  if(current.length>=4){msg('Ai atins limita de 4 fotografii dupa curatare.',false);return;}
+  const maxWidth=1920,scale=Math.min(1,maxWidth/video.videoWidth);
+  canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
+  const context=canvas.getContext('2d',{alpha:false});
+  context.drawImage(video,0,0,canvas.width,canvas.height);
+  canvas.toBlob(blob=>{
+    if(!blob){msg('Fotografia nu a putut fi capturata. Incearca din nou.',false);return;}
+    const index=(window.__filerAfterPhotos||[]).length+1;
+    const file=new File([blob],`Aparat-dupa-curatare-${Date.now()}-${index}.jpg`,{type:'image/jpeg',lastModified:Date.now()});
+    window.__filerAfterPhotos=[...(window.__filerAfterPhotos||[]),file].slice(0,4);
+    filerRenderAfterPhotoPreviews();
+    const count=window.__filerAfterPhotos.length;
+    const counter=document.getElementById('filerCameraCounter');if(counter)counter.textContent=`${count}/4 fotografii`;
+    const message=document.getElementById('filerCameraMessage');if(message)message.textContent=`Fotografia ${count} a fost adaugata. Poti incadra si fotografia urmatorul unghi.`;
+    const capture=document.getElementById('filerCaptureAfterPhotoBtn');if(capture&&count>=4){capture.disabled=true;capture.textContent='Limita de 4 fotografii atinsa';}
+    const pageCount=document.getElementById('filerAfterPhotoCount');if(pageCount)pageCount.textContent=`${count}/4 fotografii facute`;
+  },'image/jpeg',0.88);
+}
+function filerCloseAfterCamera(){
+  const stream=window.__filerAfterCameraStream;
+  if(stream){try{stream.getTracks().forEach(track=>track.stop());}catch(_){};window.__filerAfterCameraStream=null;}
+  const overlay=document.getElementById('filerCameraOverlay');if(overlay)overlay.remove();
+}
+
 function filerRenderAfterPhotoPreviews(){
   const box=document.getElementById('filerAfterPreview');if(!box)return;
   (window.__filerAfterPhotoUrls||[]).forEach(url=>{try{URL.revokeObjectURL(url)}catch(_){}});
   window.__filerAfterPhotoUrls=[];
   const photos=window.__filerAfterPhotos||[];
-  box.innerHTML=(photos.length?`<div style="grid-column:1/-1;font-size:12px;color:#526560;font-weight:700">${photos.length}/4 fotografii selectate · selectarea repetata adauga poze noi</div>`:'<div style="grid-column:1/-1;font-size:12px;color:#718096">Nu ai selectat fotografii dupa curatare.</div>')+photos.map((f,i)=>{
+  box.innerHTML=(photos.length?`<div style="grid-column:1/-1;font-size:12px;color:#526560;font-weight:700">${photos.length}/4 fotografii facute cu camera telefonului</div>`:'<div style="grid-column:1/-1;font-size:12px;color:#718096">Nu ai selectat fotografii dupa curatare.</div>')+photos.map((f,i)=>{
     const url=URL.createObjectURL(f);window.__filerAfterPhotoUrls.push(url);
     return `<div style="border:1px solid #d5dfdc;border-radius:8px;overflow:hidden;background:#fff"><img src="${url}" style="width:100%;height:76px;object-fit:cover"><div style="font-size:10px;padding:4px;word-break:break-word">${i+1}. ${esc(f.name)}</div><button type="button" class="dangerButton" style="width:100%;padding:5px;border-radius:0" onclick="filerRemoveAfterPhoto(${i})">Elimina</button></div>`;
   }).join('');
@@ -3345,6 +3402,9 @@ function filerRenderAfterPhotoPreviews(){
 function filerRemoveAfterPhoto(index){
   const photos=window.__filerAfterPhotos||[];if(index<0||index>=photos.length)return;
   photos.splice(index,1);window.__filerAfterPhotos=photos;filerRenderAfterPhotoPreviews();
+  const count=document.getElementById('filerAfterPhotoCount');if(count)count.textContent=`${photos.length}/4 fotografii facute`;
+  const cameraCount=document.getElementById('filerCameraCounter');if(cameraCount)cameraCount.textContent=`${photos.length}/4 fotografii`;
+  const capture=document.getElementById('filerCaptureAfterPhotoBtn');if(capture){capture.disabled=false;capture.textContent='📸 Fa fotografia';}
 }
 
 async function filerPreparePhotoUpload(file,meta,index){
