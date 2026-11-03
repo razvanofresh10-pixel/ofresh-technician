@@ -648,7 +648,7 @@ function uid(p){return p+"-"+Date.now()+"-"+Math.random().toString(36).slice(2,7
 function setSearch(v){searchTerm=v||"";render()}
 function clearSearch(){searchTerm="";document.getElementById("globalSearch").value="";render()}
 function msg(t,ok=true){const e=document.getElementById("message");e.textContent=t;e.className="message "+(ok?"ok":"err");setTimeout(()=>{e.className="message"},3600)}
-function api(params){return new Promise((resolve,reject)=>{const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}const to=setTimeout(()=>{if(done)return;done=true;clean();reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
+function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const track=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerFinalizePhotoUpload)$/.test(action);const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshFilerLastApiMs=ms;const server=d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;console.info('[OFRESH FILER PERF]',{action:action,networkMs:ms,serverMs:server,locations:d?.totalLocations,machines:d?.totalMachines});}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();perf(d);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
 function buildClientsFromMachines(machines){
   const rows=Array.isArray(machines)?machines:[];
   const map=new Map();
@@ -859,9 +859,11 @@ async function load(background=false){
   try{
     let data={};
     if(filerSession){
+      const filerLoadStarted=performance.now();
       data=await api({action:"filerData",telefon:filerSession.phone,pin:filerSession.pin});
       if(!data || data.success===false) throw new Error(data?.error || "Nu am putut incarca datele Filer.");
       filerState=data;
+      console.info('[OFRESH FILER PERF]',{phase:'filer-data-and-render',totalMs:Math.round(performance.now()-filerLoadStarted),serverMs:data?.diagnostics?.timings?.totalServerMs||0,locations:data.totalLocations,machines:data.totalMachines});
       showFilerCurrentView();
       return true;
     }else if(techSession && !adminSession && !commercialSession){
@@ -3077,6 +3079,20 @@ function openFilerLogin(){
   document.getElementById('filerLoginForm')?.addEventListener('submit',ev=>{ev.preventDefault();submit();});
   setTimeout(()=>document.getElementById('f_filerTelefon')?.focus(),50);
 }
+function filerLogUiPerf_(label,started){
+  const ms=Math.round(performance.now()-started);
+  console.info('[OFRESH FILER PERF]',{phase:label,uiMs:ms});
+  return ms;
+}
+function filerUpdatePerfLine_(renderMs){
+  const node=document.getElementById('filerPerfLine');if(!node)return;
+  const d=filerState?.diagnostics||{},t=d.timings||{};
+  const network=Number(window.__ofreshFilerLastApiMs||0);
+  const server=Number(t.totalServerMs||0);
+  const ui=Number(renderMs||0);
+  node.textContent=`Incarcare date: retea ${network} ms · server ${server} ms · afisare ${ui} ms`;
+}
+
 function filerApplyDedicatedShell(){
   document.body.classList.add('ofreshFilerMode');
   document.body.classList.remove('ofreshAccess','techLoginActive');
@@ -3092,7 +3108,30 @@ function filerRestoreAppShell(){
 }
 function filerRefreshData(){return load(true);}
 function filerLocationKey(location){return String(location?.key||location?.['ID Locatie']||[location?.Client,location?.Oras,location?.Adresa].join('|'));}
-function filerAllLocations(){return Array.isArray(filerState?.locations)?filerState.locations:[];}
+function filerNormalizeAccessValue(value){return String(value==null?'':value).trim().toLocaleLowerCase('ro-RO').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');}
+function filerIsEspressoRecord(machine){
+  const equipment=filerNormalizeAccessValue(machine?.['Tip Echipament']||machine?.['Tip echipament']||machine?.Echipament||'');
+  return /^(esp|espresso|espressor|espressoare)$/.test(equipment);
+}
+function filerIsActiveRecord(machine){
+  const status=filerNormalizeAccessValue(machine?.Status||machine?.status||machine?.Stare||'');
+  const withdrawal=filerNormalizeAccessValue(machine?.['Data retragere']||machine?.['Data Retragere']||machine?.['Data retragerii']||'');
+  return (status==='activ'||status==='active') && (!withdrawal||['-','—','n/a','na','nu','0'].includes(withdrawal));
+}
+function filerAllLocations(){
+  const raw=Array.isArray(filerState?.locations)?filerState.locations:[];
+  const allowedTypes=new Set((filerSession?.equipmentTypes||[]).map(filerNormalizeAccessValue).filter(Boolean));
+  const allowedZones=new Set((filerSession?.zones||[]).map(filerNormalizeAccessValue).filter(Boolean));
+  if(!allowedTypes.size||!allowedZones.size)return [];
+  return raw.map(location=>{
+    const machines=(Array.isArray(location?.machines)?location.machines:[]).filter(machine=>{
+      const type=filerNormalizeAccessValue(machine?.['Tip Echipament']||machine?.['Tip echipament']||machine?.Echipament||'');
+      const zone=filerNormalizeAccessValue(machine?.Zona||machine?.zona||machine?.Zone||'');
+      return filerIsEspressoRecord(machine)&&filerIsActiveRecord(machine)&&allowedTypes.has(type)&&allowedZones.has(zone);
+    });
+    return {...location,machines};
+  }).filter(location=>location.machines.length>0);
+}
 function filerCurrentLocation(){return filerAllLocations().find(l=>filerLocationKey(l)===String(filerSelectedLocationKey))||null;}
 function filerFindMachine(row){
   const n=Number(row);
@@ -3113,7 +3152,8 @@ function showFilerCurrentView(){
 function filerEmptyReason(){
   const d=filerState?.diagnostics||{};
   if(!Number(d.machineRows||0))return 'Nu exista inregistrari in foaia Aparate.';
-  if(!Number(d.espressoRows||0))return 'Nu am identificat espressoare in Aparate. Verifica valorile din Tip Echipament, Tip aparat si Producator.';
+  if(!Number(d.espressoRows||0))return 'Nu am identificat espressoare in coloana Tip Echipament din foaia Aparate.';
+  if(!Number(d.activeEspressoRows||0))return 'Nu exista espressoare active. Aparatele cu Status Inactiv/Retras sau cu Data retragere completata nu sunt afisate.';
   if(!(filerState?.allowedEquipmentTypes||[]).length)return 'Administratorul nu a alocat niciun Tip Echipament acestui cont Filer.';
   if(!(filerState?.allowedZones||[]).length)return 'Administratorul nu a alocat nicio Zona din foaia Aparate acestui cont Filer.';
   if(!Number(d.allowedMachineRows||0))return `Nu am gasit aparate care sa corespunda simultan Tip Echipament: ${(filerState?.allowedEquipmentTypes||[]).join(', ')} si Zona: ${(filerState?.allowedZones||[]).join(', ')}. Verifica selectiile din Administrare → Utilizatori.`;
@@ -3121,9 +3161,11 @@ function filerEmptyReason(){
 }
 
 function filerLocationCardHtml(l){
-  return `<div class="locationCard"><div class="locationCardTop"><span class="statusDot">${(l.machines||[]).length} espressoare</span></div><h3>${esc(l.Client||'Client')}</h3><p><strong>Adresa:</strong> ${esc(l.Adresa||'Adresa nespecificata')}</p><p><strong>Zona:</strong> ${esc(l.Zona||'-')}</p><div class="locationFooter"><div><strong>${esc(String((l.machines||[]).length))}</strong><span>aparate</span></div><button class="primaryButton" type="button" data-key="${esc(filerLocationKey(l))}" onclick="filerOpenLocation(this.dataset.key)">Deschide</button></div></div>`;
+  const count=(l.machines||[]).length;
+  return `<div class="locationCard"><div class="locationCardTop"><span class="statusDot">${count} espressoare</span></div><h3>${esc(l.Client||'Client')}</h3><p><strong>Adresa:</strong> ${esc(l.Adresa||'Adresa nespecificata')}</p><p><strong>Zona:</strong> ${esc(l.Zona||'-')}</p><div class="locationFooter"><div><strong>${esc(String(count))}</strong><span>espressoare</span></div><button class="primaryButton" type="button" data-key="${esc(filerLocationKey(l))}" onclick="filerOpenLocation(this.dataset.key)">Deschide</button></div></div>`;
 }
 function filerUpdateSearchResults(){
+  const searchStarted=performance.now();
   const locations=filerAllLocations();
   const input=document.getElementById('filerClientSearch');
   const query=normalizeOfreshSearch(input?.value||'');
@@ -3142,44 +3184,88 @@ function filerUpdateSearchResults(){
   });
   if(counter)counter.textContent=`${visible.length} clienti gasiti din ${locations.length}.`;
   box.innerHTML=visible.map(filerLocationCardHtml).join('')||`<div class="emptyState">${locations.length?`Nu exista rezultate pentru „${esc(input?.value||'')}”.`:filerEmptyReason()}</div>`;
+  filerLogUiPerf_('search-render',searchStarted);
 }
 function showFilerHome(){
   if(!filerSession)return;
+  const renderStarted=performance.now();
   filerView='home';
   filerApplyDedicatedShell();
   const locations=filerAllLocations();
-  const totalMachines=Number(filerState.totalMachines||locations.reduce((n,l)=>n+(l.machines||[]).length,0));
+  const totalMachines=locations.reduce((n,l)=>n+(l.machines||[]).length,0);
   const zones=(filerSession.zones||[]).join(', ');
   const equipmentTypes=(filerSession.equipmentTypes||[]).join(', ');
   document.getElementById('app').innerHTML=`<div class="techHome">
     <section class="welcome"><div><div class="eyebrow">MOD FILER · SERVICE ESPRESSOARE</div><h2>Buna, ${esc(filerSession.name)}!</h2><p>Tip echipament: ${esc(equipmentTypes)} · Zone alocate: ${esc(zones)}</p></div><button class="secondaryButton" type="button" onclick="logoutFiler()">Iesire</button></section>
-    <div class="reportGrid" style="margin-bottom:16px"><div class="reportCard"><span>Clienti cu espressoare</span><strong>${locations.length}</strong></div><div class="reportCard"><span>Espressoare disponibile</span><strong>${totalMachines}</strong></div></div>
-    <section class="panel"><div class="panelHeader"><div><h3>Clientii mei - espressoare</h3><p>Afiseaza doar clientii cu espressoare din zonele alocate de Administrator.</p></div><button class="secondaryButton" type="button" onclick="filerRefreshData()">Reincarca</button></div>
-      <form id="filerSearchForm" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><input id="filerClientSearch" type="search" value="${esc(filerSearchTerm)}" placeholder="Cauta client, adresa, oras, serie sau cod OFRESH..." style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px"><button class="primaryButton" type="submit">Cauta</button><button class="secondaryButton" type="button" onclick="openMachineScanner()">Scaneaza QR</button></form><div id="filerSearchCounter" class="small" style="margin-bottom:12px"></div>
+    <div class="reportGrid" style="margin-bottom:16px"><div class="reportCard"><span>Clienti cu espressoare active</span><strong>${locations.length}</strong></div><div class="reportCard"><span>Espressoare active in zonele alocate</span><strong>${totalMachines}</strong></div></div>
+    <section class="panel"><div class="panelHeader"><div><h3>Clientii mei - espressoare</h3><p>Sunt afisate exclusiv espressoarele active din tipurile si zonele alocate de Administrator.</p></div><button class="secondaryButton" type="button" onclick="filerRefreshData()">Reincarca</button></div>
+      <form id="filerSearchForm" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><input id="filerClientSearch" type="search" value="${esc(filerSearchTerm)}" placeholder="Cauta client, adresa, zona, serie sau cod OFRESH..." style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px"><button class="primaryButton" type="submit">Cauta</button><button class="secondaryButton" type="button" onclick="openMachineScanner()">Scaneaza QR</button></form><div id="filerSearchCounter" class="small" style="margin-bottom:4px"></div><div id="filerPerfLine" class="small" style="margin-bottom:12px;color:#718096"></div>
       <div id="filerLocationResults" class="locationGrid"></div>
     </section></div>`;
   const form=document.getElementById('filerSearchForm');
   form?.addEventListener('submit',ev=>{ev.preventDefault();filerUpdateSearchResults();});
   document.getElementById('filerClientSearch')?.addEventListener('input',filerUpdateSearchResults);
   filerUpdateSearchResults();
+  const renderMs=filerLogUiPerf_('home-render',renderStarted);
+  filerUpdatePerfLine_(renderMs);
 }
 function filerSearchClients(){filerUpdateSearchResults();}
+
+function filerMapLinks(location){
+  const lat=Number(location?.['GPS Latitudine']),lng=Number(location?.['GPS Longitudine']);
+  const hasGps=Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180&&String(location?.['GPS Latitudine']||'').trim()!==''&&String(location?.['GPS Longitudine']||'').trim()!=='';
+  const destination=hasGps?`${lat},${lng}`:[location?.Adresa,location?.Zona].filter(Boolean).join(', ');
+  if(!destination)return {waze:'',maps:'',hasGps:false};
+  const encoded=encodeURIComponent(destination);
+  return {waze:hasGps?`https://www.waze.com/ul?ll=${lat},${lng}&navigate=yes`:`https://www.waze.com/ul?q=${encoded}&navigate=yes`,maps:`https://www.google.com/maps/dir/?api=1&destination=${encoded}`,hasGps:hasGps};
+}
+async function filerSaveCurrentGps(row){
+  if(!filerSession)return;
+  const gpsStarted=performance.now();
+  if(!navigator.geolocation)return msg('Telefonul sau browserul nu permite citirea pozitiei GPS.',false);
+  const selectedKey=filerSelectedLocationKey;
+  msg('Se citeste pozitia GPS. Permite accesul la locatie si ramai la adresa clientului.',true);
+  try{
+    const position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:0}));
+    console.info('[OFRESH FILER PERF]',{phase:'gps-device-fix',durationMs:Math.round(performance.now()-gpsStarted),accuracyMeters:Math.round(position.coords.accuracy||0)});
+    const r=await api({action:'filerUpdateGps',telefon:filerSession.phone,pin:filerSession.pin,locationRow:Number(row),latitudine:position.coords.latitude,longitudine:position.coords.longitude,precizie:position.coords.accuracy||0});
+    if(!r||r.success!==true)throw new Error(r?.error||'Pozitia GPS nu a putut fi salvata.');
+    msg(`Pozitia GPS a fost salvata pentru ${r.aparateActualizate} espressoare.`,true);
+    await filerRefreshData();
+    if(selectedKey)filerOpenLocation(selectedKey);
+  }catch(e){
+    const text=e?.code===1?'Accesul la locatie a fost refuzat. Activeaza permisiunea de locatie pentru site.':e?.code===2?'Telefonul nu a putut determina pozitia GPS. Incearca afara sau activeaza locatia.':e?.code===3?'Citirea pozitiei GPS a expirat. Incearca din nou.':(e?.message||'Pozitia GPS nu a putut fi salvata.');
+    msg(text,false);
+  }
+}
 
 function filerOpenLocation(key){
   filerSelectedLocationKey=String(key||'');filerView='location';filerRenderLocation();
 }
 function filerRenderLocation(){
+  const renderStarted=performance.now();
   const l=filerCurrentLocation();if(!l){filerView='home';return showFilerHome();}
   const address=[l.Adresa||'',l.Zona||''].filter(Boolean).join(' · ');
   const machines=(l.machines||[]).slice().sort((a,b)=>String(a['Tip aparat']||'').localeCompare(String(b['Tip aparat']||''),'ro'));
+  const map=filerMapLinks(l);
+  const gpsText=map.hasGps?`Pozitie GPS salvata${l['GPS Precizie m']?` · precizie ${esc(String(Math.round(Number(l['GPS Precizie m'])||0)))} m`:''}`:'Nu exista coordonate GPS salvate pentru aceasta locatie.';
+  const targetRow=Number(l.__filerRow||(machines[0]&&machines[0].__filerRow)||0);
   document.getElementById('app').innerHTML=`<div class="techHome"><section class="welcome"><div><div class="eyebrow">CLIENT · ESPRESSOARE</div><h2>${esc(l.Client||'Client')}</h2><p>${esc(address||'Adresa nespecificata')}</p></div><button class="secondaryButton" onclick="showFilerHome()">Inapoi</button></section>
     <section class="panel"><div class="panelHeader"><div><h3>Date locatie</h3><p>Verifica adresa si corecteaz-o cand este necesar.</p></div><button class="secondaryButton" onclick="filerEditLocation()">Modifica adresa</button></div>
       <div class="notice"><strong>${esc(l.Adresa||'Adresa lipsa')}</strong><br>Zona: ${esc(l.Zona||'-')}</div>
+      <div class="right" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;justify-content:flex-start">
+        ${map.waze?`<a class="secondaryButton" href="${esc(map.waze)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Deschide in Waze</a>`:''}
+        ${map.maps?`<a class="secondaryButton" href="${esc(map.maps)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Deschide in Google Maps</a>`:''}
+        <button class="primaryButton" type="button" onclick="filerSaveCurrentGps(${targetRow})">Salveaza pozitia GPS aici</button>
+      </div>
+      <p class="small" style="margin-top:8px">${gpsText} Pentru salvarea pozitiei, Filerul trebuie sa fie fizic la adresa clientului si sa permita accesul GPS.</p>
     </section>
-    <section class="panel"><div class="panelHeader"><div><h3>Espressoare (${machines.length})</h3><p>Selecteaza aparatul pentru verificarea datelor sau inregistrarea service-ului.</p></div><button class="secondaryButton" onclick="openMachineScanner()">Scaneaza QR</button></div>
-      <div class="locationGrid">${machines.map(m=>`<div class="locationCard"><span class="statusDot">ESPrESSOR</span><h3>${esc(m['Tip aparat']||m.Model||m.Producator||'Espressor')}</h3><p><strong>Producator:</strong> ${esc(m.Producator||'-')}</p><p><strong>Cod OFRESH:</strong> ${esc(m['Cod OFRESH']||'Lipsa')}</p><p><strong>Serie:</strong> ${esc(m['Serie Aparat']||'Lipsa')}</p><p><strong>Zona:</strong> ${esc(m.Zona||'-')}</p><div class="right" style="margin-top:12px"><button class="secondaryButton" data-row="${Number(m.__filerRow)}" onclick="filerOpenMachine(Number(this.dataset.row))">Date aparat</button><button class="primaryButton" data-row="${Number(m.__filerRow)}" onclick="filerStartVisit(Number(this.dataset.row))">Service</button></div></div>`).join('')||'<div class="emptyState">Nu exista espressoare inregistrate la aceasta locatie.</div>'}</div>
+    <section class="panel"><div class="panelHeader"><div><h3>Espressoare active (${machines.length})</h3><p>Sunt afisate numai espressoarele cu Status Activ si fara data retragerii.</p></div><button class="secondaryButton" onclick="openMachineScanner()">Scaneaza QR</button></div>
+      <div class="locationGrid">${machines.map(m=>`<div class="locationCard"><span class="statusDot">ESPRESSOR ACTIV</span><h3>${esc(m['Tip aparat']||m.Model||m.Producator||'Espressor')}</h3><p><strong>Producator:</strong> ${esc(m.Producator||'-')}</p><p><strong>Cod OFRESH:</strong> ${esc(m['Cod OFRESH']||'Lipsa')}</p><p><strong>Serie:</strong> ${esc(m['Serie Aparat']||'Lipsa')}</p><p><strong>Zona:</strong> ${esc(m.Zona||'-')}</p><div class="right" style="margin-top:12px"><button class="secondaryButton" data-row="${Number(m.__filerRow)}" onclick="filerOpenMachine(Number(this.dataset.row))">Date aparat</button><button class="primaryButton" data-row="${Number(m.__filerRow)}" onclick="filerStartVisit(Number(this.dataset.row))">Service</button></div></div>`).join('')||'<div class="emptyState">Nu exista espressoare active inregistrate la aceasta locatie.</div>'}</div>
     </section></div>`;
+  filerLogUiPerf_('location-render',renderStarted);
 }
+
 function filerEditLocation(){
   const l=filerCurrentLocation();if(!l||!Number(l.__filerRow))return msg('Locatia nu poate fi modificata deoarece lipseste ID-ul intern.',false);
   modal('Corecteaza adresa locatiei',`<div class="grid"><label class="field wide"><span>Client</span><input value="${esc(l.Client||'')}" disabled></label>${inputField('Adresa exacta','filerAddress',l.Adresa||'','text',true)}<label class="field"><span>Zona aparat (gestionata de Administrator)</span><input value="${esc(l.Zona||'')}" disabled></label></div>`,`Salveaza adresa`,`filerSaveLocation(${Number(l.__filerRow)})`);
@@ -3195,13 +3281,16 @@ async function filerSaveLocation(row){
 }
 function filerOpenMachine(row){filerSelectedMachineRow=Number(row);filerView='machine';filerRenderMachine();}
 function filerRenderMachine(){
+  const renderStarted=performance.now();
   const found=filerFindMachine(filerSelectedMachineRow);if(!found){filerView='location';return filerRenderLocation();}
   const {location:l,machine:m}=found;
   document.getElementById('app').innerHTML=`<div class="techHome"><section class="welcome"><div><div class="eyebrow">FISA ESPRESSOR</div><h2>${esc(m['Tip aparat']||m.Model||m.Producator||'Espressor')}</h2><p>${esc(l.Client||'')} · ${esc(l.Zona||'')}</p></div><button class="secondaryButton" onclick="filerOpenLocation(${JSON.stringify(filerLocationKey(l)).replace(/"/g,'&quot;')})">Inapoi</button></section>
   <section class="panel"><div class="panelHeader"><div><h3>Date aparat</h3><p>Poti completa sau corecta seria si Codul OFRESH.</p></div><button class="secondaryButton" onclick="filerEditMachine(${Number(m.__filerRow)})">Modifica date</button></div>
+    <div class="right" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-start;margin-bottom:12px">${filerMapLinks(l).waze?`<a class="secondaryButton" href="${esc(filerMapLinks(l).waze)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Waze</a>`:''}${filerMapLinks(l).maps?`<a class="secondaryButton" href="${esc(filerMapLinks(l).maps)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Google Maps</a>`:''}<button class="secondaryButton" type="button" onclick="filerSaveCurrentGps(${Number(l.__filerRow||m.__filerRow)})">Salveaza pozitia GPS aici</button></div>
     <div class="reportGrid"><div class="reportCard"><span>Client</span><strong style="font-size:16px">${esc(l.Client||'-')}</strong></div><div class="reportCard"><span>Adresa</span><strong style="font-size:15px">${esc(l.Adresa||'-')}</strong></div><div class="reportCard"><span>Cod OFRESH</span><strong style="font-size:16px">${esc(m['Cod OFRESH']||'Lipsa')}</strong></div><div class="reportCard"><span>Serie aparat</span><strong style="font-size:16px">${esc(m['Serie Aparat']||'Lipsa')}</strong></div></div>
     <div class="right" style="margin-top:14px"><button class="primaryButton" onclick="filerStartVisit(${Number(m.__filerRow)})">Inregistreaza service</button>${(m['Cod OFRESH']||m['Serie Aparat']||m['ID Aparat'])?`<button class="secondaryButton" onclick='qrMachine(${JSON.stringify(m)})'>Afiseaza QR</button>`:''}</div>
   </section></div>`;
+  filerLogUiPerf_('machine-render',renderStarted);
 }
 function filerEditMachine(row){
   const found=filerFindMachine(row);if(!found)return;
@@ -3230,6 +3319,7 @@ function filerStartVisit(row){
   after?.addEventListener('change',()=>{window.__filerAfterPhotos=[...(after.files||[])].filter(f=>String(f.type||'').startsWith('image/')).slice(0,4);const box=document.getElementById('filerAfterPreview');if(box)box.innerHTML=window.__filerAfterPhotos.map((f,i)=>`<div style="border:1px solid #d5dfdc;border-radius:8px;overflow:hidden"><img src="${URL.createObjectURL(f)}" style="width:100%;height:76px;object-fit:cover"><div style="font-size:10px;padding:4px">${i+1}. ${esc(f.name)}</div></div>`).join('');});
 }
 async function filerUploadPhotoFile(file,meta,index){
+  const photoStarted=performance.now();
   const prepared=await compressInterventionImage(file);
   const base64=prepared.dataUrl.split(',')[1]||'';
   const uploadId='FILER-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
@@ -3246,6 +3336,7 @@ async function filerUploadPhotoFile(file,meta,index){
   for(let start=0;start<totalChunks;start+=batchSize){const batch=[];for(let i=start;i<Math.min(start+batchSize,totalChunks);i++)batch.push(send(i));await Promise.all(batch);}
   const r=await api({action:'filerFinalizePhotoUpload',telefon:filerSession.phone,pin:filerSession.pin,visitId:meta.visitId,uploadId,totalChunks,photoIndex:index,category:meta.category,fileName:prepared.fileName,mimeType:prepared.mimeType});
   if(!r||r.success!==true)throw new Error(r?.error||'Fotografia nu a putut fi salvata.');
+  console.info('[OFRESH FILER PERF]',{phase:'photo-upload',durationMs:Math.round(performance.now()-photoStarted),chunks:totalChunks,photoIndex:index});
   return r;
 }
 async function filerSaveVisit(row){
