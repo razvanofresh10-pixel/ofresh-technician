@@ -538,6 +538,15 @@ body.ofreshFilerMode #app { width:100% !important; max-width:none !important; }
   body.ofreshFilerMode .main .wrap { padding:14px 12px !important; }
 }
 </style>
+
+<style id="ofresh-filer-shell-override-v8">
+html body.ofreshFilerMode .sidebar,html body.ofreshFilerMode .topbar,html body.ofreshFilerMode .sidebar.adminCleanHidden{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;width:0!important;min-width:0!important}
+html body.ofreshFilerMode .main,html body.ofreshFilerMode .main.adminCleanMain{margin:0!important;margin-left:0!important;width:100%!important;min-width:0!important}
+html body.ofreshFilerMode .main .wrap{width:100%!important;max-width:none!important;margin:0!important;padding:24px!important}
+html body.ofreshFilerMode #app{width:100%!important;max-width:none!important}
+@media(max-width:700px){html body.ofreshFilerMode .main .wrap{padding:12px!important}}
+</style>
+
 </head>
 <body>
 <aside class="sidebar">
@@ -3040,16 +3049,16 @@ function openFilerLogin(){
   const screen=document.createElement('div');
   screen.id='filerLoginScreen';
   screen.className='techOverlay';
-  screen.innerHTML=`<div class="techLoginCard" role="dialog" aria-modal="true" aria-label="Acces Filer">
+  screen.innerHTML=`<form id="filerLoginForm" class="techLoginCard" role="dialog" aria-modal="true" aria-label="Acces Filer" novalidate>
     <button type="button" class="techLoginClose" aria-label="Inchide" title="Inchide accesul Filer" onclick="document.getElementById('filerLoginScreen')?.remove();document.body.classList.remove('techLoginActive');showAccessPage()">×</button>
     <div class="techLoginLogo">OFRESH</div>
     <div class="techLoginEyebrow">OFRESH ONLINE</div>
     <h2>Acces Filer</h2>
-    <div id="filerLoginError" class="techLoginError"></div>
-    <div class="techLoginField"><label for="f_filerTelefon">Telefon</label><input id="f_filerTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon"></div>
-    <div class="techLoginField"><label for="f_filerPin">PIN</label><input id="f_filerPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces"></div>
-    <button type="button" class="techLoginButton" id="filerLoginSubmit">Intra in modul Filer</button>
-  </div>`;
+    <div id="filerLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
+    <div class="techLoginField"><label for="f_filerTelefon">Telefon</label><input id="f_filerTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon" required></div>
+    <div class="techLoginField"><label for="f_filerPin">PIN</label><input id="f_filerPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces" required></div>
+    <button type="submit" class="techLoginButton" id="filerLoginSubmit">Intra in modul Filer</button>
+  </form>`;
   document.body.classList.add('techLoginActive');
   document.body.appendChild(screen);
   const submit=async()=>{
@@ -3059,23 +3068,37 @@ function openFilerLogin(){
     const phone=String(document.getElementById('f_filerTelefon')?.value||'').trim();
     const pin=String(document.getElementById('f_filerPin')?.value||'').trim();
     if(!phone||!pin){if(error){error.textContent='Completeaza telefonul si PIN-ul.';error.style.display='block';}window.__ofreshFilerLoginBusy=false;return;}
+    const submitButton=document.getElementById('filerLoginSubmit');
+    if(submitButton){submitButton.disabled=true;submitButton.textContent='Se verifica...';}
     try{
       const r=await api({action:'loginFiler',telefon:phone,pin:pin});
       if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut valida contul Filer.');
-      filerSession={id:r.user?.['ID Utilizator']||'',name:r.user?.Nume||'Filer',phone:phone,pin:pin,cities:r.cities||[]};
+      if(!Array.isArray(r.locations))throw new Error('Autentificarea a reusit, dar lista de clienti nu a fost returnata.');
+      filerSession={id:r.user?.['ID Utilizator']||'',name:r.user?.Nume||'Filer',phone:phone,pin:pin,cities:r.allowedCities||r.cities||[]};
       techSession=null;commercialSession=null;adminSession=null;
+      filerState=r;
       filerView='home';filerSelectedLocationKey='';filerSelectedMachineRow=0;filerSearchTerm='';
       document.getElementById('filerLoginScreen')?.remove();
-      document.body.classList.remove('techLoginActive');
-      document.body.classList.remove('ofreshAccess');
-      document.body.classList.add('ofreshFilerMode');
-      await load(false);
+      filerApplyDedicatedShell();
+      showFilerCurrentView();
     }catch(e){if(error){error.textContent=e.message||'Autentificare esuata.';error.style.display='block';}else msg(e.message||'Autentificare esuata.',false);}
-    finally{window.__ofreshFilerLoginBusy=false;}
+    finally{window.__ofreshFilerLoginBusy=false;const btn=document.getElementById('filerLoginSubmit');if(btn){btn.disabled=false;btn.textContent='Intra in modul Filer';}}
   };
-  document.getElementById('filerLoginSubmit')?.addEventListener('click',submit);
-  ['f_filerTelefon','f_filerPin'].forEach(id=>document.getElementById(id)?.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();submit();}}));
+  document.getElementById('filerLoginForm')?.addEventListener('submit',ev=>{ev.preventDefault();submit();});
   setTimeout(()=>document.getElementById('f_filerTelefon')?.focus(),50);
+}
+function filerApplyDedicatedShell(){
+  document.body.classList.add('ofreshFilerMode');
+  document.body.classList.remove('ofreshAccess','techLoginActive');
+  const sidebar=document.querySelector('.sidebar'), topbar=document.querySelector('.topbar'), main=document.querySelector('.main');
+  [sidebar,topbar].forEach(el=>{if(el){el.style.setProperty('display','none','important');el.style.setProperty('visibility','hidden','important');el.style.setProperty('pointer-events','none','important');}});
+  if(main){main.style.setProperty('margin-left','0','important');main.style.setProperty('width','100%','important');main.style.setProperty('min-height','100vh','important');}
+}
+function filerRestoreAppShell(){
+  document.body.classList.remove('ofreshFilerMode');
+  const sidebar=document.querySelector('.sidebar'), topbar=document.querySelector('.topbar'), main=document.querySelector('.main');
+  [sidebar,topbar].forEach(el=>{if(el){el.style.removeProperty('display');el.style.removeProperty('visibility');el.style.removeProperty('pointer-events');}});
+  if(main){main.style.removeProperty('margin-left');main.style.removeProperty('width');main.style.removeProperty('min-height');}
 }
 function filerRefreshData(){return load(true);}
 function filerLocationKey(location){return String(location?.key||location?.['ID Locatie']||[location?.Client,location?.Oras,location?.Adresa].join('|'));}
@@ -3091,6 +3114,7 @@ function filerFindMachine(row){
 }
 function showFilerCurrentView(){
   if(!filerSession)return;
+  filerApplyDedicatedShell();
   if(filerView==='location')return filerRenderLocation();
   if(filerView==='machine')return filerRenderMachine();
   if(filerView==='visit')return filerRenderMachine();
@@ -3100,34 +3124,60 @@ function filerEmptyReason(){
   const d=filerState?.diagnostics||{};
   if(!Number(d.machineRows||0))return 'Nu am gasit inregistrari in foaia Aparate.';
   if(!Number(d.locationRows||0))return 'Nu am gasit inregistrari in foaia Locatii.';
-  if(!Number(d.prefixSourceRows||0))return 'Nu am gasit clienti cu prefix ESP in foile Aparate, Locatii sau Clienti. Verificam unde este completata denumirea ESP.';
+  if(!Number(d.prefixSourceRows||0)){
+    const h=d.sourceHeaders||{};
+    const describe=name=>Array.isArray(h[name])&&h[name].length?h[name].map(x=>esc(x)).join(', '):'foaie inexistenta sau fara antete';
+    return `Nu am gasit prefixul ESP in datele citite. Randuri: Aparate ${Number(d.machineRows||0)}, Locatii ${Number(d.locationRows||0)}, Clienti ${Number(d.clientRows||0)}. Antete Aparate: ${describe('Aparate')}. Antete Locatii: ${describe('Locatii')}. Antete Clienti: ${describe('Clienti')}.`;
+  }
   if(!Number(d.matchedMachineRows||0))return `Am gasit ${d.prefixSourceRows} inregistrari cu prefix ESP, dar nu am identificat aparate asociate. Verificam coloanele Client si ID Locatie din Aparate.`;
   if(!Number(d.mappedMachineRows||0))return `Am identificat ${d.matchedMachineRows} aparate pentru clienti ESP, dar nu le-am putut lega de o locatie din foaia Locatii. Verificam ID-ul, numele clientului si adresa.`;
   if(!Number(d.allowedMachineRows||0))return `Am gasit ${d.mappedMachineRows} aparate ESP, dar locatiile nu sunt in zonele autorizate pentru acest cont. Zone alocate: ${(filerState?.allowedCities||[]).join(', ')}. Pentru Ilfov, Administratorul trebuie sa aloce si judetul Ilfov acestui Filer.`;
   return 'Nu exista clienti cu espressoare in orasele alocate acestui cont.';
 }
+function filerLocationCardHtml(l){
+  return `<div class="locationCard"><div class="locationCardTop"><span class="statusDot">${(l.machines||[]).length} espressoare</span></div><h3>${esc(l.Client||'Client')}</h3><p><strong>Adresa:</strong> ${esc(l.Adresa||'Adresa nespecificata')}</p><p>${esc([l.Oras,l.Judet].filter(Boolean).join(', '))}</p><div class="locationFooter"><div><strong>${esc(String((l.machines||[]).length))}</strong><span>aparate</span></div><button class="primaryButton" type="button" data-key="${esc(filerLocationKey(l))}" onclick="filerOpenLocation(this.dataset.key)">Deschide</button></div></div>`;
+}
+function filerUpdateSearchResults(){
+  const locations=filerAllLocations();
+  const input=document.getElementById('filerClientSearch');
+  const query=normalizeOfreshSearch(input?.value||'');
+  filerSearchTerm=input?.value||'';
+  const counter=document.getElementById('filerSearchCounter');
+  const box=document.getElementById('filerLocationResults');
+  if(!box)return;
+  if(query.length>0&&query.length<3){
+    if(counter)counter.textContent='Scrie cel putin 3 litere pentru a cauta.';
+    box.innerHTML=locations.map(filerLocationCardHtml).join('')||`<div class="emptyState">${filerEmptyReason()}</div>`;
+    return;
+  }
+  const visible=locations.filter(l=>{
+    const fields=[l.Client,l.Adresa,l.Oras,l.Judet,l.Zona,...(l.machines||[]).flatMap(m=>[m['Cod OFRESH'],m['Serie Aparat'],m['Tip aparat'],m.Producator])];
+    return ofreshSearchFieldsMatch(fields,query,3);
+  });
+  if(counter)counter.textContent=`${visible.length} clienti gasiti din ${locations.length}.`;
+  box.innerHTML=visible.map(filerLocationCardHtml).join('')||`<div class="emptyState">${locations.length?`Nu exista rezultate pentru „${esc(input?.value||'')}”.`:filerEmptyReason()}</div>`;
+}
 function showFilerHome(){
   if(!filerSession)return;
   filerView='home';
+  filerApplyDedicatedShell();
   const locations=filerAllLocations();
   const totalMachines=Number(filerState.totalMachines||locations.reduce((n,l)=>n+(l.machines||[]).length,0));
-  const query=normalizeOfreshSearch(filerSearchTerm||'');
-  const visible=locations.filter(l=>{
-    const fields=[l.Client,l.Adresa,l.Oras,l.Judet,...(l.machines||[]).flatMap(m=>[m['Cod OFRESH'],m['Serie Aparat'],m['Tip aparat'],m.Producator])];
-    return ofreshSearchFieldsMatch(fields,query,3);
-  });
   const cities=(filerSession.cities||[]).join(', ');
   document.getElementById('app').innerHTML=`<div class="techHome">
-    <section class="welcome"><div><div class="eyebrow">MOD FILER · SERVICE ESPRESSOARE</div><h2>Buna, ${esc(filerSession.name)}!</h2><p>Zone alocate: ${esc(cities)}</p></div><button class="secondaryButton" onclick="logoutFiler()">Iesire</button></section>
+    <section class="welcome"><div><div class="eyebrow">MOD FILER · SERVICE ESPRESSOARE</div><h2>Buna, ${esc(filerSession.name)}!</h2><p>Zone alocate: ${esc(cities)}</p></div><button class="secondaryButton" type="button" onclick="logoutFiler()">Iesire</button></section>
     <div class="reportGrid" style="margin-bottom:16px"><div class="reportCard"><span>Clienti cu espressoare</span><strong>${locations.length}</strong></div><div class="reportCard"><span>Espressoare disponibile</span><strong>${totalMachines}</strong></div></div>
-    <section class="panel"><div class="panelHeader"><div><h3>Clientii mei - espressoare</h3><p>Afiseaza doar clientii cu espressoare din zonele alocate de Administrator.</p></div><button class="secondaryButton" onclick="filerRefreshData()">Reincarca</button></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><input id="filerClientSearch" type="search" value="${esc(filerSearchTerm)}" placeholder="Cauta client, adresa, oras, serie sau cod OFRESH..." style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px"><button class="secondaryButton" type="button" onclick="openMachineScanner()">Scaneaza QR</button></div><div class="small" style="margin-bottom:12px">${query.length>0&&query.length<3?'Scrie cel putin 3 litere pentru a cauta.':`${visible.length} clienti gasiti din ${locations.length}.`}</div>
-      <div id="filerLocationResults" class="locationGrid">${visible.map(l=>`<div class="locationCard"><div class="locationCardTop"><span class="statusDot">${(l.machines||[]).length} espressoare</span></div><h3>${esc(l.Client||'Client')}</h3><p><strong>Adresa:</strong> ${esc(l.Adresa||'Adresa nespecificata')}</p><p>${esc([l.Oras,l.Judet].filter(Boolean).join(', '))}</p><div class="locationFooter"><div><strong>${esc(String((l.machines||[]).length))}</strong><span>aparate</span></div><button class="primaryButton" data-key="${esc(filerLocationKey(l))}" onclick="filerOpenLocation(this.dataset.key)">Deschide</button></div></div>`).join('')||`<div class="emptyState">${filerEmptyReason()}</div>`}</div>
+    <section class="panel"><div class="panelHeader"><div><h3>Clientii mei - espressoare</h3><p>Afiseaza doar clientii cu espressoare din zonele alocate de Administrator.</p></div><button class="secondaryButton" type="button" onclick="filerRefreshData()">Reincarca</button></div>
+      <form id="filerSearchForm" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 6px"><input id="filerClientSearch" type="search" value="${esc(filerSearchTerm)}" placeholder="Cauta client, adresa, oras, serie sau cod OFRESH..." style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px"><button class="primaryButton" type="submit">Cauta</button><button class="secondaryButton" type="button" onclick="openMachineScanner()">Scaneaza QR</button></form><div id="filerSearchCounter" class="small" style="margin-bottom:12px"></div>
+      <div id="filerLocationResults" class="locationGrid"></div>
     </section></div>`;
-  const search=document.getElementById('filerClientSearch');
-  search?.addEventListener('input',()=>{filerSearchTerm=search.value;const caret=search.selectionStart;showFilerHome();const next=document.getElementById('filerClientSearch');if(next){next.focus();next.setSelectionRange(caret,caret);}});
+  const form=document.getElementById('filerSearchForm');
+  form?.addEventListener('submit',ev=>{ev.preventDefault();filerUpdateSearchResults();});
+  document.getElementById('filerClientSearch')?.addEventListener('input',filerUpdateSearchResults);
+  filerUpdateSearchResults();
 }
-function filerSearchClients(){filerSearchTerm=String(document.getElementById('filerClientSearch')?.value||'');showFilerHome();}
+function filerSearchClients(){filerUpdateSearchResults();}
+
 function filerOpenLocation(key){
   filerSelectedLocationKey=String(key||'');filerView='location';filerRenderLocation();
 }
@@ -3236,7 +3286,7 @@ async function filerSaveVisit(row){
 }
 function logoutFiler(){
   filerSession=null;filerState={locations:[],totalLocations:0,totalMachines:0,allowedCities:[]};filerView='home';filerSelectedLocationKey='';filerSelectedMachineRow=0;filerSearchTerm='';
-  document.body.classList.remove('ofreshFilerMode');
+  filerRestoreAppShell();
   showAccessPage();
 }
 function espressoInterventionsPage(){
@@ -3492,6 +3542,7 @@ function closeTechLogin(){
   showAccessPage();
 }
 function showAccessPage(){
+  filerRestoreAppShell();
   document.body.classList.remove("ofreshFilerMode");
   document.body.classList.add("ofreshAccess"); document.querySelector(".sidebar")?.classList.add("accessHiddenForce"); document.querySelector(".topbar")?.classList.add("accessHiddenForce");
   adminSession=null; commercialSession=null; techSession=null; filerSession=null;
