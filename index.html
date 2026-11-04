@@ -233,7 +233,7 @@ img{max-width:100%;height:auto}
 <style id="dashboard-v36">
 .dashboardV36{display:flex;flex-direction:column;gap:16px;padding-bottom:28px}.dashHeroV36{position:relative;overflow:hidden;background:linear-gradient(135deg,#fff 0%,#f3fbff 62%,#eefaf7 100%);border:1px solid #d8e7ea;border-radius:22px;padding:22px 24px;min-height:126px;box-shadow:0 10px 28px rgba(25,75,95,.07);display:flex;align-items:center;justify-content:space-between;gap:20px}.dashHeroV36:after{content:"";position:absolute;width:380px;height:150px;right:-60px;top:-35px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(46,165,211,.16),transparent 68%);pointer-events:none}.dashBrandV36{display:flex;align-items:center;gap:18px;position:relative;z-index:1}.dashBrandV36 img{width:190px;height:auto;display:block}.dashBrandV36 .eyebrow{color:#1683bb;font-weight:900;letter-spacing:1.5px;font-size:11px}.dashBrandV36 h2{margin:3px 0 2px;font-size:27px;color:#132c38}.dashBrandV36 p{margin:0;color:#667b84;font-size:13px}.dashHeroMetaV36{position:relative;z-index:1;background:rgba(255,255,255,.82);border:1px solid #d8e7ea;border-radius:14px;padding:11px 15px;text-align:right;min-width:150px}.dashHeroMetaV36 strong{display:block;font-size:18px;color:#153d4e}.dashHeroMetaV36 span{font-size:11px;color:#71848c}.dashKpisV36{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:11px}.dashKpiV36{background:#fff;border:1px solid #dce7eb;border-radius:17px;padding:14px;min-height:94px;box-shadow:0 7px 20px rgba(24,67,85,.05);display:flex;align-items:center;gap:11px}.dashKpiIconV36{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:#e9f6ff;flex:none}.dashKpiV36:nth-child(2) .dashKpiIconV36{background:#eaf8f1}.dashKpiV36:nth-child(3) .dashKpiIconV36{background:#f1edff}.dashKpiV36:nth-child(4) .dashKpiIconV36{background:#fff0e8}.dashKpiV36:nth-child(5) .dashKpiIconV36{background:#eef4ff}.dashKpiV36:nth-child(6) .dashKpiIconV36{background:#f4efff}.dashKpiV36 strong{display:block;font-size:21px;color:#163848;line-height:1}.dashKpiV36 span{display:block;font-size:11px;color:#70818a;margin-top:5px}.dashModulesV36{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px}.dashModuleV36{border:1px solid #dce7eb;background:#fff;border-radius:16px;padding:15px;min-height:108px;cursor:pointer;box-shadow:0 6px 17px rgba(24,67,85,.045);transition:.15s;position:relative;text-align:left}.dashModuleV36:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(24,67,85,.09);border-color:#8cc7d6}.dashModuleIconV36{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:#f0f7fb;margin-bottom:9px}.dashModuleV36 h3{margin:0;font-size:15px;color:#173642}.dashModuleV36 p{margin:4px 0 0;font-size:11px;color:#75868e}.dashModuleArrowV36{position:absolute;right:13px;top:16px;color:#287e9d;font-weight:900}.dashPanelsV36{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:12px}.dashPanelV36{background:#fff;border:1px solid #dce7eb;border-radius:17px;padding:16px;box-shadow:0 6px 18px rgba(24,67,85,.045)}.dashPanelTitleV36{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.dashPanelTitleV36 h3{margin:0;font-size:16px;color:#173642}.dashPanelTitleV36 span{font-size:11px;color:#75868e}.dashRowV36{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid #edf1f3;font-size:12px}.dashRowV36:first-of-type{border-top:0}.dashRowV36 b{color:#173642}.dashAlertV36{color:#bd4b23!important;font-weight:800}.dashQuickV36{display:grid;grid-template-columns:1fr 1fr;gap:9px}.dashQuickV36 button{border:1px solid #d7e5ea;background:#f8fcfd;border-radius:12px;padding:11px 10px;font-weight:800;cursor:pointer;color:#21495a}.dashQuickV36 button:hover{border-color:#7eb7c9;background:#f0f9fc}@media(max-width:1150px){.dashKpisV36{grid-template-columns:repeat(3,1fr)}.dashModulesV36{grid-template-columns:repeat(3,1fr)}.dashPanelsV36{grid-template-columns:1fr 1fr}.dashPanelV36:first-child{grid-column:1/-1}}@media(max-width:700px){.dashHeroV36{align-items:flex-start;flex-direction:column;padding:17px}.dashBrandV36{align-items:flex-start;flex-direction:column;gap:10px}.dashBrandV36 img{width:155px}.dashBrandV36 h2{font-size:22px}.dashHeroMetaV36{width:100%;text-align:left}.dashKpisV36,.dashModulesV36,.dashPanelsV36{grid-template-columns:1fr}.dashPanelV36:first-child{grid-column:auto}.dashKpiV36{min-height:82px}.dashModuleV36{min-height:92px}}</style>
 
-<script>window.__OFRESH_BUILD="FINAL-2026-09-29";</script>
+<script>window.__OFRESH_BUILD="OFRESH-FILER-DIRECT-CAMERA-V13-2026-11-03";</script>
 
 <style>
 @media(max-width:700px){
@@ -710,7 +710,7 @@ function saveCachedData(){
   try{
     const key=ofreshAdminCacheKey(adminSession);
     if(!key)return;
-    const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],Utilizatori:db.Utilizatori||[],_ofreshLoadedSheets:[...ofreshLoadedSheets],_ofreshSavedAt:Date.now()};
+    const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],"Poze Interventii":db["Poze Interventii"]||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],Utilizatori:db.Utilizatori||[],_ofreshLoadedSheets:[...ofreshLoadedSheets],_ofreshSavedAt:Date.now()};
     const raw=JSON.stringify(payload);
     if(raw.length<4500000)localStorage.setItem(key,raw);
   }catch(e){}
@@ -728,7 +728,7 @@ let ofreshAdminPrefetchPromise = null;
 // Pregateste in fundal datele modulelor mari, fara sa blocheze Dashboard-ul.
 async function prefetchAdminModuleSheets(){
   if(!adminSession || commercialSession || techSession) return;
-  const names=["Interventii"].filter(name=>!ofreshLoadedSheets.has(name));
+  const names=["Interventii","Poze Interventii"].filter(name=>!ofreshLoadedSheets.has(name));
   if(!names.length) return;
   if(ofreshAdminPrefetchPromise) return ofreshAdminPrefetchPromise;
   ofreshAdminPrefetchPromise=(async()=>{
@@ -812,7 +812,7 @@ function adminSheetsForModule(page){
   const map = {
     clienti:["Locatii","Aparate","Clienti"],
     aparate:["Aparate","Locatii","Clienti"],
-    interventii:["Interventii","Aparate","Locatii"],
+    interventii:["Interventii","Poze Interventii","Aparate","Locatii"],
     interventiiEspresso:["Interventii Espressoare","Poze Interventii Espressoare"],
     filtre:["Filtre","Aparate","Locatii"],
     stoc:["Stoc"],
@@ -1186,8 +1186,7 @@ function goTechLocations(){
   const rows=technicianVisibleClients();
   document.getElementById("app").innerHTML=`<section class="panel"><div class="panelHeader"><div><h3>Clienti OFRESH</h3><p id="techClientCount">${rows.length} clienti disponibili. Cauta clientul dupa nume, oras sau adresa.</p></div><button class="secondaryButton" onclick="showTechnicianHome()">Inapoi</button></div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0 16px">
-    <input id="techClientSearch" type="search" placeholder="Cauta client..." autocomplete="off" style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px">
-    <button class="primaryButton" type="button" onclick="filterTechClients()">🔎 Cauta client</button>
+    <input id="techClientSearch" type="search" placeholder="Cauta client dupa nume, oras sau adresa..." autocomplete="off" style="flex:1;min-width:220px;min-height:46px;padding:0 14px;border:1px solid #d5dfdc;border-radius:10px;font-size:16px">
   </div>
   <div id="techClientResults" class="locationGrid"></div></section>`;
   renderTechClientCards(rows);
@@ -1212,12 +1211,13 @@ function renderTechClientCards(rows){
 }
 function filterTechClients(){
   const q=normalizeOfreshSearch(document.getElementById("techClientSearch")?.value||"");
-  const rows=technicianVisibleClients().filter(l=>ofreshSearchFieldsMatch([
+  const all=technicianVisibleClients();
+  const rows=all.filter(l=>ofreshSearchFieldsMatch([
     clientName(l),l.Adresa||l.adresa||"",l.Oras||l.oras||"",l.Judet||l.judet||"",l.Zona||l.zona||""
-  ],q,3));
+  ],q,1));
   renderTechClientCards(rows);
   const count=document.getElementById("techClientCount");
-  if(count&&q.length>0&&q.length<3)count.textContent="Scrie cel putin 3 litere pentru a cauta. "+technicianVisibleClients().length+" clienti disponibili.";
+  if(count)count.textContent=q?rows.length+" rezultate pentru cautare. "+all.length+" clienti disponibili.":all.length+" clienti disponibili. Cauta clientul dupa nume, oras sau adresa.";
 }
 function openInterventionForClient(id){const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(id));if(!c)return msg("Clientul nu a fost gasit.",false);openIntervention({"ID Client":clientId(c),Client:clientName(c),Tehnician:techSession?.name||""});const e=document.getElementById("f_tehnician");if(e&&techSession){e.value=techSession.name;e.disabled=true}}
 async function saveClientGPS(id){
@@ -2012,7 +2012,60 @@ function commercialPage(){
     ${commercialDataLoading?'<section class="panel"><div class="emptyState">Se incarca datele portofoliului Comercial. Poti ramane in aceasta pagina; datele vor aparea automat.</div></section>':(commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialInterventions())}`;
 }
 
-function interventionsPage(){const rows=(db.Interventii||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("SERVICE","Interventii","Istoricul lucrarilor si interventiilor tehnice",`<button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${rows.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th></tr></thead><tbody>${rows.map(i=>{const bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";const sf=i.tipFiltru||i["Tip filtru"]||"";const next=i.urmatorSchimbFiltru||i["Urmator schimb"]||"";return `<tr><td>${esc(i.data||i.Data||"")}</td><td><strong>${esc(i.aparat||i.Aparat||i["ID Aparat"]||"")}</strong></td><td>${esc(i.Client||i.client||i.locatie||i.Locatie||"")}</td><td>${esc(i.tehnician||i.Tehnician||"")}</td><td>${esc(i.tipInterventie||i["Tip interventie"]||"")}</td><td>${esc(Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"")}</td><td>${esc(sf)}${next?`<div class="small">Urmator: ${esc(next)}</div>`:""}</td><td>${esc(i.urmatoareaInterventie||i["Urmatoarea interventie"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii.</div>'}</section>`}
+function interventionsPage(){
+ const rows=(Array.isArray(db.Interventii)?db.Interventii:[]).filter(matches);
+ const photos=Array.isArray(db["Poze Interventii"])?db["Poze Interventii"]:[];
+ const machines=Array.isArray(db.Aparate)?db.Aparate:[];
+ const locations=Array.isArray(db.Locatii)?db.Locatii:(Array.isArray(db.Clienti)?db.Clienti:[]);
+ const norm=v=>String(v==null?"":v).trim();
+ const key=v=>norm(v).toLowerCase().replace(/[\s–—-]+/g,"");
+ const photoUrl=p=>{
+   const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);
+   if(fileId)return "https://drive.google.com/file/d/"+encodeURIComponent(fileId)+"/view";
+   const raw=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL||p.Link||p.link);
+   return /^https?:\/\//i.test(raw)?raw:"";
+ };
+ const photoMap=new Map();
+ photos.forEach(p=>{
+   const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId||p.ID||p.id);
+   const url=photoUrl(p); if(!id||!url)return;
+   if(!photoMap.has(id))photoMap.set(id,[]);
+   const list=photoMap.get(id);
+   if(!list.some(x=>x.url===url))list.push({url,label:/aviz/i.test(norm(p.Categorie||p.Tip||p.Nume))?"Deschide aviz":"Deschide poza"});
+ });
+ const machineFor=i=>{
+   const id=norm(i["ID Aparat"]||i.aparatId||i.aparatID||i.AparatID);
+   const serial=norm(i["Serie Aparat"]||i.Serie||i.serie);
+   const code=norm(i["Cod OFRESH"]||i.codOFRESH);
+   return machines.find(m=>[m["ID Aparat"],m.idAparat,m.id,m.ID,m["Serie Aparat"],m.Serie,m["Cod OFRESH"]].some(v=>key(v)&&[key(id),key(serial),key(code)].includes(key(v))))||null;
+ };
+ const clientFor=(i,m)=>{
+   const direct=norm(i.Client||i.client||i.locatie||i.Locatie||i["Nume locatie"]||i["Client"]);
+   if(direct)return direct;
+   const locationId=norm(i["ID Locatie"]||i["ID Client"]||i.clientId||i.locatieId||m?.["ID Locatie"]||m?.["ID Client"]);
+   const c=locations.find(x=>key(x["ID Locatie"]||x["ID Client"]||x.ID||x.id)===key(locationId));
+   return c?(c["Nume locatie"]||c.Client||c.Nume||c.client||""):"";
+ };
+ const inlinePhotos=i=>{
+   const found=[];
+   Object.keys(i||{}).filter(k=>/(fotografii|fotografie|poze|poza|photos?|image.?urls?)/i.test(k)).forEach(k=>{
+     const values=Array.isArray(i[k])?i[k]:[i[k]];
+     values.forEach(v=>{const raw=typeof v==="object"?(v["URL poza"]||v.url||v.URL||""):v;String(raw||"").split(/[\n\r;,]+/).map(x=>x.trim()).filter(x=>/^https?:\/\//i.test(x)).forEach(url=>{if(!found.some(x=>x.url===url))found.push({url,label:"Deschide poza"});});});
+   });
+   return found;
+ };
+ const sorted=rows.slice().sort((a,b)=>norm(b.data||b.Data).localeCompare(norm(a.data||a.Data)));
+ document.getElementById("app").innerHTML=pageHero("SERVICE","Interventii","Istoricul lucrarilor si interventiilor tehnice",`<button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>`)+
+ `<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${sorted.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${sorted.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th><th>Fotografii</th></tr></thead><tbody>${sorted.map(i=>{
+   const m=machineFor(i), bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";
+   const sf=i.tipFiltru||i["Tip filtru"]||"", next=i.urmatorSchimbFiltru||i["Urmator schimb"]||"";
+   const id=norm(i["ID Interventie"]||i["ID interventie"]||i.ID||i.id);
+   const linked=[...(photoMap.get(id)||[]),...inlinePhotos(i)].filter((x,n,a)=>a.findIndex(y=>y.url===x.url)===n);
+   const apparatus=norm(i.aparat||i.Aparat||i["ID Aparat"]||i["Cod OFRESH"]||i["Serie Aparat"]|| (m?(m["Cod OFRESH"]||m["Producator"]+" "+m["Model"]+" - "+(m["Serie Aparat"]||"")):""));
+   const operations=Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"";
+   return `<tr><td>${esc(i.data||i.Data||"")}</td><td><strong>${esc(apparatus)}</strong></td><td>${esc(clientFor(i,m))}</td><td>${esc(i.tehnician||i.Tehnician||"")}</td><td>${esc(i.tipInterventie||i["Tip interventie"]||"")}</td><td style="white-space:normal;min-width:220px">${esc(operations)}</td><td>${esc(sf)}${next?`<div class="small">Urmator: ${esc(next)}</div>`:""}</td><td>${esc(i.urmatoareaInterventie||i["Urmatoarea interventie"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td><td>${linked.map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${x.label}</a>`).join("<br>")||"-"}</td></tr>`;
+ }).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii.</div>'}</section>`;
+}
 function filtersPage(){const rows=(db.Filtre||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("MENTENANTA","Filtre","Urmarirea schimburilor si a termenelor pentru filtre",`<button class="primaryButton" onclick="openFilter()">+ Adauga filtru</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Monitorizare filtre</h3><p>${rows.length} filtre inregistrate</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Aparat</th><th>Client</th><th>Zona</th><th>Tip filtru</th><th>Montat la</th><th>Scadenta</th><th>Status</th></tr></thead><tbody>${rows.map(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb||"";const s=soonDate(d);const m=(db.Aparate||[]).find(x=>String(machineId(x))===String(f["ID Aparat"]||f.aparatId||""));const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(f["ID Locatie"]||f["ID Client"]||""));return `<tr><td>${esc(machineLabel(m||{})||f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(c?clientName(c):(f.Client||f.client||f.Locatie||f.locatie||""))}</td><td>${esc(machineFloor(m||{})||f.Zona||f.zona||"")}</td><td>${esc(f["Tip filtru"]||f.tipFiltru||f.tip||"")}</td><td>${esc(f["Data montare"]||f.montat||f.dataSchimbare||"")}</td><td>${esc(d)}</td><td><span class="badge ${s?"warningBadge":""}">${s?"NECESITA ATENTIE":"OK"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista filtre.</div>'}</section>`}
 function stockGroups(){
  const groups=new Map();
@@ -3314,7 +3367,7 @@ function filerStartVisit(row){
   const checks=tasks.map((t,i)=>`<label class="checkRow"><input type="checkbox" id="filerTask${i}" value="${esc(t)}">${esc(t)}</label>`).join('');
   modal('Interventie service espressor',`<div class="grid"><div class="field"><span>Client</span><div class="notice">${esc(found.location.Client||'')}</div></div><div class="field"><span>Espressor</span><div class="notice">${esc(found.machine['Tip aparat']||found.machine.Model||'')} · ${esc(found.machine['Serie Aparat']||'Fara serie')}</div></div>${inputField('Data interventiei','filerDate',new Date().toISOString().slice(0,10),'date')}<label class="field wide"><span>Operatiuni efectuate</span><div class="checkList">${checks}</div></label>
   <div class="field wide"><span>Aviz marfa (maximum 1 fotografie)</span><label class="secondaryButton" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">📄 Adauga aviz<input id="filerAvizInput" type="file" accept="image/*" capture="environment" style="display:none"></label><div id="filerAvizPreview" class="small" style="margin-top:6px">Nicio fotografie selectata.</div></div>
-  <div class="field wide"><span>Fotografii aparat dupa curatare (maximum 4)</span><button id="filerOpenCameraBtn" class="secondaryButton" type="button" onclick="filerOpenAfterCamera()" style="display:inline-flex;align-items:center;gap:8px">📷 Deschide camera si fa poza</button><div id="filerAfterPhotoCount" class="small" style="margin-top:6px">0/4 fotografii facute</div><div id="filerAfterPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:8px"></div><small class="hint">Se deschide direct camera din telefon. Nu se poate selecta din galerie. Poti face fotografiile succesiv, pana la maximum 4.</small></div>
+  <div class="field wide"><span>Fotografii aparat dupa curatare (maximum 4 – camera directa V13)</span><button id="filerOpenCameraBtn" class="secondaryButton" type="button" onclick="filerOpenAfterCamera()" style="display:inline-flex;align-items:center;gap:8px">📷 CAMERA DIRECTA – FA FOTOGRAFIE (V13)</button><div id="filerAfterPhotoCount" class="small" style="margin-top:6px">0/4 fotografii facute</div><div id="filerAfterPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-top:8px"></div><small class="hint">Se deschide direct camera din telefon. Nu se poate selecta din galerie. Poti face fotografiile succesiv, pana la maximum 4.</small></div>
   ${inputField('Observatii','filerObs','','text',true)}</div>`,`Salveaza interventia`,`filerSaveVisit(${Number(row)})`);
   window.__filerAvizPhoto=null;window.__filerAfterPhotos=[];
   const aviz=document.getElementById('filerAvizInput');
@@ -3327,39 +3380,62 @@ function filerStartVisit(row){
 async function filerOpenAfterCamera(){
   const current=window.__filerAfterPhotos||[];
   if(current.length>=4){msg('Ai deja 4 fotografii dupa curatare. Elimina una daca doresti sa o refaci.',false);return;}
+  if(!window.isSecureContext){msg('Camera directa necesita conexiune HTTPS. Deschide aplicatia OFRESH prin linkul Cloudflare securizat.',false);return;}
   if(!navigator.mediaDevices||typeof navigator.mediaDevices.getUserMedia!=='function'){
-    msg('Camera directa nu este disponibila in acest browser. Deschide OFRESH prin HTTPS intr-un browser actual si permite accesul la camera.',false);return;
+    msg('Browserul nu ofera acces la camera direct in pagina. Actualizeaza Chrome/Safari si permite accesul la camera pentru OFRESH.',false);return;
   }
   if(document.getElementById('filerCameraOverlay'))return;
   const overlay=document.createElement('div');
   overlay.id='filerCameraOverlay';
-  overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(7,12,18,.96);display:flex;align-items:center;justify-content:center;padding:12px;';
-  overlay.innerHTML=`<section style="width:min(680px,100%);max-height:96dvh;overflow:auto;background:#fff;border-radius:18px;padding:14px;box-shadow:0 20px 70px rgba(0,0,0,.4)">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px"><div><strong style="font-size:18px;color:#17212b">Fotografie dupa curatare</strong><div id="filerCameraCounter" style="font-size:12px;color:#64748b;margin-top:3px">${current.length}/4 fotografii</div></div><button type="button" class="secondaryButton" onclick="filerCloseAfterCamera()">Inchide</button></div>
-    <div style="position:relative;background:#080b0e;border-radius:12px;overflow:hidden"><video id="filerAfterCameraVideo" autoplay playsinline muted style="display:block;width:100%;max-height:65dvh;min-height:220px;object-fit:cover"></video><canvas id="filerAfterCameraCanvas" style="display:none"></canvas></div>
-    <div id="filerCameraMessage" class="small" style="padding:9px 2px;color:#64748b">Se porneste camera din spatele telefonului...</div>
-    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px"><button id="filerCaptureAfterPhotoBtn" type="button" class="primaryButton" disabled onclick="filerCaptureAfterPhoto()" style="min-width:190px;min-height:48px">📸 Fa fotografia</button><button type="button" class="secondaryButton" onclick="filerCloseAfterCamera()" style="min-height:48px">Gata</button></div>
-    <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px">Camera ramane deschisa pentru fotografii succesive. Maximum 4.</div>
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(7,12,18,.97);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+  overlay.innerHTML=`<section style="width:min(680px,100%);max-height:96dvh;overflow:auto;background:#fff;border-radius:18px;padding:14px;box-shadow:0 20px 70px rgba(0,0,0,.4);box-sizing:border-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px"><div><strong style="font-size:18px;color:#17212b">Camera – aparat dupa curatare</strong><div id="filerCameraCounter" style="font-size:12px;color:#64748b;margin-top:3px">${current.length}/4 fotografii</div></div><button type="button" class="secondaryButton" onclick="filerCloseAfterCamera()">Inchide</button></div>
+    <div style="position:relative;background:#080b0e;border-radius:12px;overflow:hidden"><video id="filerAfterCameraVideo" autoplay playsinline muted webkit-playsinline="true" style="display:block;width:100%;max-height:65dvh;min-height:220px;object-fit:cover;background:#080b0e"></video><canvas id="filerAfterCameraCanvas" style="display:none"></canvas></div>
+    <div id="filerCameraMessage" class="small" aria-live="polite" style="padding:9px 2px;color:#64748b">Se solicita accesul la camera din spatele telefonului...</div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px"><button id="filerCaptureAfterPhotoBtn" type="button" class="primaryButton" disabled onclick="filerCaptureAfterPhoto()" style="min-width:190px;min-height:50px">📸 Fa fotografia</button><button type="button" class="secondaryButton" onclick="filerCloseAfterCamera()" style="min-height:50px">Gata</button></div>
+    <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px">Fotografiile se fac direct aici. Nu se deschide galeria sau selectorul telefonului. Maximum 4.</div>
   </section>`;
   document.body.appendChild(overlay);
+  let stream=null, lastError=null;
+  const constraints=[
+    {audio:false,video:{facingMode:{exact:'environment'},width:{ideal:1600},height:{ideal:1200}}},
+    {audio:false,video:{facingMode:{ideal:'environment'}}},
+    {audio:false,video:true}
+  ];
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
-    // Daca utilizatorul a inchis overlay-ul cat timp browserul cerea permisiunea,
-    // oprim imediat camera si nu lasam indicatorul camerei aprins.
+    for(let i=0;i<constraints.length;i++){
+      try{stream=await navigator.mediaDevices.getUserMedia(constraints[i]);break;}
+      catch(error){lastError=error;if(error?.name==='NotAllowedError'||error?.name==='PermissionDeniedError')throw error;}
+    }
+    if(!stream)throw lastError||new Error('Camera nu a putut fi pornita.');
     const liveOverlay=document.getElementById('filerCameraOverlay');
     if(!liveOverlay){stream.getTracks().forEach(t=>t.stop());return;}
     window.__filerAfterCameraStream=stream;
     const video=document.getElementById('filerAfterCameraVideo');
+    video.muted=true;video.playsInline=true;video.setAttribute('playsinline','');video.setAttribute('webkit-playsinline','');
     video.srcObject=stream;
+    await new Promise((resolve,reject)=>{
+      if(video.readyState>=1&&video.videoWidth){resolve();return;}
+      const timer=setTimeout(()=>reject(new Error('Camera a pornit, dar imaginea nu a ajuns in pagina. Inchide si incearca din nou.')),10000);
+      video.addEventListener('loadedmetadata',()=>{clearTimeout(timer);resolve();},{once:true});
+      video.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('Fluxul video al camerei nu poate fi afisat.'));},{once:true});
+    });
     await video.play();
     const capture=document.getElementById('filerCaptureAfterPhotoBtn');if(capture)capture.disabled=false;
-    const message=document.getElementById('filerCameraMessage');if(message)message.textContent='Camera este pregatita. Incadreaza aparatul si apasa „Fa fotografia”.';
+    const message=document.getElementById('filerCameraMessage');if(message)message.textContent='CAMERA ESTE ACTIVA. Incadreaza aparatul si apasa „Fa fotografia”.';
+    console.info('[OFRESH CAMERA V13]',{secureContext:window.isSecureContext,tracks:stream.getVideoTracks().map(t=>({label:t.label,settings:t.getSettings?.()}))});
   }catch(error){
+    if(stream){try{stream.getTracks().forEach(t=>t.stop());}catch(_){}}
     filerCloseAfterCamera();
-    const detail=error?.name==='NotAllowedError'?'Ai blocat accesul la camera. Permite accesul la camera pentru site-ul OFRESH.':error?.name==='NotFoundError'?'Nu a fost gasita o camera disponibila pe acest dispozitiv.':error?.name==='NotReadableError'?'Camera este folosita de alta aplicatie. Inchide acea aplicatie si incearca din nou.':'Nu am putut porni camera: '+(error?.message||'eroare necunoscuta');
+    const detail=error?.name==='NotAllowedError'||error?.name==='PermissionDeniedError'?'Accesul la camera este blocat. In Chrome apasa lacatul de langa adresa site-ului → Permisiuni → Camera → Permite, apoi reincarca aplicatia.':error?.name==='NotFoundError'?'Telefonul nu a raportat o camera disponibila.':error?.name==='NotReadableError'?'Camera este folosita de alta aplicatie. Inchide acea aplicatie si incearca din nou.':error?.name==='OverconstrainedError'?'Camera telefonului nu suporta setarile cerute. Incearca din nou; aplicatia va folosi setari video standard.':(error?.message||'Nu am putut porni camera.');
+    console.error('[OFRESH CAMERA V13]',error);
     msg(detail,false);
   }
 }
+window.filerOpenAfterCamera=filerOpenAfterCamera;
+
 function filerCaptureAfterPhoto(){
   const video=document.getElementById('filerAfterCameraVideo');
   const canvas=document.getElementById('filerAfterCameraCanvas');
@@ -3370,6 +3446,7 @@ function filerCaptureAfterPhoto(){
   canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
   const context=canvas.getContext('2d',{alpha:false});
   context.drawImage(video,0,0,canvas.width,canvas.height);
+  if(typeof canvas.toBlob!=='function'){msg('Browserul nu poate procesa fotografia. Actualizeaza browserul telefonului.',false);return;}
   canvas.toBlob(blob=>{
     if(!blob){msg('Fotografia nu a putut fi capturata. Incearca din nou.',false);return;}
     const index=(window.__filerAfterPhotos||[]).length+1;
