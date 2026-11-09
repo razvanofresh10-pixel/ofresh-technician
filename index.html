@@ -823,31 +823,22 @@ function mergeClientDataFromLoadedSheets(){
   ofreshMergedLocatiiRef=realLocatii; ofreshMergedAparateRef=aparateRef; ofreshMergedClientiRef=clientiRef;
   const autoClients = buildClientsFromMachines(aparateRef);
   const clientMap = new Map();
-  for(const c of [...realLocatii, ...autoClients]){
+  // Un singur card per client, chiar daca acesta are mai multe locatii/aparate.
+  // Cheia este numele clientului, nu orasul/judetul locatiei.
+  for(const c of [...realLocatii, ...autoClients, ...clientiRef]){
     const name = clientName(c).trim();
     if(!name) continue;
-    const city = String(c.Oras||c.oras||"").trim().toLowerCase();
-    const county = String(c.Judet||c.judet||"").trim().toLowerCase();
-    const address = String(c.Adresa||c.adresa||"").trim().toLowerCase();
-    const key = name.toLowerCase()+"|"+city+"|"+county+(city||county?"":"|"+address);
-    if(!clientMap.has(key)) clientMap.set(key,c);
+    const key = name.toLocaleLowerCase('ro-RO').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+    if(!clientMap.has(key)) clientMap.set(key,{...c});
     else {
       const x = clientMap.get(key);
-      for(const k of ["Adresa","Zona","Oras","Judet","Telefon","Email","Latitudine","Longitudine"]){ if(!x[k] && c[k]) x[k]=c[k]; }
+      for(const k of ["Adresa","Zona","Oras","Judet","Telefon","Email","Latitudine","Longitudine","Persoana contact"]){ if(!x[k] && c[k]) x[k]=c[k]; }
+      // Pastreaza un ID stabil deja existent; completeaza doar daca lipseste.
+      if(!x["ID Locatie"] && c["ID Locatie"]) x["ID Locatie"]=c["ID Locatie"];
+      if(!x["ID Client"] && c["ID Client"]) x["ID Client"]=c["ID Client"];
     }
   }
-  for(const c of clientiRef){
-    const name = clientName(c).trim();
-    if(!name) continue;
-    const city = String(c.Oras||c.oras||"").trim().toLowerCase();
-    const county = String(c.Judet||c.judet||"").trim().toLowerCase();
-    const address = String(c.Adresa||c.adresa||"").trim().toLowerCase();
-    const key = name.toLowerCase()+"|"+city+"|"+county+(city||county?"":"|"+address);
-    if(!clientMap.has(key)) clientMap.set(key,c);
-  }
   db.Clienti = [...clientMap.values()];
-  // Memorizeaza referinta rezultat; altfel urmatorul render considera cache-ul invalid
-  // si reconstruieste lista completa de clienti din nou.
   ofreshMergedClientiRef = db.Clienti;
 }
 
@@ -2490,7 +2481,19 @@ async function saveClient(old){
    /* Daca ID-ul nu exista efectiv in Locatii, facem ADD, nu UPDATE. */
    const exists=!!(db.Locatii||[]).some(x=>String(x["ID Locatie"]||x.id||"").trim()===id);
    await rawSave("Locatii",rec,"ID Locatie",exists?id:"");
-   closeModal();msg(exists?"Datele clientului au fost actualizate.":"Clientul a fost adaugat.");await load();
+   // Asteapta citirile vechi, invalideaza cache-ul si citeste din nou sursele clientilor.
+   if(adminSession && !commercialSession && !techSession){
+     await refreshAdminSheetList(["Locatii","Aparate"]);
+     ofreshMergedLocatiiRef=null; ofreshMergedAparateRef=null; ofreshMergedClientiRef=null;
+     mergeClientDataFromLoadedSheets();
+     saveCachedData();
+   }else{
+     ofreshMergedLocatiiRef=null; ofreshMergedAparateRef=null; ofreshMergedClientiRef=null;
+     mergeClientDataFromLoadedSheets();
+   }
+   closeModal();
+   if(current==="clienti") clientsPage(); else await load();
+   msg(exists?"Datele clientului au fost actualizate.":"Clientul a fost adaugat.");
  }catch(e){msg(e.message||"Nu am putut salva clientul. Verifica conexiunea cu Google Sheets.",false)}
 }
 const OFRESH_DEFAULT_MODEL_CATALOG = {
