@@ -758,30 +758,70 @@ let ofreshNavigationToken = 0;
 // Evita cereri paralele: modulele Administrator asteapta finalizarea incarcarii initiale Dashboard.
 let ofreshDashboardLoadPromise = null;
 let ofreshAdminPrefetchPromise = null;
-
-// Pregateste in fundal datele modulelor mari, fara sa blocheze Dashboard-ul.
-async function prefetchAdminModuleSheets(){
+let ofreshDashboardRefreshTimer = null;
+function scheduleAdminDashboardRefresh(delay=450){
   if(!adminSession || commercialSession || techSession) return;
-  const names=["Interventii","Poze Interventii"].filter(name=>!ofreshLoadedSheets.has(name));
-  if(!names.length) return;
-  if(ofreshAdminPrefetchPromise) return ofreshAdminPrefetchPromise;
-  ofreshAdminPrefetchPromise=(async()=>{
-    try{
-      const data=await api({action:"readSheets",sheets:JSON.stringify(names)});
-      if(!data || data.success===false) return false;
-      Object.assign(db,data);
-      names.forEach(name=>ofreshLoadedSheets.add(name));
-      saveCachedData();
-      return true;
-    }catch(e){ console.warn("[OFRESH] Prefetch module sheets failed:",e); return false; }
-    finally{ ofreshAdminPrefetchPromise=null; }
-  })();
-  return ofreshAdminPrefetchPromise;
+  if(ofreshDashboardRefreshTimer) clearTimeout(ofreshDashboardRefreshTimer);
+  ofreshDashboardRefreshTimer=setTimeout(()=>{
+    ofreshDashboardRefreshTimer=null;
+    if(current==="dashboard" && adminSession && !commercialSession && !techSession && !ofreshDashboardLoadPromise){
+      ofreshDashboardLoadPromise=loadAdminDashboard(true).finally(()=>{ofreshDashboardLoadPromise=null;});
+    }
+  },delay);
+}
+function cancelAdminDashboardRefresh(){
+  if(ofreshDashboardRefreshTimer){clearTimeout(ofreshDashboardRefreshTimer);ofreshDashboardRefreshTimer=null;}
 }
 
+// Incalzire progresiva a modulelor Administrator dupa autentificare.
+// Ruleaza numai cat timp utilizatorul ramane in Dashboard si foloseste
+// aceeasi functie de incarcare ca navigarea normala, evitand cererile duplicate.
+let ofreshModuleWarmupTimer = null;
+let ofreshModuleWarmupRunning = false;
+const ofreshModuleWarmupQueue = ["Stoc","Utilizatori","Interventii Espressoare","Interventii"];
+function cancelAdminModuleWarmup(){
+  if(ofreshModuleWarmupTimer){clearTimeout(ofreshModuleWarmupTimer);ofreshModuleWarmupTimer=null;}
+}
+function scheduleAdminModuleWarmup(delay=1200){
+  if(!adminSession || commercialSession || techSession || current!=="dashboard") return;
+  cancelAdminModuleWarmup();
+  ofreshModuleWarmupTimer=setTimeout(()=>{
+    ofreshModuleWarmupTimer=null;
+    runAdminModuleWarmup();
+  },delay);
+}
+async function runAdminModuleWarmup(){
+  if(ofreshModuleWarmupRunning || !adminSession || commercialSession || techSession || current!=="dashboard") return;
+  ofreshModuleWarmupRunning=true;
+  try{
+    // Un singur request pentru foile care nu vin deja in dashboardData.
+    // Fotografiile raman excluse fiind voluminoase si nu sunt necesare la prima afisare.
+    const missing=ofreshModuleWarmupQueue.filter(name=>!ofreshLoadedSheets.has(name));
+    if(missing.length && current==="dashboard"){
+      await ensureAdminSheetList(missing);
+      console.info('[OFRESH PERF]',{phase:'admin-background-module-warmup-batch',sheets:missing,status:'ready'});
+    }
+  }catch(e){
+    console.warn('[OFRESH] Background module warm-up skipped:',e);
+  }finally{
+    ofreshModuleWarmupRunning=false;
+  }
+}
+
+// Referinte folosite pentru a evita reconstruirea listei de clienti la fiecare render.
+let ofreshMergedLocatiiRef = null;
+let ofreshMergedAparateRef = null;
+let ofreshMergedClientiRef = null;
+
+// Istoricul si fotografiile se incarca doar la deschiderea modulului;
+// nu pornim preincarcari voluminoase in fundal care concureaza cu navigarea.
 function mergeClientDataFromLoadedSheets(){
   const realLocatii = Array.isArray(db.Locatii) ? db.Locatii : [];
-  const autoClients = buildClientsFromMachines(db.Aparate || []);
+  const aparateRef = Array.isArray(db.Aparate) ? db.Aparate : [];
+  const clientiRef = Array.isArray(db.Clienti) ? db.Clienti : [];
+  if(realLocatii===ofreshMergedLocatiiRef && aparateRef===ofreshMergedAparateRef && clientiRef===ofreshMergedClientiRef) return;
+  ofreshMergedLocatiiRef=realLocatii; ofreshMergedAparateRef=aparateRef; ofreshMergedClientiRef=clientiRef;
+  const autoClients = buildClientsFromMachines(aparateRef);
   const clientMap = new Map();
   for(const c of [...realLocatii, ...autoClients]){
     const name = clientName(c).trim();
@@ -796,7 +836,7 @@ function mergeClientDataFromLoadedSheets(){
       for(const k of ["Adresa","Zona","Oras","Judet","Telefon","Email","Latitudine","Longitudine"]){ if(!x[k] && c[k]) x[k]=c[k]; }
     }
   }
-  for(const c of (Array.isArray(db.Clienti)?db.Clienti:[])){
+  for(const c of clientiRef){
     const name = clientName(c).trim();
     if(!name) continue;
     const city = String(c.Oras||c.oras||"").trim().toLowerCase();
@@ -806,6 +846,9 @@ function mergeClientDataFromLoadedSheets(){
     if(!clientMap.has(key)) clientMap.set(key,c);
   }
   db.Clienti = [...clientMap.values()];
+  // Memorizeaza referinta rezultat; altfel urmatorul render considera cache-ul invalid
+  // si reconstruieste lista completa de clienti din nou.
+  ofreshMergedClientiRef = db.Clienti;
 }
 
 async function loadAdminDashboard(background=true){
@@ -827,6 +870,7 @@ async function loadAdminDashboard(background=true){
       if(current==="dashboard") render();
     }
     console.info('[OFRESH PERF]',{phase:'admin-dashboard-complete',totalMs:Math.round(performance.now()-dashboardStarted),locations:(db.Locatii||[]).length,machines:(db.Aparate||[]).length});
+    scheduleAdminModuleWarmup(900);
     return true;
   }catch(e){
     console.error("OFRESH Dashboard load error:",e);
@@ -848,8 +892,9 @@ function adminSheetsForModule(page){
     // de o citire separata a foii Clienti la fiecare navigare.
     clienti:["Locatii","Aparate"],
     aparate:["Aparate"],
-    interventii:["Interventii","Poze Interventii","Aparate","Locatii"],
-    interventiiEspresso:["Interventii Espressoare","Poze Interventii Espressoare"],
+    // Fotografiile sunt voluminoase si nu blocheaza afisarea istoricului.
+    interventii:["Interventii","Aparate","Locatii"],
+    interventiiEspresso:["Interventii Espressoare"],
     filtre:["Filtre","Aparate","Locatii"],
     stoc:["Stoc"],
     tehnicieni:["Tehnicieni"],
@@ -998,6 +1043,19 @@ async function load(background=false){
       }
     }else{
       render();
+      // Fotografiile se incarca dupa ce tabelul principal este deja afisat.
+      // Nu tinem blocata deschiderea modulelor Service de foile foto voluminoase.
+      if(adminSession && !commercialSession && !techSession && current==="interventii"){
+        const photoPage="interventii";
+        ensureAdminSheetList(["Poze Interventii"]).then(()=>{
+          if(current===photoPage && adminSession) render();
+        }).catch(e=>console.warn("[OFRESH] Interventii photos deferred load:",e));
+      }else if(adminSession && !commercialSession && !techSession && current==="interventiiEspresso"){
+        const photoPage="interventiiEspresso";
+        ensureAdminSheetList(["Poze Interventii Espressoare"]).then(()=>{
+          if(current===photoPage && adminSession) render();
+        }).catch(e=>console.warn("[OFRESH] Espresso photos deferred load:",e));
+      }
     }
   }catch(e){
     if(techSession && !adminSession){
@@ -1015,6 +1073,12 @@ function nav(){document.getElementById("nav").innerHTML=Object.entries(pages).fi
 async function go(p){
   const navigationStarted=performance.now();
   current=p;
+  if(p==="dashboard"){
+    scheduleAdminDashboardRefresh(180);
+  }else{
+    cancelAdminDashboardRefresh();
+    cancelAdminModuleWarmup();
+  }
   const token=++ofreshNavigationToken;
   if(adminSession) enterAdminCleanMode();
   document.getElementById("pageTitle").textContent=pages[p]||"";
@@ -1503,6 +1567,7 @@ function addAdminModuleBar(){
   app.insertBefore(bar,app.firstChild);
 }
 function render(){
+  const ofreshRenderStarted=performance.now();
   document.body.classList.remove("ofreshAccess");
   if(adminSession)enterAdminCleanMode();else exitAdminCleanMode();
   if(filerSession){document.body.classList.add("ofreshFilerMode");showFilerCurrentView();return}
@@ -1513,6 +1578,7 @@ function render(){
   const pageFn={dashboard:dashboard,clienti:clientsPage,aparate:machinesPage,interventii:interventionsPage,interventiiEspresso:espressoInterventionsPage,filtre:filtersPage,stoc:stockPage,tehnicieni:techniciansPage,rapoarte:reportsPage,utilizatori:usersPage,comercial:openCommercialFromAdmin,setari:settingsPage}[current]||dashboard;
   pageFn();
   addAdminModuleBar();
+  if(adminSession) console.info('[OFRESH PERF]',{phase:'module-render',module:current,renderMs:Math.round(performance.now()-ofreshRenderStarted)});
 }
 function normalizeOfreshSearch(value){return String(value==null?"":value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("ro-RO").replace(/\s+/g," ").trim()}
 function ofreshSearchTokens(value){return normalizeOfreshSearch(value).split(" ").filter(Boolean)}
@@ -1650,6 +1716,10 @@ function pageHero(ey,title,text,actions){return `<section class="pageHero"><div>
 let ofreshClientPage = 0;
 let ofreshMachinePage = 0;
 const OFRESH_PAGE_SIZE = 25;
+let ofreshInterventionPage = 0;
+let ofreshEspressoPage = 0;
+function changeInterventionPage(delta){ofreshInterventionPage=Math.max(0,ofreshInterventionPage+delta);interventionsPage()}
+function changeEspressoPage(delta){ofreshEspressoPage=Math.max(0,ofreshEspressoPage+delta);espressoInterventionsPage()}
 function ofreshPager(kind, page, total) {
   const pages = Math.max(1, Math.ceil(total / OFRESH_PAGE_SIZE));
   return `<div class="panelHeader" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap"><span class="small">Pagina ${page+1} din ${pages} · ${total} rezultate</span><div class="right"><button class="secondaryButton" ${page<=0?'disabled':''} onclick="${kind}(-1)">Inapoi</button><button class="secondaryButton" ${page>=pages-1?'disabled':''} onclick="${kind}(1)">Inainte</button></div></div>`;
@@ -1660,7 +1730,10 @@ function changeMachinePage(delta){ofreshMachinePage=Math.max(0,ofreshMachinePage
 function clientsPage(){
  if(Array.isArray(db.Locatii) && db.Locatii.length) mergeClientDataFromLoadedSheets();
  const q=normalizeOfreshSearch(searchTerm||"");
- const rows=(db.Clienti||[]).filter(l=>ofreshSearchFieldsMatch([
+ const allClients=Array.isArray(db.Clienti)?db.Clienti:[];
+ // La prima deschidere fara cautare nu este necesar sa scanam si sa normalizam
+ // toate campurile fiecarui client; afisam direct lista si paginam doar vizual.
+ const rows=!q?allClients:allClients.filter(l=>ofreshSearchFieldsMatch([
    clientName(l),l.Adresa||l.adresa||"",l.Oras||l.oras||"",l.Judet||l.judet||"",l.Zona||l.zona||"",
    l.Telefon||l.telefon||"",l.Email||l.email||""
  ],q,3));
@@ -1770,10 +1843,15 @@ function clearMachinePageSearch(){
  machinesPage();
 }
 function machinesPage(){
- const allMachines=db.Aparate||[];
+ const allMachines=Array.isArray(db.Aparate)?db.Aparate:[];
  const term=machineSearchNormalize(searchTerm);
- const exactRows=term?allMachines.filter(machine=>machineSearchFields(machine).some(value=>value===term)):[];
- const rows=exactRows.length?exactRows:allMachines.filter(machineSearchMatches);
+ // Fara cautare, folosim direct lista deja incarcata; nu normalizam campurile
+ // tuturor aparatelor la fiecare prima afisare a modulului.
+ let rows=allMachines;
+ if(term){
+   const exactRows=allMachines.filter(machine=>machineSearchFields(machine).some(value=>value===term));
+   rows=exactRows.length?exactRows:allMachines.filter(machine=>machineSearchFields(machine).some(value=>value.includes(term)));
+ }
  const pages=Math.max(1,Math.ceil(rows.length/OFRESH_PAGE_SIZE));
  ofreshMachinePage=Math.min(ofreshMachinePage,pages-1);
  const visible=rows.slice(ofreshMachinePage*OFRESH_PAGE_SIZE,(ofreshMachinePage+1)*OFRESH_PAGE_SIZE);
@@ -2167,17 +2245,28 @@ function interventionsPage(){
    const list=photoMap.get(id);
    if(!list.some(x=>x.url===url))list.push({url,label:/aviz/i.test(norm(p.Categorie||p.Tip||p.Nume))?"Deschide aviz":"Deschide poza"});
  });
+ const machineIndex=new Map();
+ machines.forEach(m=>{
+   [m["ID Aparat"],m.idAparat,m.id,m.ID,m["Serie Aparat"],m.Serie,m["Cod OFRESH"]].forEach(v=>{
+     const k=key(v); if(k && !machineIndex.has(k)) machineIndex.set(k,m);
+   });
+ });
+ const locationIndex=new Map();
+ locations.forEach(x=>{
+   const k=key(x["ID Locatie"]||x["ID Client"]||x.ID||x.id);
+   if(k && !locationIndex.has(k)) locationIndex.set(k,x);
+ });
  const machineFor=i=>{
    const id=norm(i["ID Aparat"]||i.aparatId||i.aparatID||i.AparatID);
    const serial=norm(i["Serie Aparat"]||i.Serie||i.serie);
    const code=norm(i["Cod OFRESH"]||i.codOFRESH);
-   return machines.find(m=>[m["ID Aparat"],m.idAparat,m.id,m.ID,m["Serie Aparat"],m.Serie,m["Cod OFRESH"]].some(v=>key(v)&&[key(id),key(serial),key(code)].includes(key(v))))||null;
+   return machineIndex.get(key(id))||machineIndex.get(key(serial))||machineIndex.get(key(code))||null;
  };
  const clientFor=(i,m)=>{
    const direct=norm(i.Client||i.client||i.locatie||i.Locatie||i["Nume locatie"]||i["Client"]);
    if(direct)return direct;
    const locationId=norm(i["ID Locatie"]||i["ID Client"]||i.clientId||i.locatieId||m?.["ID Locatie"]||m?.["ID Client"]);
-   const c=locations.find(x=>key(x["ID Locatie"]||x["ID Client"]||x.ID||x.id)===key(locationId));
+   const c=locationIndex.get(key(locationId));
    return c?(c["Nume locatie"]||c.Client||c.Nume||c.client||""):"";
  };
  const inlinePhotos=i=>{
@@ -2189,8 +2278,11 @@ function interventionsPage(){
    return found;
  };
  const sorted=rows.slice().sort((a,b)=>norm(b.data||b.Data).localeCompare(norm(a.data||a.Data)));
+ const historyPages=Math.max(1,Math.ceil(sorted.length/OFRESH_PAGE_SIZE));
+ ofreshInterventionPage=Math.min(ofreshInterventionPage,historyPages-1);
+ const visibleHistory=sorted.slice(ofreshInterventionPage*OFRESH_PAGE_SIZE,(ofreshInterventionPage+1)*OFRESH_PAGE_SIZE);
  document.getElementById("app").innerHTML=pageHero("SERVICE","Interventii","Istoricul lucrarilor si interventiilor tehnice",`<button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>`)+
- `<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${sorted.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${sorted.length?`<div class="tableWrap"><table class="table ofreshInterventionsTable"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th><th>Fotografii</th></tr></thead><tbody>${sorted.map(i=>{
+ `<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${sorted.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${sorted.length?`<div class="tableWrap"><table class="table ofreshInterventionsTable"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th><th>Fotografii</th></tr></thead><tbody>${visibleHistory.map(i=>{
    const m=machineFor(i), bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";
    const sf=i.tipFiltru||i["Tip filtru"]||"", next=i.urmatorSchimbFiltru||i["Urmator schimb"]||"";
    const id=norm(i["ID Interventie"]||i["ID interventie"]||i.ID||i.id);
@@ -2198,9 +2290,9 @@ function interventionsPage(){
    const apparatus=norm(i.aparat||i.Aparat||i["ID Aparat"]||i["Cod OFRESH"]||i["Serie Aparat"]|| (m?(m["Cod OFRESH"]||m["Producator"]+" "+m["Model"]+" - "+(m["Serie Aparat"]||"")):""));
    const operations=Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"";
    return `<tr><td>${esc(i.data||i.Data||"")}</td><td><strong>${esc(apparatus)}</strong></td><td>${esc(clientFor(i,m))}</td><td>${esc(i.tehnician||i.Tehnician||"")}</td><td>${esc(i.tipInterventie||i["Tip interventie"]||"")}</td><td style="white-space:normal;min-width:220px">${esc(operations)}</td><td>${esc(sf)}${next?`<div class="small">Urmator: ${esc(next)}</div>`:""}</td><td>${esc(i.urmatoareaInterventie||i["Urmatoarea interventie"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td><td>${linked.map(x=>`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${x.label}</a>`).join("<br>")||"-"}</td></tr>`;
- }).join("")}</tbody></table></div>`:(!interventionsLoaded?'<div class="emptyState">Se incarca istoricul interventiilor...</div>':'<div class="emptyState">Nu exista interventii inregistrate.</div>')}</section>`;
+ }).join("")}</tbody></table></div>${ofreshPager("changeInterventionPage",ofreshInterventionPage,sorted.length)}`:(!interventionsLoaded?'<div class="emptyState">Se incarca istoricul interventiilor...</div>':'<div class="emptyState">Nu exista interventii inregistrate.</div>')}</section>`;
 }
-function filtersPage(){const filtersLoaded=typeof ofreshLoadedSheets!=="undefined" && ofreshLoadedSheets.has("Filtre");const rows=(db.Filtre||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("MENTENANTA","Filtre","Urmarirea schimburilor si a termenelor pentru filtre",`<button class="primaryButton" onclick="openFilter()">+ Adauga filtru</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Monitorizare filtre</h3><p>${rows.length} filtre inregistrate</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Aparat</th><th>Client</th><th>Zona</th><th>Tip filtru</th><th>Montat la</th><th>Scadenta</th><th>Status</th></tr></thead><tbody>${rows.map(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb||"";const s=soonDate(d);const m=(db.Aparate||[]).find(x=>String(machineId(x))===String(f["ID Aparat"]||f.aparatId||""));const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(f["ID Locatie"]||f["ID Client"]||""));return `<tr><td>${esc(machineLabel(m||{})||f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(c?clientName(c):(f.Client||f.client||f.Locatie||f.locatie||""))}</td><td>${esc(machineFloor(m||{})||f.Zona||f.zona||"")}</td><td>${esc(f["Tip filtru"]||f.tipFiltru||f.tip||"")}</td><td>${esc(f["Data montare"]||f.montat||f.dataSchimbare||"")}</td><td>${esc(d)}</td><td><span class="badge ${s?"warningBadge":""}">${s?"NECESITA ATENTIE":"OK"}</span></td></tr>`}).join("")}</tbody></table></div>`:(!filtersLoaded?'<div class="emptyState">Se incarca evidenta filtrelor...</div>':'<div class="emptyState">Nu exista filtre montate/inregistrate. Stocul disponibil este afisat separat in modulul Stoc.</div>')}</section>`}
+function filtersPage(){const filtersLoaded=typeof ofreshLoadedSheets!=="undefined" && ofreshLoadedSheets.has("Filtre");const rows=(db.Filtre||[]).filter(matches);const machineIndex=new Map((db.Aparate||[]).map(x=>[String(machineId(x)),x]));const clientIndex=new Map((db.Clienti||[]).map(x=>[String(clientId(x)),x]));document.getElementById("app").innerHTML=pageHero("MENTENANTA","Filtre","Urmarirea schimburilor si a termenelor pentru filtre",`<button class="primaryButton" onclick="openFilter()">+ Adauga filtru</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Monitorizare filtre</h3><p>${rows.length} filtre inregistrate</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Aparat</th><th>Client</th><th>Zona</th><th>Tip filtru</th><th>Montat la</th><th>Scadenta</th><th>Status</th></tr></thead><tbody>${rows.map(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb||"";const s=soonDate(d);const m=machineIndex.get(String(f["ID Aparat"]||f.aparatId||""));const c=clientIndex.get(String(f["ID Locatie"]||f["ID Client"]||""));return `<tr><td>${esc(machineLabel(m||{})||f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(c?clientName(c):(f.Client||f.client||f.Locatie||f.locatie||""))}</td><td>${esc(machineFloor(m||{})||f.Zona||f.zona||"")}</td><td>${esc(f["Tip filtru"]||f.tipFiltru||f.tip||"")}</td><td>${esc(f["Data montare"]||f.montat||f.dataSchimbare||"")}</td><td>${esc(d)}</td><td><span class="badge ${s?"warningBadge":""}">${s?"NECESITA ATENTIE":"OK"}</span></td></tr>`}).join("")}</tbody></table></div>`:(!filtersLoaded?'<div class="emptyState">Se incarca evidenta filtrelor...</div>':'<div class="emptyState">Nu exista filtre montate/inregistrate. Stocul disponibil este afisat separat in modulul Stoc.</div>')}</section>`}
 function stockGroups(){
  const groups=new Map();
  (Array.isArray(db.Stoc)?db.Stoc:[]).forEach(s=>{
@@ -3739,6 +3831,16 @@ function espressoInterventionsPage(){
   const rows=Array.isArray(db['Interventii Espressoare'])?db['Interventii Espressoare']:[];
   const photos=Array.isArray(db['Poze Interventii Espressoare'])?db['Poze Interventii Espressoare']:[];
   const sorted=rows.slice().sort((a,b)=>String(b.Data||'').localeCompare(String(a.Data||'')));
+  const espressoPages=Math.max(1,Math.ceil(sorted.length/OFRESH_PAGE_SIZE));
+  ofreshEspressoPage=Math.min(ofreshEspressoPage,espressoPages-1);
+  const visibleEspresso=sorted.slice(ofreshEspressoPage*OFRESH_PAGE_SIZE,(ofreshEspressoPage+1)*OFRESH_PAGE_SIZE);
+  const photosByIntervention=new Map();
+  photos.forEach(p=>{
+    const id=String(p['ID Interventie']||'');
+    if(!id)return;
+    if(!photosByIntervention.has(id))photosByIntervention.set(id,[]);
+    photosByIntervention.get(id).push(p);
+  });
   const photoUrl=p=>{
     const fileId=String(p['File ID']||p['File Id']||p.fileId||p.fileID||'').trim();
     if(fileId)return 'https://drive.google.com/file/d/'+encodeURIComponent(fileId)+'/view';
@@ -3746,7 +3848,7 @@ function espressoInterventionsPage(){
     return /^https?:\/\//i.test(raw)?raw:'';
   };
   const photoLabel=p=>filerNormalizeAccessValue(p.Categorie||'').includes('aviz')?'Deschide aviz':'Deschide poza';
-  document.getElementById('app').innerHTML=pageHero('SERVICE CAFEA','Interventii Espressoare','Istoricul operatiunilor efectuate de Fileri.',`<button class="secondaryButton" onclick="exportSheet('Interventii Espressoare','OFRESH_Interventii_Espressoare.xlsx')">Export interventii</button>`)+`<section class="panel"><div class="toolbar"><strong>${sorted.length} interventii</strong><span class="notice">Istoric separat de interventiile pentru apa si filtre.</span></div>${sorted.length?`<div class="tableWrap"><table class="table espressoHistoryTable"><thead><tr><th>Data</th><th>Client</th><th>Oras</th><th>Espressor</th><th>Filer</th><th>Operatiuni</th><th>Fotografii</th></tr></thead><tbody>${sorted.map(r=>{const linked=photos.filter(p=>String(p['ID Interventie'])===String(r['ID Interventie']));return `<tr><td>${esc(r.Data||'')}</td><td><strong>${esc(r.Client||'')}</strong><br><small>${esc(r.Adresa||'')}</small></td><td>${esc(r.Oras||r.Zona||'')}</td><td>${esc([r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH']].filter(Boolean).join(' · '))}</td><td>${esc(r.Filer||'')}</td><td style="white-space:normal;min-width:220px">${esc(r['Operatiuni efectuate']||'')}</td><td>${linked.map(p=>{const url=photoUrl(p);return url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${photoLabel(p)}</a>`:'-';}).join('<br>')||'-'}</td></tr>`;}).join('')}</tbody></table></div>`:'<div class="emptyState">Nu exista inca interventii pentru espressoare.</div>'}</section>`;
+  document.getElementById('app').innerHTML=pageHero('SERVICE CAFEA','Interventii Espressoare','Istoricul operatiunilor efectuate de Fileri.',`<button class="secondaryButton" onclick="exportSheet('Interventii Espressoare','OFRESH_Interventii_Espressoare.xlsx')">Export interventii</button>`)+`<section class="panel"><div class="toolbar"><strong>${sorted.length} interventii</strong><span class="notice">Istoric separat de interventiile pentru apa si filtre.</span></div>${sorted.length?`<div class="tableWrap"><table class="table espressoHistoryTable"><thead><tr><th>Data</th><th>Client</th><th>Oras</th><th>Espressor</th><th>Filer</th><th>Operatiuni</th><th>Fotografii</th></tr></thead><tbody>${visibleEspresso.map(r=>{const linked=photosByIntervention.get(String(r['ID Interventie']))||[];return `<tr><td>${esc(r.Data||'')}</td><td><strong>${esc(r.Client||'')}</strong><br><small>${esc(r.Adresa||'')}</small></td><td>${esc(r.Oras||r.Zona||'')}</td><td>${esc([r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH']].filter(Boolean).join(' · '))}</td><td>${esc(r.Filer||'')}</td><td style="white-space:normal;min-width:220px">${esc(r['Operatiuni efectuate']||'')}</td><td>${linked.map(p=>{const url=photoUrl(p);return url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${photoLabel(p)}</a>`:'-';}).join('<br>')||'-'}</td></tr>`;}).join('')}</tbody></table></div>${ofreshPager('changeEspressoPage',ofreshEspressoPage,sorted.length)}`:'<div class="emptyState">Nu exista inca interventii pentru espressoare.</div>'}</section>`;
 }
 
 function makePublicQrToken(key){
@@ -4052,7 +4154,7 @@ async function loginAdministrator(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
   const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
   const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{const shellStarted=performance.now();adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();console.info('[OFRESH PERF]',{phase:'admin-shell-rendered-from-cache',durationMs:Math.round(performance.now()-shellStarted),totalSinceLoginMs:Math.round(performance.now()-adminLoginStarted)});/* Cache-ul local afiseaza imediat datele existente, apoi actualizam asincron din backend. */ofreshDashboardLoadPromise=loadAdminDashboard(true).finally(()=>{ofreshDashboardLoadPromise=null;});};
+  const openAdmin=(u)=>{const shellStarted=performance.now();cancelAdminDashboardRefresh();adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();console.info('[OFRESH PERF]',{phase:'admin-shell-rendered-from-cache',durationMs:Math.round(performance.now()-shellStarted),totalSinceLoginMs:Math.round(performance.now()-adminLoginStarted)});/* Dashboard-ul se actualizeaza doar daca administratorul ramane pe Dashboard; navigarea spre un modul anuleaza timerul si nu asteapta cererea Dashboard. */scheduleAdminDashboardRefresh(650);};
   try{
     const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");console.info('[OFRESH PERF]',{phase:'admin-auth-success',totalMs:Math.round(performance.now()-adminLoginStarted)});openAdmin(r.user);return;}
