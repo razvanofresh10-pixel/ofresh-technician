@@ -2483,7 +2483,7 @@ async function saveClient(old){
    await rawSave("Locatii",rec,"ID Locatie",exists?id:"");
    // Asteapta citirile vechi, invalideaza cache-ul si citeste din nou sursele clientilor.
    if(adminSession && !commercialSession && !techSession){
-     await refreshAdminSheetList(["Locatii","Aparate"]);
+     await ensureAdminSheetList(["Locatii","Aparate"]);
      ofreshMergedLocatiiRef=null; ofreshMergedAparateRef=null; ofreshMergedClientiRef=null;
      mergeClientDataFromLoadedSheets();
      saveCachedData();
