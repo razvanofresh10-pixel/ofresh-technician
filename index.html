@@ -2477,24 +2477,41 @@ async function saveClient(old){
  const id=String(old||"").trim()||uid("LOC");
  const rec={"ID Locatie":id,Client:v("client").trim(),"Nume locatie":v("client").trim(),Adresa:v("adresa").trim(),Zona:v("zona").trim(),Oras:v("oras").trim(),Judet:v("judet").trim(),"Persoana contact":v("contact").trim(),Telefon:v("telefon").trim(),Email:v("email").trim(),Latitudine:v("lat").trim(),Longitudine:v("lon").trim(),Status:existing.Status||"Activ",Observatii:v("obs").trim()};
  if(!rec.Client||!rec.Adresa)return msg("Completeaza Client si Adresa.",false);
+
+ const btn=document.getElementById("modalSaveBtn");
+ if(btn){btn.disabled=true;btn.textContent="Se salveaza...";}
+
+ // Actualizam imediat datele locale, la fel ca la salvarea aparatelor.
+ const previousRows=Array.isArray(db.Locatii)?db.Locatii.slice():[];
+ const idx=previousRows.findIndex(x=>String(x["ID Locatie"]||x.id||"").trim()===id);
+ if(idx>=0) db.Locatii[idx]={...previousRows[idx],...rec};
+ else db.Locatii=[...previousRows,rec];
+
+ ofreshMergedLocatiiRef=null;
+ ofreshMergedAparateRef=null;
+ ofreshMergedClientiRef=null;
+ mergeClientDataFromLoadedSheets();
+ saveCachedData();
+ closeModal();
+ if(current==="clienti") clientsPage();
+ else render();
+ msg(old?"Clientul a fost actualizat.":"Clientul a fost adaugat.");
+
+ // Scrierea in Google Sheets continua in fundal; interfata nu asteapta reincarcarea foilor.
  try{
-   /* Daca ID-ul nu exista efectiv in Locatii, facem ADD, nu UPDATE. */
-   const exists=!!(db.Locatii||[]).some(x=>String(x["ID Locatie"]||x.id||"").trim()===id);
-   await rawSave("Locatii",rec,"ID Locatie",exists?id:"");
-   // Asteapta citirile vechi, invalideaza cache-ul si citeste din nou sursele clientilor.
-   if(adminSession && !commercialSession && !techSession){
-     await ensureAdminSheetList(["Locatii","Aparate"]);
-     ofreshMergedLocatiiRef=null; ofreshMergedAparateRef=null; ofreshMergedClientiRef=null;
-     mergeClientDataFromLoadedSheets();
-     saveCachedData();
-   }else{
-     ofreshMergedLocatiiRef=null; ofreshMergedAparateRef=null; ofreshMergedClientiRef=null;
-     mergeClientDataFromLoadedSheets();
-   }
-   closeModal();
-   if(current==="clienti") clientsPage(); else await load();
-   msg(exists?"Datele clientului au fost actualizate.":"Clientul a fost adaugat.");
- }catch(e){msg(e.message||"Nu am putut salva clientul. Verifica conexiunea cu Google Sheets.",false)}
+   await rawSave("Locatii",rec,"ID Locatie",old? id:"");
+ }catch(e){
+   // Revenim la datele anterioare daca Google Sheets nu confirma scrierea.
+   db.Locatii=previousRows;
+   ofreshMergedLocatiiRef=null;
+   ofreshMergedAparateRef=null;
+   ofreshMergedClientiRef=null;
+   mergeClientDataFromLoadedSheets();
+   saveCachedData();
+   if(current==="clienti") clientsPage();
+   else render();
+   msg((e&&e.message)||"Nu am putut salva clientul in Google Sheets.",false);
+ }
 }
 const OFRESH_DEFAULT_MODEL_CATALOG = {
   Apa: [
