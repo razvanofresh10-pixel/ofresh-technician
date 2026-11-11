@@ -2214,13 +2214,36 @@ function commercialHasEspressoAccess(){
 async function ensureCommercialEspressoHistory(){
   if(commercialEspressoHistoryLoaded)return true;
   if(commercialEspressoLoading)return window.__ofreshCommercialEspressoPromise||false;
-  if(!commercialHasEspressoAccess()){msg("Acest utilizator nu are dreptul Service Espressoare.",false);return false;}
-  const email=String(commercialSession?.Email||commercialSession?.email||"").trim().toLowerCase();
-  const pin=String(commercialAuthPin||"").trim();
-  if(!email||!pin){msg("Sesiunea Comercial nu este valida. Autentifica-te din nou.",false);return false;}
   commercialEspressoLoading=true;
   window.__ofreshCommercialEspressoPromise=(async()=>{
     try{
+      // Administratorul poate deschide Comercial prin „Mod Administrator”.
+      // In aceasta previzualizare nu exista PIN Comercial; folosim drepturile
+      // Administratorului si aceeasi sursa de foi ca in modulul Service Espressoare.
+      if(adminSession && commercialSession===adminSession){
+        await ensureAdminSheetList(["Interventii Espressoare","Poze Interventii Espressoare"]);
+        const rows=Array.isArray(db["Interventii Espressoare"])?db["Interventii Espressoare"]:[];
+        const photos=Array.isArray(db["Poze Interventii Espressoare"])?db["Poze Interventii Espressoare"]:[];
+        const byId=new Map();
+        photos.forEach(p=>{
+          const id=String(p["ID Interventie"]||p["ID interventie"]||p.idInterventie||"").trim();
+          if(!id)return;
+          const fileId=String(p["File ID"]||p["File Id"]||p.fileId||p.fileID||"").trim();
+          const raw=String(p["URL poza"]||p["URL Poza"]||p.url||p.URL||"").trim();
+          const url=fileId?"https://drive.google.com/file/d/"+encodeURIComponent(fileId)+"/view":(/^https?:\/\//i.test(raw)?raw:"");
+          if(url){if(!byId.has(id))byId.set(id,[]);byId.get(id).push(url);}
+        });
+        commercialEspressoHistory=rows.map(r=>{
+          const id=String(r["ID Interventie"]||r["ID interventie"]||r.ID||r.id||"").trim();
+          return {...r,Fotografii:byId.get(id)||[]};
+        });
+        commercialEspressoHistoryLoaded=true;
+        return true;
+      }
+      // Utilizatorul Comercial autentificat este validat de Apps Script.
+      const email=String(commercialSession?.Email||commercialSession?.email||"").trim().toLowerCase();
+      const pin=String(commercialAuthPin||"").trim();
+      if(!email||!pin)throw new Error("Nu am putut valida sesiunea Comercial. Iesi si autentifica-te din nou.");
       const r=await api({action:"commercialEspressoHistory",email,pin});
       if(!r||!r.success)throw new Error(r?.error||"Nu am putut incarca istoricul espressoarelor.");
       commercialEspressoHistory=Array.isArray(r.data?.InterventiiEspressoare)?r.data.InterventiiEspressoare:[];
@@ -2359,7 +2382,7 @@ function commercialPage(){
           <button class="primary" onclick="commercialTab='aparate';commercialPage()">Aparate</button>
           <button onclick="commercialTab='filtre';commercialPage()">Schimbari filtre</button>
           <button onclick="openCommercialHistory()">Istoric interventii</button>
-          ${commercialHasEspressoAccess()?`<button onclick="openCommercialEspressoHistory()">Service Espressoare</button>`:""}
+          <button onclick="openCommercialEspressoHistory()">Service Espressoare</button>
           <button class="primary" onclick="exportCommercialWorkbook()">Export</button>
           <button onclick="adminSession ? adminBackToModules() : logoutCommercial()">← Inapoi</button>
         </div>
@@ -2374,7 +2397,7 @@ function commercialPage(){
       <div class="commercialInfoGrid">
         <div class="commercialInfo"><h3>Schimbari filtre</h3><p>Situatia actuala din portofoliu</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>In urmatoarele 30 zile</span><b>${dueSoon}</b></div><div class="commercialMiniRow"><span>Expirate</span><b>${expired}</b></div><div class="commercialMiniRow"><span>Fara scadenta</span><b>${withoutDate}</b></div></div></div>
         <div class="commercialInfo"><h3>Portofoliu pe judete</h3><p>Primele judete dupa numarul de aparate</p><div class="commercialMiniRows">${topCounties.length?topCounties.map(([j,n])=>`<div class="commercialMiniRow"><span>${esc(j)}</span><b>${n}</b></div>`).join(""): '<div class="commercialMiniRow"><span>Nu exista date</span><b>0</b></div>'}</div></div>
-        <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="openCommercialHistory()">Deschide →</b></div>${commercialHasEspressoAccess()?`<div class="commercialMiniRow"><span>Service Espressoare</span><b style="cursor:pointer" onclick="openCommercialEspressoHistory()">Deschide →</b></div>`:""}</div></div>
+        <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="openCommercialHistory()">Deschide →</b></div><div class="commercialMiniRow"><span>Service Espressoare</span><b style="cursor:pointer" onclick="openCommercialEspressoHistory()">Deschide →</b></div></div></div>
       </div>
     </section>
     ${commercialDataLoading?'<section class="panel"><div class="emptyState">Se incarca datele portofoliului Comercial. Poti ramane in aceasta pagina; datele vor aparea automat.</div></section>':(commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialTab==='espresso'?commercialEspressoInterventions():commercialInterventions())}`;
