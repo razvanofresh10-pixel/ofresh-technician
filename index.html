@@ -2014,6 +2014,23 @@ function commercialFilterRows(){
     return (!term||hay.includes(term))&&(!commercialCounty||normalizeCounty(county)===normalizeCounty(commercialCounty));
   });
 }
+function commercialPhotoLinks(i){
+  const found=[];
+  const add=value=>{
+    if(value==null)return;
+    if(Array.isArray(value)){value.forEach(add);return;}
+    if(typeof value==="object"){
+      const fileId=String(value["File ID"]||value["File Id"]||value.fileId||value.fileID||"").trim();
+      const raw=String(value["URL poza"]||value["URL Poza"]||value.url||value.URL||value.Link||value.link||"").trim();
+      const url=fileId?`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`:raw;
+      if(/^https?:\/\//i.test(url)&&!found.includes(url))found.push(url);
+      return;
+    }
+    String(value).split(/[\n\r;,]+/).map(x=>x.trim()).filter(x=>/^https?:\/\//i.test(x)).forEach(url=>{if(!found.includes(url))found.push(url);});
+  };
+  Object.keys(i||{}).filter(k=>/(fotografii|fotografie|poze|poza|photos?|image.?urls?)/i.test(k)).forEach(k=>add(i[k]));
+  return found;
+}
 function commercialInterventions(){
   const rows=commercialInterventionRows();
   return `<section class="panel">
@@ -2023,7 +2040,7 @@ function commercialInterventions(){
       <select class="search" style="width:180px" onchange="commercialCounty=this.value;commercialPage()"><option value="">Toate judetele</option>${commercialCounties().map(j=>`<option value="${esc(j)}" ${normalizeCounty(j)===normalizeCounty(commercialCounty)?'selected':''}>${esc(j)}</option>`).join("")}</select>
       <button class="secondaryButton" onclick="commercialClearFilters()">Sterge filtrele</button>
     </div></div>
-    ${rows.length?`<div class="tableWrap"><table class="machineTable"><thead><tr><th>Data</th><th>Client</th><th>Aparat</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th></tr></thead><tbody>${rows.map(i=>{const bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";return `<tr><td>${esc(i.Data||i.data||"")}</td><td>${esc(i.Client||i.client||i.Locatie||i.Locatie||"")}</td><td><strong>${esc(i.Aparat||i.aparat||i["ID Aparat"]||"")}</strong></td><td>${esc(i.Tehnician||i.tehnician||"")}</td><td>${esc(i["Tip interventie"]||i.tipInterventie||"")}</td><td>${esc(Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"")}</td><td>${esc(i["Tip filtru"]||i.tipFiltru||"")}</td><td>${esc(i["Urmatoarea interventie"]||i.urmatoareaInterventie||i["Urmator schimb"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru criteriile selectate.</div>'}
+    ${rows.length?`<div class="tableWrap"><table class="machineTable"><thead><tr><th>Data</th><th>Client</th><th>Aparat</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th><th>Fotografii</th></tr></thead><tbody>${rows.map(i=>{const bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";const photos=commercialPhotoLinks(i);return `<tr><td>${esc(i.Data||i.data||"")}</td><td>${esc(i.Client||i.client||i.Locatie||"")}</td><td><strong>${esc(i.Aparat||i.aparat||i["ID Aparat"]||"")}</strong></td><td>${esc(i.Tehnician||i.tehnician||"")}</td><td>${esc(i["Tip interventie"]||i.tipInterventie||"")}</td><td style="white-space:normal;min-width:220px">${esc(Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"")}</td><td>${esc(i["Tip filtru"]||i.tipFiltru||"")}</td><td>${esc(i["Urmatoarea interventie"]||i.urmatoareaInterventie||i["Urmator schimb"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td><td>${photos.map((url,n)=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Deschide poza</a>`).join("<br>")||"-"}</td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru criteriile selectate.</div>'}
   </section>`;
 }
 function commercialMachines(){
@@ -2195,21 +2212,7 @@ async function exportCommercialWorkbook(){
     const filtre=commercialExportFilterRows();
     const interventii=(commercialDb.Interventii||[]).map(i=>({...i}));
     // Fotografiile sunt salvate separat in Drive; includem linkuri clicabile in Excel.
-    const photoUrlsFor = row => {
-      const found=[];
-      Object.keys(row||{}).forEach(k=>{
-        if(!/(fotografii|fotografie|poze|poza|photos?|image.?urls?)/i.test(k)) return;
-        const value=row[k];
-        const values=Array.isArray(value)?value:[value];
-        values.forEach(v=>{
-          const raw=(v&&typeof v==="object")?(v["URL poza"]||v.url||v.URL||""):v;
-          String(raw||'').split(/[\n\r;,]+/).map(x=>x.trim()).filter(Boolean).forEach(url=>{
-            if(/^https?:\/\//i.test(url)&&!found.includes(url))found.push(url);
-          });
-        });
-      });
-      return found;
-    };
+    const photoUrlsFor = row => commercialPhotoLinks(row);
     const intRows=interventii.map(row=>{const clean={...row};delete clean.Fotografii;delete clean.Fotografie;delete clean.Poze;delete clean.Poza;delete clean.Photos;delete clean.Photo;return {...clean,__photoUrls:photoUrlsFor(row)};});
     const maxPhotos=Math.max(0,...intRows.map(r=>r.__photoUrls.length));
     const excelInterventii=intRows.map(r=>{const out={};Object.keys(r).filter(k=>k!=='__photoUrls').forEach(k=>out[k]=r[k]);for(let p=0;p<maxPhotos;p++)out['Fotografie '+(p+1)]=r.__photoUrls[p]?'Deschide poza':'';return out;});
@@ -2232,7 +2235,7 @@ async function exportCommercialWorkbook(){
     XLSX.utils.book_append_sheet(wb,wsF,"Schimbari filtre");
     XLSX.utils.book_append_sheet(wb,wsI,"Istoric interventii");
     XLSX.writeFile(wb,"OFRESH_Export_Complet.xlsx");
-    msg(`Export generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii. Fotografiile sunt incluse ca linkuri clicabile.`);
+    msg(`Export generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii. Fotografiile sunt incluse ca linkuri clicabile cu textul „Deschide poza”.`);
   }catch(e){msg(e?.message||"Nu am putut genera exportul complet. Verifica internetul si incearca din nou.",false)}
 }
 // Pastreaza compatibilitatea cu eventuale apeluri vechi; toate exporta acelasi fisier complet.
