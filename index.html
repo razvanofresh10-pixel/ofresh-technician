@@ -2208,42 +2208,41 @@ async function openCommercialHistory(){
   commercialTab="interventii"; commercialPage();
 }
 function commercialHasEspressoAccess(){
+  if(adminSession)return true; // Administratorul poate previzualiza toate modulele Comercial.
   const raw=String(commercialSession?.Drepturi||commercialSession?.drepturi||"");
   return raw.split(/[,;|]/).map(x=>x.trim().toLowerCase()).includes("service espressoare");
 }
 async function ensureCommercialEspressoHistory(){
   if(commercialEspressoHistoryLoaded)return true;
-  if(commercialEspressoLoading)return window.__ofreshCommercialEspressoPromise||false;
+  if(window.__ofreshCommercialEspressoPromise)return window.__ofreshCommercialEspressoPromise;
   commercialEspressoLoading=true;
   window.__ofreshCommercialEspressoPromise=(async()=>{
     try{
-      // Administratorul poate deschide Comercial prin „Mod Administrator”.
-      // In aceasta previzualizare nu exista PIN Comercial; folosim drepturile
-      // Administratorului si aceeasi sursa de foi ca in modulul Service Espressoare.
-      if(adminSession && commercialSession===adminSession){
+      // In previzualizarea Comercial din Administrator folosim sesiunea Administratorului,
+      // nu cerem email/PIN Comercial. Incarcam doar foile espressoarelor, la prima deschidere.
+      if(adminSession){
         await ensureAdminSheetList(["Interventii Espressoare","Poze Interventii Espressoare"]);
-        const rows=Array.isArray(db["Interventii Espressoare"])?db["Interventii Espressoare"]:[];
+        const visits=Array.isArray(db["Interventii Espressoare"])?db["Interventii Espressoare"]:[];
         const photos=Array.isArray(db["Poze Interventii Espressoare"])?db["Poze Interventii Espressoare"]:[];
-        const byId=new Map();
+        const norm=v=>String(v==null?"":v).trim();
+        const photoMap={};
         photos.forEach(p=>{
-          const id=String(p["ID Interventie"]||p["ID interventie"]||p.idInterventie||"").trim();
-          if(!id)return;
-          const fileId=String(p["File ID"]||p["File Id"]||p.fileId||p.fileID||"").trim();
-          const raw=String(p["URL poza"]||p["URL Poza"]||p.url||p.URL||"").trim();
-          const url=fileId?"https://drive.google.com/file/d/"+encodeURIComponent(fileId)+"/view":(/^https?:\/\//i.test(raw)?raw:"");
-          if(url){if(!byId.has(id))byId.set(id,[]);byId.get(id).push(url);}
+          const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId);
+          const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);
+          const saved=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);
+          const url=fileId?`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`:saved;
+          if(id&&/^https?:\/\//i.test(url)){if(!photoMap[id])photoMap[id]=[];if(!photoMap[id].some(x=>x.url===url))photoMap[id].push({url,categorie:norm(p.Categorie||p.categorie||p.Tip||p.tip||p.TipFotografie)});}
         });
-        commercialEspressoHistory=rows.map(r=>{
-          const id=String(r["ID Interventie"]||r["ID interventie"]||r.ID||r.id||"").trim();
-          return {...r,Fotografii:byId.get(id)||[]};
+        commercialEspressoHistory=visits.map(row=>{
+          const id=norm(row["ID Interventie"]||row["ID interventie"]||row.interventionId||row.interventieId||row.ID||row.id);
+          return {...row,Fotografii:photoMap[id]||[]};
         });
         commercialEspressoHistoryLoaded=true;
         return true;
       }
-      // Utilizatorul Comercial autentificat este validat de Apps Script.
       const email=String(commercialSession?.Email||commercialSession?.email||"").trim().toLowerCase();
       const pin=String(commercialAuthPin||"").trim();
-      if(!email||!pin)throw new Error("Nu am putut valida sesiunea Comercial. Iesi si autentifica-te din nou.");
+      if(!email||!pin)throw new Error("Sesiunea Comercial nu este valida. Autentifica-te din nou.");
       const r=await api({action:"commercialEspressoHistory",email,pin});
       if(!r||!r.success)throw new Error(r?.error||"Nu am putut incarca istoricul espressoarelor.");
       commercialEspressoHistory=Array.isArray(r.data?.InterventiiEspressoare)?r.data.InterventiiEspressoare:[];
@@ -2260,14 +2259,17 @@ async function openCommercialEspressoHistory(){
 }
 function commercialEspressoPhotoLinks(row){
   const value=row?.Fotografii||row?.fotografii||"";
-  if(Array.isArray(value))return value.map(x=>String(x||"").trim()).filter(x=>/^https?:\/\//i.test(x));
-  return String(value).split(/[\n\r;,]+/).map(x=>x.trim()).filter(x=>/^https?:\/\//i.test(x));
+  const items=Array.isArray(value)?value:String(value).split(/[\n\r;,]+/);
+  return items.map(x=>{
+    if(x&&typeof x==='object'){const url=String(x.url||x.URL||x['URL poza']||'').trim();return /^https?:\/\//i.test(url)?{url,categorie:String(x.Categorie||x.categorie||'').trim(),nr:x['Nr. poza']||''}:null;}
+    const url=String(x||'').trim();return /^https?:\/\//i.test(url)?{url,categorie:'',nr:''}:null;
+  }).filter(Boolean);
 }
 function commercialEspressoInterventions(){
   const rows=commercialEspressoHistory.slice().sort((a,b)=>String(b.Data||"").localeCompare(String(a.Data||"")));
   return `<section class="panel"><div class="panelHeader"><div><h3>Interventii Espressoare</h3><p>Istoric service espressoare. Doar vizualizare.</p></div><span class="countBadge">${rows.length} INTERVENTII</span></div>
-  <div class="toolbar"><div class="right"><input class="search" placeholder="Cauta client, espressor, serie, filer..." value="${esc(searchTerm)}" oninput="searchTerm=this.value;commercialPage()"><button class="secondaryButton" onclick="exportCommercialEspressoWorkbook()">Export interventii espressoare</button></div></div>
-  ${rows.length?`<div class="tableWrap"><table class="espressoHistoryTable"><thead><tr><th>Data</th><th>Client</th><th>Oras</th><th>Espressor</th><th>Filer</th><th>Operatiuni</th><th>Fotografii</th></tr></thead><tbody>${rows.filter(r=>!searchTerm||[r.Client,r.Adresa,r.Oras,r.Zona,r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH'],r.Filer,r['Operatiuni efectuate']].join(' ').toLowerCase().includes(searchTerm.toLowerCase())).map(r=>{const photos=commercialEspressoPhotoLinks(r);return `<tr><td>${esc(r.Data||'')}</td><td><strong>${esc(r.Client||'')}</strong><br><small>${esc(r.Adresa||'')}</small></td><td>${esc(r.Oras||r.Zona||'')}</td><td>${esc([r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH']].filter(Boolean).join(' · '))}</td><td>${esc(r.Filer||'')}</td><td>${esc(r['Operatiuni efectuate']||'')}</td><td>${photos.map(url=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Deschide poza</a>`).join('<br>')||'-'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru espressoare.</div>'}</section>`;
+  <div class="toolbar"><div class="right"><input class="search" placeholder="Cauta client, espressor, serie, filer..." value="${esc(searchTerm)}" oninput="searchTerm=this.value;commercialPage()"></div></div>
+  ${rows.length?`<div class="tableWrap"><table class="espressoHistoryTable"><thead><tr><th>Data</th><th>Client</th><th>Oras</th><th>Espressor</th><th>Filer</th><th>Operatiuni</th><th>Fotografii</th></tr></thead><tbody>${rows.filter(r=>!searchTerm||[r.Client,r.Adresa,r.Oras,r.Zona,r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH'],r.Filer,r['Operatiuni efectuate']].join(' ').toLowerCase().includes(searchTerm.toLowerCase())).map(r=>{const photos=commercialEspressoPhotoLinks(r);return `<tr><td>${esc(r.Data||'')}</td><td><strong>${esc(r.Client||'')}</strong><br><small>${esc(r.Adresa||'')}</small></td><td>${esc(r.Oras||r.Zona||'')}</td><td>${esc([r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH']].filter(Boolean).join(' · '))}</td><td>${esc(r.Filer||'')}</td><td>${esc(r['Operatiuni efectuate']||'')}</td><td>${photos.map(photo=>`<a href="${esc(photo.url)}" target="_blank" rel="noopener noreferrer">${filerNormalizeAccessValue(photo.categorie).includes('aviz')?'Deschide aviz':'Deschide poza'}</a>`).join('<br>')||'-'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru espressoare.</div>'}</section>`;
 }
 async function exportCommercialEspressoWorkbook(){
   try{
@@ -2280,12 +2282,12 @@ async function exportCommercialEspressoWorkbook(){
       const out={...row};
       delete out.Fotografii;delete out.fotografii;delete out.Fotografie;delete out.Poze;
       out['Numar fotografii']=urls.length;
-      for(let i=0;i<maxPhotos;i++)out['Fotografie '+(i+1)]=urls[i]?'Deschide poza':'';
+      for(let i=0;i<maxPhotos;i++)out['Fotografie '+(i+1)]=urls[i]?(filerNormalizeAccessValue(urls[i].categorie).includes('aviz')?'Deschide aviz':'Deschide poza'):'';
       return out;
     });
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.json_to_sheet(exportRows.length?exportRows:[{'Informatii':'Nu exista interventii pentru espressoare.'}]);
-    if(exportRows.length&&maxPhotos){const headers=Object.keys(exportRows[0]);for(let r=0;r<photoRows.length;r++)for(let p=0;p<maxPhotos;p++){const url=photoRows[r].urls[p];if(!url)continue;const col=headers.indexOf('Fotografie '+(p+1));if(col>=0){const cell=XLSX.utils.encode_cell({r:r+1,c:col});if(ws[cell])ws[cell].l={Target:url,Tooltip:'Deschide poza in Google Drive'};}}}
+    if(exportRows.length&&maxPhotos){const headers=Object.keys(exportRows[0]);for(let r=0;r<photoRows.length;r++)for(let p=0;p<maxPhotos;p++){const photo=photoRows[r].urls[p];if(!photo)continue;const col=headers.indexOf('Fotografie '+(p+1));if(col>=0){const cell=XLSX.utils.encode_cell({r:r+1,c:col});if(ws[cell])ws[cell].l={Target:photo.url,Tooltip:filerNormalizeAccessValue(photo.categorie).includes('aviz')?'Deschide aviz in Google Drive':'Deschide poza in Google Drive'};}}}
     XLSX.utils.book_append_sheet(wb,ws,'Interventii Espressoare');
     XLSX.writeFile(wb,'OFRESH_Export_Interventii_Espressoare_Comercial.xlsx');
     msg('Exportul interventiilor espressoarelor a fost generat, cu fotografii ca linkuri clicabile.');
@@ -2313,11 +2315,13 @@ function commercialExportFilterRows(){
 async function exportCommercialWorkbook(){
   try{
     if(!await ensureCommercialHistory()) return;
+    const includeEspresso=commercialHasEspressoAccess();
+    if(includeEspresso && !await ensureCommercialEspressoHistory()) return;
     await excelReady();
     const aparate=commercialActiveMachineRows();
     const filtre=commercialExportFilterRows();
     const interventii=(commercialDb.Interventii||[]).map(i=>({...i}));
-    // Fotografiile sunt salvate separat in Drive; includem linkuri clicabile in Excel.
+    // Fotografiile interventiilor pentru apa sunt salvate separat in Drive; includem linkuri clicabile.
     const photoUrlsFor = row => commercialPhotoLinks(row);
     const intRows=interventii.map(row=>{const clean={...row};delete clean.Fotografii;delete clean.Fotografie;delete clean.Poze;delete clean.Poza;delete clean.Photos;delete clean.Photo;return {...clean,__photoUrls:photoUrlsFor(row)};});
     const maxPhotos=Math.max(0,...intRows.map(r=>r.__photoUrls.length));
@@ -2340,8 +2344,33 @@ async function exportCommercialWorkbook(){
     XLSX.utils.book_append_sheet(wb,wsA,"Aparate active");
     XLSX.utils.book_append_sheet(wb,wsF,"Schimbari filtre");
     XLSX.utils.book_append_sheet(wb,wsI,"Istoric interventii");
+    let espressoCount=0;
+    if(includeEspresso){
+      const espressoRows=(commercialEspressoHistory||[]).map(r=>({...r}));
+      const espressoPhotoRows=espressoRows.map(row=>({row,urls:commercialEspressoPhotoLinks(row)}));
+      const maxEspressoPhotos=Math.max(0,...espressoPhotoRows.map(x=>x.urls.length));
+      const espressoExportRows=espressoPhotoRows.map(({row,urls})=>{
+        const out={...row};
+        delete out.Fotografii;delete out.fotografii;delete out.Fotografie;delete out.Poze;
+        out['Numar fotografii']=urls.length;
+        for(let i=0;i<maxEspressoPhotos;i++)out['Fotografie '+(i+1)]=urls[i]?(filerNormalizeAccessValue(urls[i].categorie).includes('aviz')?'Deschide aviz':'Deschide poza'):'';
+        return out;
+      });
+      const wsE=XLSX.utils.json_to_sheet(espressoExportRows.length?espressoExportRows:[{'Informatii':'Nu exista interventii pentru espressoare.'}]);
+      if(espressoExportRows.length&&maxEspressoPhotos){
+        const headers=Object.keys(espressoExportRows[0]);
+        for(let r=0;r<espressoPhotoRows.length;r++)for(let p=0;p<maxEspressoPhotos;p++){
+          const photo=espressoPhotoRows[r].urls[p];if(!photo)continue;
+          const col=headers.indexOf('Fotografie '+(p+1));if(col<0)continue;
+          const cell=XLSX.utils.encode_cell({r:r+1,c:col});
+          if(wsE[cell])wsE[cell].l={Target:photo.url,Tooltip:filerNormalizeAccessValue(photo.categorie).includes('aviz')?'Deschide aviz in Google Drive':'Deschide poza in Google Drive'};
+        }
+      }
+      XLSX.utils.book_append_sheet(wb,wsE,'Interventii Espressoare');
+      espressoCount=espressoRows.length;
+    }
     XLSX.writeFile(wb,"OFRESH_Export_Complet.xlsx");
-    msg(`Export generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii. Fotografiile sunt incluse ca linkuri clicabile cu textul „Deschide poza”.`);
+    msg(`Export generat: ${aparate.length} aparate active, ${filtre.length} inregistrari filtre, ${interventii.length} interventii${includeEspresso?`, ${espressoCount} interventii espressoare`:''}. Fotografiile si avizele sunt incluse ca linkuri clicabile.`);
   }catch(e){msg(e?.message||"Nu am putut genera exportul complet. Verifica internetul si incearca din nou.",false)}
 }
 // Pastreaza compatibilitatea cu eventuale apeluri vechi; toate exporta acelasi fisier complet.
