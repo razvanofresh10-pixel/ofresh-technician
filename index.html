@@ -2091,6 +2091,9 @@ function commercialFilters(){
  </section>`;
 }
 let commercialTab="aparate";
+let commercialEspressoHistory=[];
+let commercialEspressoHistoryLoaded=false;
+let commercialEspressoLoading=false;
 let commercialSession=null;
 let commercialCounty="";
 let commercialPageNum=1;
@@ -2119,6 +2122,7 @@ async function loginCommercial(){
     if(!r||!r.success)throw new Error(r?.error||"Emailul sau PIN-ul este gresit.");
     commercialSession=r.user||{Email:email,Rol:"comercial"};commercialAuthPin=pin;
     commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};
+    commercialEspressoHistory=[];commercialEspressoHistoryLoaded=false;commercialEspressoLoading=false;
     commercialDataLoading=true;
     closeModal();commercialTab='aparate';commercialCounty='';commercialPageNum=1;searchTerm='';commercialPage();
     document.getElementById("pageTitle").textContent="Comercial";document.getElementById("crumb").textContent="Comercial";
@@ -2136,11 +2140,29 @@ async function ensureCommercialHistory(){
   if(commercialDb.InterventiiLoaded) return true;
   if(window.__ofreshCommercialHistoryPromise) return window.__ofreshCommercialHistoryPromise;
   if(adminSession){
+    // In modulul Comercial folosim aceeasi foaie foto ca in Istoric Interventii.
+    // Foaia foto este incarcata la cerere, deci trebuie ceruta explicit si aici;
+    // altfel db["Poze Interventii"] ramane gol si toate randurile afiseaza "-".
+    await ensureAdminSheetList(["Interventii","Poze Interventii"]);
     const interventions=Array.isArray(db.Interventii)?db.Interventii:[];
     const photos=Array.isArray(db["Poze Interventii"])?db["Poze Interventii"]:[];
+    const norm=v=>String(v==null?"":v).trim();
     const photoMap={};
-    photos.forEach(p=>{const id=String(p["ID Interventie"]||p["ID interventie"]||"").trim(),url=String(p["URL poza"]||p["URL Poza"]||"").trim();if(id&&/^https?:\/\//i.test(url)){if(!photoMap[id])photoMap[id]=[];if(!photoMap[id].includes(url))photoMap[id].push(url);}});
-    commercialDb.Interventii=interventions.map(i=>{const id=String(i["ID Interventie"]||i["ID interventie"]||i.ID||i.id||"").trim();const urls=photoMap[id]||[];return {...i,Fotografii:urls.join("\n"),"Numar fotografii":urls.length};});
+    photos.forEach(p=>{
+      const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId);
+      const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);
+      const saved=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);
+      const url=fileId?`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`:saved;
+      if(id && /^https?:\/\//i.test(url)){
+        if(!photoMap[id])photoMap[id]=[];
+        if(!photoMap[id].includes(url))photoMap[id].push(url);
+      }
+    });
+    commercialDb.Interventii=interventions.map(i=>{
+      const id=norm(i["ID Interventie"]||i["ID interventie"]||i.interventionId||i.interventieId||i.ID||i.id);
+      const urls=id?(photoMap[id]||[]):[];
+      return {...i,Fotografii:urls.join("\n"),"Numar fotografii":urls.length};
+    });
     commercialDb.InterventiiLoaded=true;
     return true;
   }
@@ -2184,6 +2206,67 @@ async function ensureCommercialHistory(){
 async function openCommercialHistory(){
   if(!await ensureCommercialHistory()) return;
   commercialTab="interventii"; commercialPage();
+}
+function commercialHasEspressoAccess(){
+  const raw=String(commercialSession?.Drepturi||commercialSession?.drepturi||"");
+  return raw.split(/[,;|]/).map(x=>x.trim().toLowerCase()).includes("service espressoare");
+}
+async function ensureCommercialEspressoHistory(){
+  if(commercialEspressoHistoryLoaded)return true;
+  if(commercialEspressoLoading)return window.__ofreshCommercialEspressoPromise||false;
+  if(!commercialHasEspressoAccess()){msg("Acest utilizator nu are dreptul Service Espressoare.",false);return false;}
+  const email=String(commercialSession?.Email||commercialSession?.email||"").trim().toLowerCase();
+  const pin=String(commercialAuthPin||"").trim();
+  if(!email||!pin){msg("Sesiunea Comercial nu este valida. Autentifica-te din nou.",false);return false;}
+  commercialEspressoLoading=true;
+  window.__ofreshCommercialEspressoPromise=(async()=>{
+    try{
+      const r=await api({action:"commercialEspressoHistory",email,pin});
+      if(!r||!r.success)throw new Error(r?.error||"Nu am putut incarca istoricul espressoarelor.");
+      commercialEspressoHistory=Array.isArray(r.data?.InterventiiEspressoare)?r.data.InterventiiEspressoare:[];
+      commercialEspressoHistoryLoaded=true;
+      return true;
+    }catch(e){msg(e.message||"Nu am putut incarca istoricul espressoarelor.",false);return false;}
+    finally{commercialEspressoLoading=false;window.__ofreshCommercialEspressoPromise=null;}
+  })();
+  return window.__ofreshCommercialEspressoPromise;
+}
+async function openCommercialEspressoHistory(){
+  if(!await ensureCommercialEspressoHistory())return;
+  commercialTab="espresso";commercialPage();
+}
+function commercialEspressoPhotoLinks(row){
+  const value=row?.Fotografii||row?.fotografii||"";
+  if(Array.isArray(value))return value.map(x=>String(x||"").trim()).filter(x=>/^https?:\/\//i.test(x));
+  return String(value).split(/[\n\r;,]+/).map(x=>x.trim()).filter(x=>/^https?:\/\//i.test(x));
+}
+function commercialEspressoInterventions(){
+  const rows=commercialEspressoHistory.slice().sort((a,b)=>String(b.Data||"").localeCompare(String(a.Data||"")));
+  return `<section class="panel"><div class="panelHeader"><div><h3>Interventii Espressoare</h3><p>Istoric service espressoare. Doar vizualizare.</p></div><span class="countBadge">${rows.length} INTERVENTII</span></div>
+  <div class="toolbar"><div class="right"><input class="search" placeholder="Cauta client, espressor, serie, filer..." value="${esc(searchTerm)}" oninput="searchTerm=this.value;commercialPage()"><button class="secondaryButton" onclick="exportCommercialEspressoWorkbook()">Export interventii espressoare</button></div></div>
+  ${rows.length?`<div class="tableWrap"><table class="espressoHistoryTable"><thead><tr><th>Data</th><th>Client</th><th>Oras</th><th>Espressor</th><th>Filer</th><th>Operatiuni</th><th>Fotografii</th></tr></thead><tbody>${rows.filter(r=>!searchTerm||[r.Client,r.Adresa,r.Oras,r.Zona,r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH'],r.Filer,r['Operatiuni efectuate']].join(' ').toLowerCase().includes(searchTerm.toLowerCase())).map(r=>{const photos=commercialEspressoPhotoLinks(r);return `<tr><td>${esc(r.Data||'')}</td><td><strong>${esc(r.Client||'')}</strong><br><small>${esc(r.Adresa||'')}</small></td><td>${esc(r.Oras||r.Zona||'')}</td><td>${esc([r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH']].filter(Boolean).join(' · '))}</td><td>${esc(r.Filer||'')}</td><td>${esc(r['Operatiuni efectuate']||'')}</td><td>${photos.map(url=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Deschide poza</a>`).join('<br>')||'-'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru espressoare.</div>'}</section>`;
+}
+async function exportCommercialEspressoWorkbook(){
+  try{
+    if(!await ensureCommercialEspressoHistory())return;
+    await excelReady();
+    const rows=commercialEspressoHistory.map(r=>({...r}));
+    const photoRows=rows.map(r=>({row:r,urls:commercialEspressoPhotoLinks(r)}));
+    const maxPhotos=Math.max(0,...photoRows.map(x=>x.urls.length));
+    const exportRows=photoRows.map(({row,urls})=>{
+      const out={...row};
+      delete out.Fotografii;delete out.fotografii;delete out.Fotografie;delete out.Poze;
+      out['Numar fotografii']=urls.length;
+      for(let i=0;i<maxPhotos;i++)out['Fotografie '+(i+1)]=urls[i]?'Deschide poza':'';
+      return out;
+    });
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.json_to_sheet(exportRows.length?exportRows:[{'Informatii':'Nu exista interventii pentru espressoare.'}]);
+    if(exportRows.length&&maxPhotos){const headers=Object.keys(exportRows[0]);for(let r=0;r<photoRows.length;r++)for(let p=0;p<maxPhotos;p++){const url=photoRows[r].urls[p];if(!url)continue;const col=headers.indexOf('Fotografie '+(p+1));if(col>=0){const cell=XLSX.utils.encode_cell({r:r+1,c:col});if(ws[cell])ws[cell].l={Target:url,Tooltip:'Deschide poza in Google Drive'};}}}
+    XLSX.utils.book_append_sheet(wb,ws,'Interventii Espressoare');
+    XLSX.writeFile(wb,'OFRESH_Export_Interventii_Espressoare_Comercial.xlsx');
+    msg('Exportul interventiilor espressoarelor a fost generat, cu fotografii ca linkuri clicabile.');
+  }catch(e){msg(e?.message||'Nu am putut genera exportul interventiilor espressoarelor.',false);}
 }
 function logoutCommercial(){commercialSession=null;commercialAuthPin="";commercialDataLoading=false;commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};commercialCounty="";searchTerm="";showAccessPage()}
 function commercialActiveMachineRows(){
@@ -2276,6 +2359,7 @@ function commercialPage(){
           <button class="primary" onclick="commercialTab='aparate';commercialPage()">Aparate</button>
           <button onclick="commercialTab='filtre';commercialPage()">Schimbari filtre</button>
           <button onclick="openCommercialHistory()">Istoric interventii</button>
+          ${commercialHasEspressoAccess()?`<button onclick="openCommercialEspressoHistory()">Service Espressoare</button>`:""}
           <button class="primary" onclick="exportCommercialWorkbook()">Export</button>
           <button onclick="adminSession ? adminBackToModules() : logoutCommercial()">← Inapoi</button>
         </div>
@@ -2290,10 +2374,10 @@ function commercialPage(){
       <div class="commercialInfoGrid">
         <div class="commercialInfo"><h3>Schimbari filtre</h3><p>Situatia actuala din portofoliu</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>In urmatoarele 30 zile</span><b>${dueSoon}</b></div><div class="commercialMiniRow"><span>Expirate</span><b>${expired}</b></div><div class="commercialMiniRow"><span>Fara scadenta</span><b>${withoutDate}</b></div></div></div>
         <div class="commercialInfo"><h3>Portofoliu pe judete</h3><p>Primele judete dupa numarul de aparate</p><div class="commercialMiniRows">${topCounties.length?topCounties.map(([j,n])=>`<div class="commercialMiniRow"><span>${esc(j)}</span><b>${n}</b></div>`).join(""): '<div class="commercialMiniRow"><span>Nu exista date</span><b>0</b></div>'}</div></div>
-        <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="openCommercialHistory()">Deschide →</b></div></div></div>
+        <div class="commercialInfo"><h3>Actiuni rapide</h3><p>Acces direct la informatiile comerciale</p><div class="commercialMiniRows"><div class="commercialMiniRow"><span>Portofoliu aparate</span><b style="cursor:pointer" onclick="commercialTab='aparate';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Schimbari filtre</span><b style="cursor:pointer" onclick="commercialTab='filtre';commercialPage()">Deschide →</b></div><div class="commercialMiniRow"><span>Istoric interventii</span><b style="cursor:pointer" onclick="openCommercialHistory()">Deschide →</b></div>${commercialHasEspressoAccess()?`<div class="commercialMiniRow"><span>Service Espressoare</span><b style="cursor:pointer" onclick="openCommercialEspressoHistory()">Deschide →</b></div>`:""}</div></div>
       </div>
     </section>
-    ${commercialDataLoading?'<section class="panel"><div class="emptyState">Se incarca datele portofoliului Comercial. Poti ramane in aceasta pagina; datele vor aparea automat.</div></section>':(commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialInterventions())}`;
+    ${commercialDataLoading?'<section class="panel"><div class="emptyState">Se incarca datele portofoliului Comercial. Poti ramane in aceasta pagina; datele vor aparea automat.</div></section>':(commercialTab==='aparate'?commercialMachines():commercialTab==='filtre'?commercialFilters():commercialTab==='espresso'?commercialEspressoInterventions():commercialInterventions())}`;
 }
 
 function interventionsPage(){
