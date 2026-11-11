@@ -1190,49 +1190,65 @@ function openTechLogin(){
   if(techSidebar){techSidebar.dataset.techPrevDisplay=techSidebar.style.display||"";techSidebar.style.setProperty("display","none","important");techSidebar.style.setProperty("visibility","hidden","important");techSidebar.style.setProperty("pointer-events","none","important");}
   if(techTopbar){techTopbar.dataset.techPrevDisplay=techTopbar.style.display||"";techTopbar.style.setProperty("display","none","important");}
   if(techMain){techMain.dataset.techPrevMargin=techMain.style.marginLeft||"";techMain.style.setProperty("margin-left","0","important");techMain.style.setProperty("width","100%","important");}
-
-  // Daca exista deja, nu cream inca un ecran peste primul.
   document.getElementById("techLoginScreen")?.remove();
-
-  // Din interiorul Administratorului, Tehnicianul se deschide fara o a doua autentificare.
   if(adminSession){
     techSession={id:adminSession["ID Utilizator"]||"ADMIN",name:adminSession.Nume||"Administrator",phone:adminSession.Telefon||"admin",adminAccess:true};
-    techView="home";
-    document.body.classList.remove("techLoginActive");
-    showTechnicianHome();
-    load(true);
-    return;
+    techView="home";document.body.classList.remove("techLoginActive");showTechnicianHome();load(true);return;
   }
-
-  const techs=getTechnicians().filter(x=>(x.status||x.Status||"Activ")==="Activ");
-  const screen=document.createElement("div");
-  screen.id="techLoginScreen";
-  screen.innerHTML=`<div class="techLoginCard" role="dialog" aria-modal="true" aria-label="Acces tehnician">
-    <button type="button" class="techLoginClose" aria-label="Inchide accesul tehnician" title="Inchide" onclick="closeTechLogin()">×</button>
-    <div class="techLoginLogo">OFRESH</div>
-    <div class="techLoginEyebrow">OFRESH ONLINE</div>
-    <h2>Acces tehnician</h2>
-    <div id="techLoginError" class="techLoginError"></div>
+  const screen=document.createElement("div");screen.id="techLoginScreen";
+  screen.innerHTML=`<div class="techLoginCard" role="dialog" aria-modal="true" aria-label="Acces Tehnician sau Filer">
+    <button type="button" class="techLoginClose" aria-label="Inchide accesul" title="Inchide" onclick="closeTechLogin()">×</button>
+    <div class="techLoginLogo">OFRESH</div><div class="techLoginEyebrow">OFRESH ONLINE</div>
+    <h2>Acces aplicație</h2>
+    <div class="techRoleChoices" role="group" aria-label="Alege tipul de acces">
+      <button type="button" class="techRoleChoice is-selected" data-role="technician" aria-pressed="true">Tehnician</button>
+      <button type="button" class="techRoleChoice" data-role="filer" aria-pressed="false">Filer</button>
+    </div>
+    <div id="techLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
     <div class="techLoginField"><label for="f_loginTelefon">Telefon</label><input id="f_loginTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon"></div>
     <div class="techLoginField"><label for="f_loginPin">PIN</label><input id="f_loginPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces"></div>
     <button type="button" class="techLoginButton" id="techLoginSubmit">Intra in modul tehnician</button>
-    <div class="techLoginHint">${techs.length?techs.length+" tehnicieni activi disponibili.":"Nu exista tehnicieni activi. Adauga-i din modul Administrator."}</div>
-    <button type="button" class="techFilerSwitch" id="techFilerSwitch">Acces Filer · Service espressoare</button>
   </div>`;
   document.body.appendChild(screen);
-
+  let selectedRole="technician";
+  const roleButtons=[...screen.querySelectorAll(".techRoleChoice")];
+  const submitButton=document.getElementById("techLoginSubmit");
+  const error=document.getElementById("techLoginError");
+  roleButtons.forEach(b=>b.addEventListener("click",()=>{
+    selectedRole=b.dataset.role;
+    roleButtons.forEach(x=>{const active=x===b;x.classList.toggle("is-selected",active);x.setAttribute("aria-pressed",active?"true":"false");});
+    submitButton.textContent=selectedRole==="filer"?"Intra in modul Filer":"Intra in modul tehnician";
+    if(error)error.style.display="none";
+  }));
   const submit=async()=>{
-    if(window.__ofreshLoginBusy)return;
-    window.__ofreshLoginBusy=true;
-    try{await loginTechnician();}finally{window.__ofreshLoginBusy=false;}
+    if(selectedRole==="technician"){
+      if(window.__ofreshLoginBusy)return;
+      window.__ofreshLoginBusy=true;
+      try{await loginTechnician();}finally{window.__ofreshLoginBusy=false;}
+      return;
+    }
+    if(window.__ofreshFilerLoginBusy)return;
+    window.__ofreshFilerLoginBusy=true;
+    const phone=String(document.getElementById("f_loginTelefon")?.value||"").trim();
+    const pin=String(document.getElementById("f_loginPin")?.value||"").trim();
+    if(!phone||!pin){if(error){error.textContent="Completeaza telefonul si PIN-ul.";error.style.display="block";}window.__ofreshFilerLoginBusy=false;return;}
+    submitButton.disabled=true;submitButton.textContent="Se verifica...";
+    try{
+      const r=await api({action:"loginFiler",telefon:phone,pin:pin});
+      if(!r||r.success!==true)throw new Error(r?.error||"Nu am putut valida contul Filer.");
+      if(!Array.isArray(r.locations))throw new Error("Autentificarea a reusit, dar lista de clienti nu a fost returnata.");
+      filerSession={id:r.user?.["ID Utilizator"]||"",name:r.user?.Nume||"Filer",phone:phone,pin:pin,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
+      techSession=null;commercialSession=null;adminSession=null;filerState=r;
+      filerView="home";filerSelectedLocationKey="";filerSelectedMachineRow=0;filerSearchTerm="";
+      document.getElementById("techLoginScreen")?.remove();document.body.classList.remove("techLoginActive");
+      filerApplyDedicatedShell();showFilerCurrentView();
+    }catch(e){if(error){error.textContent=e.message||"Autentificare esuata.";error.style.display="block";}}
+    finally{window.__ofreshFilerLoginBusy=false;if(document.getElementById("techLoginSubmit")){submitButton.disabled=false;submitButton.textContent=selectedRole==="filer"?"Intra in modul Filer":"Intra in modul tehnician";}}
   };
-  document.getElementById("techLoginSubmit")?.addEventListener("click",submit);
-  document.getElementById("techFilerSwitch")?.addEventListener("click",()=>{closeTechLogin();openFilerLogin();});
-  document.getElementById("f_loginTelefon")?.addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();submit();}});
-  document.getElementById("f_loginPin")?.addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();submit();}});
+  submitButton?.addEventListener("click",submit);
+  ["f_loginTelefon","f_loginPin"].forEach(id=>document.getElementById(id)?.addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();submit();}}));
   setTimeout(()=>document.getElementById("f_loginTelefon")?.focus(),50);
 }
-
 async function loginTechnician(){
   const phone=v("loginTelefon").replace(/\s+/g,"").replace(/-/g,"");
   const pin=v("loginPin").trim();
@@ -2876,12 +2892,19 @@ function openIntervention(existing={}){
       <div id="clientInterventionInfo" class="field wide"></div>
       <div id="apparatusChooser" class="field wide"></div>
 
+      <label class="field"><span>Tip aparat pentru interventie</span>
+        <select id="f_tipAparatInterv">
+          <option value="">Selecteaza tipul aparatului</option>
+          <option value="Aparat de apa">Aparat de apa</option>
+          <option value="Espressor">Espressor</option>
+        </select>
+      </label>
+      <div id="interventionCategoryHint" class="field"></div>
+
       ${selectField("Tip interventie","tipInterventie",existing["Tip interventie"]||"",interventionTypes,true)}
 
       <label class="field wide"><span>Operatiuni efectuate</span>
-        <div class="checkList">
-          ${operations.map((o,i)=>`<label class="checkRow"><input type="checkbox" id="op_${i}" value="${esc(o)}">${esc(o)}</label>`).join("")}
-        </div>
+        <div id="interventionOperationsList" class="checkList"><span class="small">Selecteaza tipul aparatului pentru a afisa operatiunile.</span></div>
       </label>
 
       <div id="filterFields" class="wide"></div>
@@ -2919,6 +2942,53 @@ function openIntervention(existing={}){
   window.__ofreshInterventionPhotos=[];
 
   const cs=document.getElementById("f_clientInterv");
+  const categorySelect=document.getElementById("f_tipAparatInterv");
+  const waterOperations=operations.slice();
+  const espressoOperations=[
+    "Decalcifiere",
+    "Curatare si igienizare",
+    "Curatare grup cafea",
+    "Curatare sistem lapte / cappuccinator",
+    "Verificare si testare aparat",
+    "Curatare furtune lapte",
+    "Curatare tavita reziduuri",
+    "Predare marfa",
+    "Inlocuire aparat",
+    "Inlocuire piese",
+    "Verificare aparat / testare",
+    "Alta interventie",
+    "Alte operatiuni de mentenanta"
+  ];
+  function detectInterventionCategory(m){
+    if(!m)return "";
+    const equipment=String(machineEquipmentType(m)||"").trim().toLowerCase();
+    if(/espresso|espresor|cafea|coffee/.test(equipment))return "Espressor";
+    if(/apa|water|purificator|dispenser/.test(equipment))return "Aparat de apa";
+    const details=[machineType(m),m.Producator||m.producator||"",m.Model||m.model||""].join(" ").toLowerCase();
+    if(/espresso|espresor|wmf|schaerer|franke|nivona|saeco|nio|genius/.test(details))return "Espressor";
+    if(/ion|oasis|brita|bwt|fluux|borg|water|apa|purificator/.test(details))return "Aparat de apa";
+    return "";
+  }
+  function renderInterventionOperations(category){
+    const root=document.getElementById("interventionOperationsList");
+    const hint=document.getElementById("interventionCategoryHint");
+    if(!root)return;
+    const selected=category||"";
+    const list=selected==="Espressor"?espressoOperations:(selected==="Aparat de apa"?waterOperations:[]);
+    root.innerHTML=list.length?list.map((o,i)=>`<label class="checkRow"><input type="checkbox" id="op_${i}" value="${esc(o)}">${esc(o)}</label>`).join(""):'<span class="small">Selecteaza tipul aparatului pentru a afisa operatiunile.</span>';
+    if(hint)hint.innerHTML=selected==="Espressor"?'<span class="small">Sunt afisate doar operatiunile pentru espressoare.</span>':(selected==="Aparat de apa"?'<span class="small">Sunt afisate operatiunile existente pentru aparatele de apa.</span>':'');
+  }
+  function syncInterventionCategory(){
+    const machineIdValue=String(document.getElementById("f_aparatId")?.value||"").trim();
+    const machine=(db.Aparate||[]).find(x=>String(machineId(x)).trim()===machineIdValue);
+    const detected=detectInterventionCategory(machine);
+    if(categorySelect){
+      categorySelect.value=detected;
+      categorySelect.dataset.detected=detected;
+    }
+    renderInterventionOperations(detected);
+  }
+  if(categorySelect)categorySelect.addEventListener("change",()=>renderInterventionOperations(categorySelect.value));
 
   function renderClientInfo(){
     const c=(db.Clienti||[]).find(x=>String(clientId(x))===String(cs.value));
@@ -2934,6 +3004,8 @@ function openIntervention(existing={}){
     const root=document.getElementById("apparatusChooser");
     if(!list.length){
       root.innerHTML=techSession&&!techSession.adminBypass?'<div class="notice">Nu exista aparate active asociate acestui client.</div>':'<div class="notice">Nu exista aparat asociat acestui client.</div>';
+      if(categorySelect)categorySelect.value="";
+      renderInterventionOperations("");
       return;
     }
 
@@ -2955,13 +3027,14 @@ function openIntervention(existing={}){
         </select>
       </label>
       <div id="selectedMachineActions" class="machineActionRow"></div>`;
-      document.getElementById("f_aparatId").addEventListener("change",showSelectedMachineCorrection);
+      document.getElementById("f_aparatId").addEventListener("change",()=>{showSelectedMachineCorrection();syncInterventionCategory();});
     }
 
     const wanted=existing["ID Aparat"]||existing.Aparat||"";
     const el=document.getElementById("f_aparatId");
     if(el&&wanted)el.value=String(wanted);
     if(el&&list.length>1)showSelectedMachineCorrection();
+    syncInterventionCategory();
   }
 
   cs.addEventListener("change",fill);
@@ -3195,17 +3268,20 @@ async function saveIntervention(){
     }
 
     const selectedClientName=clientName(selectedClient);
-    const ops=[...document.querySelectorAll('.checkList input:checked')].map(x=>x.value);
+    const apparatusCategory=v("tipAparatInterv");
+    if(!["Aparat de apa","Espressor"].includes(apparatusCategory))
+      throw new Error("Selecteaza daca interventia este pentru un aparat de apa sau un espressor.");
+    const ops=[...document.querySelectorAll('#interventionOperationsList input:checked')].map(x=>x.value);
     const nextIntervention=interventionType==="Schimbare filtru"?"":(interventionType==="Mentenanta 6 luni"?plusMonths(v("data"),6):(interventionType==="Mentenanta 1 an"?plusMonths(v("data"),12):v("urmatoare")));
     const technician=(v("tehnician")||(typeof techSession!=="undefined"&&techSession?(techSession.name||techSession.Nume||techSession.nume||techSession["Nume tehnician"]||""):"")||(typeof adminSession!=="undefined"&&adminSession?(adminSession.Nume||adminSession.nume||adminSession["Nume utilizator"]||""):"")||window.currentTechnicianName||window.tehnicianNume||window.currentUserName||"");
     let pending=window.__ofreshPendingIntervention;
     // Pastreaza acelasi ID si progresul fotografiilor daca utilizatorul reincearca
     // dupa o eroare de conexiune/poza. Nu creeaza o interventie noua la retry.
-    if(!pending || pending.formKey!==[selectedMachineId,clientId(selectedClient),v("data"),interventionType].join("|")){
+    if(!pending || pending.formKey!==[selectedMachineId,clientId(selectedClient),v("data"),apparatusCategory,interventionType].join("|")){
       const interventionId=uid("INT");
       const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
-      const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||m.id||m.ID||m["ID Purificator"]||machineId(m)||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":technician,"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
-      pending={formKey:[selectedMachineId,clientId(selectedClient),v("data"),interventionType].join("|"),interventionId,rec,photos,photoIndex:0,interventionSaved:false,stockUpdated:false,filterUpdated:false};
+      const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||m.id||m.ID||m["ID Purificator"]||machineId(m)||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":technician,"Categorie aparat":apparatusCategory,"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
+      pending={formKey:[selectedMachineId,clientId(selectedClient),v("data"),apparatusCategory,interventionType].join("|"),interventionId,rec,photos,photoIndex:0,interventionSaved:false,stockUpdated:false,filterUpdated:false};
       window.__ofreshPendingIntervention=pending;
     }
 
@@ -4105,6 +4181,15 @@ function renderPublicMachineData(data,key,isQrToken=false){
 function renderPublicMachineResponse(result){
   if(!result || result.success!==true || !result.machine) return false;
   const m=result.machine, filters=Array.isArray(result.filters)?result.filters:[];
+  const equipment=String(m["Tip Echipament"]||m["Tip echipament"]||"").trim().toLowerCase();
+  const machineInfo=[m["Tip aparat"],m.Model,m.Producator].filter(Boolean).join(" ").toLowerCase();
+  const isEspresso=/espresso|espressor|coffee|cafea/.test(equipment)||/espresso|espressor|wmf|schaerer|franke|nivona|saeco|de jong|dejong|genius/.test(machineInfo);
+  if(isEspresso){
+    const machineName=m["Tip aparat"]||m.Model||m.Producator||"Espressor";
+    const lastVisit=m["Ultima vizita"]||m["Ultima vizită"]||"";
+    document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII APARAT</div><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Denumire aparat:</strong> ${esc(machineName)}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Ultima vizita:</strong> ${esc(lastVisit||"Nu exista vizite inregistrate")}</p></div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;
+    return true;
+  }
   const f=filters.find(x=>String(x.Status||"Activ").toLowerCase()!=="inactiv")||filters[0]||{};
   const last=f["Data montare"]||f["Data schimbare"]||"";
   const next=f["Data urmatoarei schimbari"]||f["Data urmatoare schimbare"]||"";
@@ -4193,10 +4278,9 @@ function showAccessPage(){
           <div class="accessEyebrowFinal">OFRESH VENDING SOLUTIONS</div>
 
           <div class="accessRolesFinal">
-            <button type="button" onclick="openTechLogin();return false;"><span class="roleIconFinal">🔧</span><span><strong>Tehnician</strong><small>Interventii, service si verificari</small></span></button>
-            <button type="button" onclick="openFilerLogin();return false;"><span class="roleIconFinal">☕</span><span><strong>Filer</strong><small>Service si verificari espressoare</small></span></button>
-            <button type="button" onclick="openCommercial();return false;"><span class="roleIconFinal">💼</span><span><strong>Comercial</strong><small>Clienti, aparate si schimb filtre</small></span></button>
-            <button type="button" onclick="openAdminLogin();return false;"><span class="roleIconFinal">⚙️</span><span><strong>Administrator</strong><small>Acces complet la aplicatie</small></span></button>
+            <button type="button" onclick="openTechLogin();return false;"><span class="roleIconFinal">🔧</span><span><strong>Tehnician / Filer</strong></span></button>
+            <button type="button" onclick="openCommercial();return false;"><span class="roleIconFinal">💼</span><span><strong>Comercial</strong></span></button>
+            <button type="button" onclick="openAdminLogin();return false;"><span class="roleIconFinal">⚙️</span><span><strong>Administrator</strong></span></button>
           </div>
         </div>
         <div class="accessVisualFinal" role="img" aria-label="Tehnologie pentru apa si cafea. Solutii inteligente. Servicii mai bune.">
@@ -4387,6 +4471,16 @@ window.addEventListener("error",function(ev){
   img.replaceWith(fallback);
 },true);
 </script>
+
+<style id="ofresh-shared-role-selector">
+#techLoginScreen .techRoleChoices{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 18px}
+#techLoginScreen .techRoleChoice{min-height:44px;border:1px solid #cfd5dc;border-radius:12px;background:#fff;color:#17202a;font-size:14px;font-weight:800;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+#techLoginScreen .techRoleChoice.is-selected{background:#17202a;color:#fff;border-color:#17202a;box-shadow:0 2px 7px rgba(0,0,0,.12)}
+#techLoginScreen .techRoleChoice:focus-visible{outline:3px solid rgba(23,32,42,.2);outline-offset:2px}
+.accessRolesFinal button strong{display:block}
+.accessRolesFinal button small{display:none!important}
+</style>
+
 </body></html>
 <style id="ofresh-final-dashboard-map">
 /* Final dashboard layout: no duplicate module cards above the map. */
