@@ -590,20 +590,6 @@ html body.ofreshFilerMode #app{width:100%!important;max-width:none!important}
 #app .commercialInterventionsTable .commercialExtraDetails b{color:#176b55;font-weight:700}
 @media(max-width:1100px){#app .commercialInterventionsTable{font-size:10px!important}#app .commercialInterventionsTable th,#app .commercialInterventionsTable td{padding:7px 5px!important;font-size:10px!important}}
 @media(max-width:760px){#app .tableWrap:has(.commercialInterventionsTable){overflow-x:auto!important}#app .commercialInterventionsTable{min-width:980px!important}}
-
-/* Service Espressoare in Comercial: acelasi stil si aliniere ca Istoric interventii */
-#app .commercialEspressoTable{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important}
-#app .commercialEspressoTable th:nth-child(1),#app .commercialEspressoTable td:nth-child(1){width:8%}
-#app .commercialEspressoTable th:nth-child(2),#app .commercialEspressoTable td:nth-child(2){width:7%}
-#app .commercialEspressoTable th:nth-child(3),#app .commercialEspressoTable td:nth-child(3){width:16%}
-#app .commercialEspressoTable th:nth-child(4),#app .commercialEspressoTable td:nth-child(4){width:15%}
-#app .commercialEspressoTable th:nth-child(5),#app .commercialEspressoTable td:nth-child(5){width:16%}
-#app .commercialEspressoTable th:nth-child(6),#app .commercialEspressoTable td:nth-child(6){width:10%}
-#app .commercialEspressoTable th:nth-child(7),#app .commercialEspressoTable td:nth-child(7){width:19%}
-#app .commercialEspressoTable th:nth-child(8),#app .commercialEspressoTable td:nth-child(8){width:9%}
-#app .commercialEspressoTable td:nth-child(7){white-space:normal!important;overflow-wrap:anywhere!important}
-#app .commercialEspressoTable td:nth-child(8) a{display:inline-block;margin:2px 0}
-@media(max-width:760px){#app .tableWrap:has(.commercialEspressoTable){overflow-x:auto!important}#app .commercialEspressoTable{min-width:980px!important}}
 </style>
 
 </head>
@@ -2332,11 +2318,9 @@ function commercialEspressoPhotoLinks(row){
 }
 function commercialEspressoInterventions(){
   const rows=commercialEspressoHistory.slice().sort((a,b)=>String(b.Data||"").localeCompare(String(a.Data||"")));
-  const val=(row,...keys)=>{for(const key of keys){const v=row?.[key];if(v!==undefined&&v!==null&&String(v).trim()!=="")return Array.isArray(v)?v.join(", "):String(v);}return "";};
-  const filtered=rows.filter(r=>!searchTerm||[r.Client,r.Adresa,r.Oras,r.Zona,r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH'],r.Filer,r.Filler,r['Operatiuni efectuate']].join(' ').toLowerCase().includes(searchTerm.toLowerCase()));
   return `<section class="panel"><div class="panelHeader"><div><h3>Interventii Espressoare</h3><p>Istoric service espressoare. Doar vizualizare.</p></div><span class="countBadge">${rows.length} INTERVENTII</span></div>
-  <div class="toolbar"><div class="right"><input id="commercialSearchInput" class="search" placeholder="Cauta client, espressor, serie, filler..." value="${esc(searchTerm)}" oninput="searchTerm=this.value;commercialPage()"></div></div>
-  ${filtered.length?`<div class="tableWrap"><table class="commercialInterventionsTable commercialEspressoTable"><thead><tr><th>Data</th><th>Ora</th><th>Client</th><th>Locatie / adresa</th><th>Espressor</th><th>Filler</th><th>Operatiuni efectuate</th><th>Fotografii</th></tr></thead><tbody>${filtered.map(r=>{const photos=commercialEspressoPhotoLinks(r);const machine=[val(r,'Tip aparat'),val(r,'Serie Aparat'),val(r,'Cod OFRESH')].filter(Boolean).join(' · ');const photoLinks=photos.map(photo=>`<a href="${esc(photo.url)}" target="_blank" rel="noopener noreferrer">${filerNormalizeAccessValue(photo.categorie).includes('aviz')?'Deschide aviz':'Deschide poza'}</a>`).join('<br>')||'-';return `<tr><td>${esc(val(r,'Data','data'))}</td><td>${esc(val(r,'Ora','ora','Ora interventie','Data si ora'))}</td><td><strong>${esc(val(r,'Client','client'))}</strong></td><td>${esc(val(r,'Adresa','adresa'))}${val(r,'Oras','oras')?`<br><small>${esc(val(r,'Oras','oras'))}</small>`:''}</td><td><strong>${esc(machine)}</strong></td><td>${esc(val(r,'Filler','Filer','Tehnician','tehnician'))}</td><td>${esc(val(r,'Operatiuni efectuate','Operatiuni','operatiuni'))}</td><td>${photoLinks}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru criteriile selectate.</div>'}</section>`;
+  <div class="toolbar"><div class="right"><input class="search" placeholder="Cauta client, espressor, serie, filer..." value="${esc(searchTerm)}" oninput="searchTerm=this.value;commercialPage()"></div></div>
+  ${rows.length?`<div class="tableWrap"><table class="espressoHistoryTable"><thead><tr><th>Data</th><th>Client</th><th>Oras</th><th>Espressor</th><th>Filler</th><th>Operatiuni</th><th>Fotografii</th></tr></thead><tbody>${rows.filter(r=>!searchTerm||[r.Client,r.Adresa,r.Oras,r.Zona,r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH'],r.Filer,r['Operatiuni efectuate']].join(' ').toLowerCase().includes(searchTerm.toLowerCase())).map(r=>{const photos=commercialEspressoPhotoLinks(r);return `<tr><td>${esc(r.Data||'')}</td><td><strong>${esc(r.Client||'')}</strong><br><small>${esc(r.Adresa||'')}</small></td><td>${esc(r.Oras||r.Zona||'')}</td><td>${esc([r['Tip aparat'],r['Serie Aparat'],r['Cod OFRESH']].filter(Boolean).join(' · '))}</td><td>${esc(r.Filer||'')}</td><td>${esc(r['Operatiuni efectuate']||'')}</td><td>${photos.map(photo=>`<a href="${esc(photo.url)}" target="_blank" rel="noopener noreferrer">${filerNormalizeAccessValue(photo.categorie).includes('aviz')?'Deschide aviz':'Deschide poza'}</a>`).join('<br>')||'-'}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii pentru espressoare.</div>'}</section>`;
 }
 async function exportCommercialEspressoWorkbook(){
   try{
@@ -3509,17 +3493,27 @@ async function saveIntervention(){
       await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
       pending.filterUpdated=true;
     }
-    for(let i=pending.photoIndex;i<pending.photos.length;i++){
-      msg("Interventia este salvata. Se incarca fotografia "+(i+1)+" din "+pending.photos.length+"...",true);
-      await uploadInterventionPhotoFile(pending.photos[i],{interventionId:pending.interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:technician,data:v("data")},i);
-      pending.photoIndex=i+1;
+    // Confirmam interventia si revenim imediat la ecranul tehnicianului.
+    // Fotografiile continua in fundal, fara sa blocheze urmatorul aparat.
+    const photosToUpload=pending.photos.slice(pending.photoIndex);
+    const photoMeta={interventionId:pending.interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:technician,data:v("data")};
+    if(!Array.isArray(db.Interventii))db.Interventii=[];
+    db.Interventii.unshift(pending.rec);
+    if(interventionType==="Schimbare filtru"){
+      const stockLocal=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
+      if(stockLocal)stockLocal.Consum=Number(stockLocal.Consum||stockLocal.consum||0)+1;
+      const oldLocal=(db.Filtre||[]).find(f=>String(f["ID Aparat"]||"")===String(machineId(m)));
+      const filterLocal={"ID Filtru":oldLocal?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":clientId(selectedClient),"Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
+      if(oldLocal)Object.assign(oldLocal,filterLocal);else (db.Filtre||(db.Filtre=[])).push(filterLocal);
     }
     window.__ofreshInterventionPhotos=[];
     window.__ofreshPendingIntervention=null;
     closeModal();
-    await load();
     if(techSession)showTechnicianHome();
-    msg(pending.photos.length?`Interventia si ${pending.photos.length} fotografii au fost salvate.`:"Interventia a fost salvata.",true);
+    msg("Interventia a fost salvata. Poti continua cu urmatorul aparat.",true);
+    if(photosToUpload.length){
+      (async()=>{let uploaded=0;for(let i=0;i<photosToUpload.length;i++){try{await uploadInterventionPhotoFile(photosToUpload[i],photoMeta,i);uploaded++;}catch(err){console.error("[OFRESH TECH PHOTO]",err);msg("Interventia este salvata, dar o fotografie nu s-a putut incarca: "+(err?.message||"eroare"),false);break;}}console.info("[OFRESH TECH PERF]",{phase:"background-photo-upload-complete",uploaded,total:photosToUpload.length});})();
+    }
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
   }finally{
@@ -4163,30 +4157,33 @@ async function filerSaveVisit(row){
     if(!saved||saved.success!==true)throw new Error(saved?.error||'Interventia nu a putut fi salvata.');
     visitSaved=true;
     console.info('[OFRESH FILER PERF]',{phase:'visit-record-saved',durationMs:Math.round(performance.now()-visitStarted),photosSelected:photos.length});
-    let uploads=[],errors=[];
-    // Pregatim maximum doua fotografii simultan, fiecare cu fragmente mai mari.
-    for(let offset=0;offset<photos.length;offset+=2){
-      const batch=photos.slice(offset,offset+2);
-      const results=await Promise.all(batch.map(async(photo,j)=>{
-        const index=offset+j+1;
-        try{return await filerPreparePhotoUpload(photo.file,{visitId:saved.visitId,photoToken:saved.photoToken,category:photo.category},index);}
-        catch(e){errors.push((photo.category==='Aviz marfa'?'Aviz: ':'Fotografie '+index+': ')+(e.message||'eroare'));return null;}
-      }));
-      uploads.push(...results.filter(Boolean));
-      msg('Interventie salvata. Fotografii pregatite: '+uploads.length+'/'+photos.length+'...',true);
-    }
-    if(uploads.length){
-      const finalizeStarted=performance.now();
-      const finalized=await api({action:'filerFinalizePhotoUploads',telefon:filerSession.phone,pin:filerSession.pin,visitId:saved.visitId,photoToken:saved.photoToken,photos:JSON.stringify(uploads)});
-      if(!finalized||finalized.success!==true)throw new Error(finalized?.error||'Fotografiile nu au putut fi finalizate.');
-      console.info('[OFRESH FILER PERF]',{phase:'photo-batch-finalized',durationMs:Math.round(performance.now()-finalizeStarted),uploaded:finalized.uploaded||uploads.length});
-    }
+    // Nu asteptam fotografiile pentru a elibera formularul: interventia este deja salvata.
     closeModal();
-    const totalMs=Math.round(performance.now()-saveStarted);
-    console.info('[OFRESH FILER PERF]',{phase:'visit-and-photos-complete',totalMs:totalMs,photosSelected:photos.length,photosUploaded:uploads.length});
-    if(errors.length)msg('Interventia a fost salvata. Fotografii incarcate: '+uploads.length+'/'+photos.length+'. '+errors.join(' '),false);
-    else msg('Interventia si toate fotografiile au fost salvate in '+(totalMs/1000).toFixed(1)+' secunde.');
     filerOpenMachine(row);
+    msg('Interventia a fost salvata. Poti continua cu urmatorul aparat; fotografiile se incarca in fundal.',true);
+    if(photos.length){
+      (async()=>{
+        let uploads=[],errors=[];
+        for(let offset=0;offset<photos.length;offset+=2){
+          const batch=photos.slice(offset,offset+2);
+          const results=await Promise.all(batch.map(async(photo,j)=>{
+            const index=offset+j+1;
+            try{return await filerPreparePhotoUpload(photo.file,{visitId:saved.visitId,photoToken:saved.photoToken,category:photo.category},index);}
+            catch(e){errors.push((photo.category==='Aviz marfa'?'Aviz: ':'Fotografie '+index+': ')+(e.message||'eroare'));return null;}
+          }));
+          uploads.push(...results.filter(Boolean));
+        }
+        if(uploads.length){
+          const finalized=await api({action:'filerFinalizePhotoUploads',telefon:filerSession.phone,pin:filerSession.pin,visitId:saved.visitId,photoToken:saved.photoToken,photos:JSON.stringify(uploads)});
+          if(!finalized||finalized.success!==true)throw new Error(finalized?.error||'Fotografiile nu au putut fi finalizate.');
+        }
+        console.info('[OFRESH FILER PERF]',{phase:'background-photos-complete',uploaded:uploads.length,total:photos.length,errors:errors.length});
+        if(errors.length)msg('Interventia este salvata. Fotografii incarcate: '+uploads.length+'/'+photos.length+'. '+errors.join(' '),false);
+      })().catch(e=>{console.error('[OFRESH FILER PHOTO]',e);msg('Interventia este salvata, dar fotografiile nu au putut fi finalizate: '+(e.message||'eroare'),false);});
+    }
+    const totalMs=Math.round(performance.now()-saveStarted);
+    console.info('[OFRESH FILER PERF]',{phase:'visit-saved-ui-released',totalMs:totalMs,photosSelected:photos.length});
+    return;
   }catch(e){
     if(btn){btn.disabled=true;btn.textContent='Interventie salvata';}
     if(visitSaved){
