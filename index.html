@@ -628,76 +628,7 @@ if ("serviceWorker" in navigator) {
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
- const SUPABASE_URL="https://zlbgxeaasctnfmjsrvql.supabase.co";
- const SUPABASE_KEY="sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb";
- let supabaseClient=null;
- let supabaseLoadPromise=null;
- function ensureSupabaseClient(){
-   if(supabaseClient)return Promise.resolve(supabaseClient);
-   if(supabaseLoadPromise)return supabaseLoadPromise;
-   supabaseLoadPromise=new Promise((resolve,reject)=>{
-     const script=document.createElement("script");
-     script.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-     script.async=true;
-     script.onload=()=>{
-       try{
-         if(!window.supabase)throw new Error("Biblioteca Supabase indisponibila.");
-         supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-         resolve(supabaseClient);
-       }catch(e){reject(e);}
-     };
-     script.onerror=()=>reject(new Error("Nu pot incarca modulul de resetare a parolei."));
-     document.head.appendChild(script);
-   }).catch(e=>{supabaseLoadPromise=null;throw e;});
-   return supabaseLoadPromise;
- }
- async function initPasswordRecovery(){
-   const hash=location.hash.replace(/^#/,"");
-   if(!hash)return;
-   const params=new URLSearchParams(hash);
-   const error=params.get("error_description")||params.get("error");
-   const type=params.get("type");
-   const access=params.get("access_token");
-   const refresh=params.get("refresh_token");
-   if(error){
-     const msgText=decodeURIComponent(error.replace(/\+/g," "));
-     document.getElementById("app").innerHTML='<div class="panel"><div class="empty"><strong>Linkul de resetare nu mai este valabil.</strong><br><br>'+esc(msgText)+"</div></div>";
-     return;
-   }
-   if(type==="recovery" || (access&&refresh)){
-     try{
-       await ensureSupabaseClient();
-       const r=await supabaseClient.auth.setSession({access_token:access||"",refresh_token:refresh||""});
-       if(r.error)throw r.error;
-       document.getElementById("app").innerHTML=`<section class="panel" style="max-width:520px;margin:50px auto">
-         <div class="eyebrow">OFRESH MANAGEMENT</div><h2>Seteaza parola noua</h2>
-         <p class="small">Introdu parola noua pentru contul tau OFRESH.</p>
-         <div class="grid" style="margin-top:18px">
-           <label class="field"><span>Parola noua</span><input id="newPassword" type="password" autocomplete="new-password" placeholder="Minim 6 caractere"></label>
-           <label class="field"><span>Confirma parola</span><input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Repeta parola"></label>
-         </div>
-         <div id="passwordError" class="hint dangerText" style="margin-top:10px"></div>
-         <div class="quickActions" style="margin-top:18px"><button class="primaryButton" onclick="finishPasswordRecovery()">Schimba parola</button></div>
-       </section>`;
-     }catch(e){
-       document.getElementById("app").innerHTML='<div class="panel"><div class="empty"><strong>Nu pot valida linkul de resetare.</strong><br><br>'+esc(e.message||e)+"</div></div>";
-     }
-   }
- }
- async function finishPasswordRecovery(){
-   const p=document.getElementById("newPassword")?.value||"";
-   const c=document.getElementById("confirmPassword")?.value||"";
-   const er=document.getElementById("passwordError");
-   if(er)er.textContent="";
-   if(p.length<6){if(er)er.textContent="Parola trebuie sa aiba cel putin 6 caractere.";return;}
-   if(p!==c){if(er)er.textContent="Parolele nu coincid.";return;}
-   try{
-     const r=await supabaseClient.auth.updateUser({password:p});
-     if(r.error)throw r.error;
-     document.getElementById("app").innerHTML='<section class="panel" style="max-width:520px;margin:50px auto"><div class="notice"><strong>Parola a fost schimbata cu succes.</strong><br><br>Poti inchide aceasta pagina si te poti conecta in OFRESH Management cu noua parola.</div></section>';
-     history.replaceState(null,"",location.pathname+location.search);
-   }catch(e){if(er)er.textContent=e.message||String(e);}
- }
+ // Recuperarea PIN-ului se face exclusiv prin Google Apps Script.
 
  const API_URL="https://script.google.com/macros/s/AKfycbwJbdx7a7lG2OpxKW53zzXQ20rQ1IKWLlYIo5UZ7rH7_EjAwiZFXCCozlndzt56O4Ml/exec";
 const pages={dashboard:"Dashboard",clienti:"Clienti",aparate:"Aparate",interventii:"Interventii",interventiiEspresso:"Service Espressoare",filtre:"Filtre",stoc:"Stoc",tehnicieni:"Tehnicieni",rapoarte:"Rapoarte",utilizatori:"Utilizatori",comercial:"Comercial",setari:"Setari"};
@@ -711,7 +642,23 @@ function uid(p){return p+"-"+Date.now()+"-"+Math.random().toString(36).slice(2,7
 function setSearch(v){searchTerm=v||"";render()}
 function clearSearch(){searchTerm="";document.getElementById("globalSearch").value="";render()}
 function msg(t,ok=true){const e=document.getElementById("message");e.textContent=t;e.className="message "+(ok?"ok":"err");setTimeout(()=>{e.className="message"},3600)}
-function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const filerTrack=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerUploadPhotoChunk|filerFinalizePhotoUpload|filerFinalizePhotoUploads)$/.test(action);const adminTrack=/^(loginUser|dashboardData|readSheets|technicianData|commercialLogin|commercialData)$/.test(action);const track=filerTrack||adminTrack;const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d,serverOverride){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshLastApiMs=ms;if(filerTrack)window.__ofreshFilerLastApiMs=ms;const server=serverOverride??d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;const details={action:action,networkMs:ms,serverMs:server,payloadChars:s.src.length,locations:d?.totalLocations,machines:d?.totalMachines};console.info(filerTrack?'[OFRESH FILER PERF]':'[OFRESH PERF]',details);}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();const serverMs=d&&typeof d==='object'?d.__ofreshServerMs:undefined;if(d&&typeof d==='object')try{delete d.__ofreshServerMs}catch{};perf(d,serverMs);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
+function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const filerTrack=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerUploadPhotoChunk|filerFinalizePhotoUpload|filerFinalizePhotoUploads)$/.test(action);const adminTrack=/^(loginUser|dashboardData|readSheets|technicianData|commercialLogin|commercialData|uploadPhotoChunk|finalizePhotoUpload)$/.test(action);const track=filerTrack||adminTrack;const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d,serverOverride){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshLastApiMs=ms;if(filerTrack)window.__ofreshFilerLastApiMs=ms;const server=serverOverride??d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;const details={action:action,networkMs:ms,serverMs:server,payloadChars:s.src.length,locations:d?.totalLocations,machines:d?.totalMachines};console.info(filerTrack?'[OFRESH FILER PERF]':'[OFRESH PERF]',details);}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();const serverMs=d&&typeof d==='object'?d.__ofreshServerMs:undefined;if(d&&typeof d==='object')try{delete d.__ofreshServerMs}catch{};perf(d,serverMs);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
+function apiPost(params){
+  return new Promise((resolve,reject)=>{
+    const nonce=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x=>x.toString(16).padStart(2,'0')).join('');
+    const frameName='ofresh_post_'+nonce;
+    const iframe=document.createElement('iframe');iframe.name=frameName;iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
+    const form=document.createElement('form');form.method='POST';form.action=API_URL;form.target=frameName;form.style.display='none';
+    const payload={...params,__ofreshPostBridge:'1',__ofreshPostNonce:nonce};
+    Object.entries(payload).forEach(([key,value])=>{const input=document.createElement('input');input.type='hidden';input.name=key;input.value=String(value??'');form.appendChild(input);});
+    let done=false;const timeout=setTimeout(()=>finish(new Error('Google Apps Script nu a raspuns. Incearca din nou.')),30000);
+    function cleanup(){window.removeEventListener('message',onMessage);form.remove();iframe.remove();}
+    function finish(error,data){if(done)return;done=true;clearTimeout(timeout);cleanup();if(error)reject(error);else resolve(data);}
+    function onMessage(event){if(event.source!==iframe.contentWindow)return;const d=event.data;if(!d||d.type!=='ofresh-api-response'||d.nonce!==nonce)return;finish(null,d.data);}
+    window.addEventListener('message',onMessage);document.body.append(iframe,form);form.submit();
+  });
+}
+
 function buildClientsFromMachines(machines){
   const rows=Array.isArray(machines)?machines:[];
   const map=new Map();
@@ -1253,6 +1200,7 @@ function openTechLogin(){
     <div id="techLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
     <div class="techLoginField"><label for="f_loginTelefon">Telefon</label><input id="f_loginTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon"></div>
     <div class="techLoginField"><label for="f_loginPin">PIN</label><input id="f_loginPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces"></div>
+    <div style="margin:8px 0 14px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
     <button type="button" class="techLoginButton" id="techLoginSubmit">Intra in modul tehnician</button>
   </div>`;
   document.body.appendChild(screen);
@@ -2159,6 +2107,7 @@ function openCommercial(){
   modal("Acces Comercial",`<div>
     ${inputField("Email","commercialEmail","","email")}
     ${inputField("PIN","commercialPin","","password")}
+    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
   </div>`,`Intra in Comercial`,`loginCommercial()`);
   setTimeout(()=>document.getElementById("f_commercialEmail")?.focus(),50);
 }
@@ -3406,11 +3355,11 @@ async function uploadInterventionPhotoFile(file,meta,index){
   const prepared=await compressInterventionImage(file);
   const base64=prepared.dataUrl.split(",")[1]||"";
   const uploadId="UPL-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);
-  // Upload optimizat pentru mobil: fragmente aproape de limita backend, 6 cereri paralele si retry la erori.
-  const chunkSize=2700;
+  // Upload optimizat pentru mobil: fragmente de 30 KB (backend max. 40 KB), 5 cereri paralele si retry la erori.
+  const chunkSize=30000;
   const totalChunks=Math.ceil(base64.length/chunkSize);
   if(!base64 || totalChunks<1 || totalChunks>100) throw new Error("Fotografia este prea mare pentru incarcare. Fa o poza mai mica.");
-  const batchSize=6;
+  const batchSize=5;
   async function sendPhotoChunk(i){
     const chunk=base64.slice(i*chunkSize,(i+1)*chunkSize);
     let lastError=null;
@@ -3732,6 +3681,7 @@ function openFilerLogin(){
     <div id="filerLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
     <div class="techLoginField"><label for="f_filerTelefon">Telefon</label><input id="f_filerTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon" required></div>
     <div class="techLoginField"><label for="f_filerPin">PIN</label><input id="f_filerPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces" required></div>
+    <div style="margin:8px 0 14px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
     <button type="submit" class="techLoginButton" id="filerLoginSubmit">Intra in modul Filler</button>
   </form>`;
   document.body.classList.add('techLoginActive');
@@ -4506,10 +4456,68 @@ function showAccessPage(){
     </section>`;
 }
 
+function openPinRecovery(){
+  document.getElementById('ofreshPinRecovery')?.remove();
+  const overlay=document.createElement('div');
+  overlay.id='ofreshPinRecovery';
+  overlay.className='techOverlay';
+  overlay.innerHTML=`<section class="techLoginCard" role="dialog" aria-modal="true" aria-label="Recuperare PIN OFRESH">
+    <button type="button" class="techLoginClose" aria-label="Inchide" onclick="closePinRecovery()">×</button>
+    <div class="techLoginLogo">OFRESH</div><div class="techLoginEyebrow">OFRESH ONLINE</div>
+    <h2>Recuperare PIN</h2>
+    <p class="small">Introdu adresa de e-mail asociata contului tau din aplicatie. Iti vom trimite un cod de verificare.</p>
+    <div id="pinRecoveryError" class="techLoginError" role="alert" aria-live="polite"></div>
+    <div class="techLoginField"><label for="pinRecoveryEmail">Adresa de e-mail</label><input id="pinRecoveryEmail" type="email" autocomplete="email" placeholder="nume@companie.ro"></div>
+    <button type="button" class="techLoginButton" id="pinRecoverySend" onclick="requestPinRecoveryUi()">Trimite codul</button>
+    <div id="pinRecoveryVerify" style="display:none;margin-top:16px">
+      <div class="techLoginField"><label for="pinRecoveryCode">Cod de verificare (6 cifre)</label><input id="pinRecoveryCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></div>
+      <div class="techLoginField"><label for="pinRecoveryNew">PIN nou (4-20 caractere)</label><input id="pinRecoveryNew" type="password" autocomplete="new-password" maxlength="20"></div>
+      <div class="techLoginField"><label for="pinRecoveryConfirm">Confirma PIN-ul nou</label><input id="pinRecoveryConfirm" type="password" autocomplete="new-password" maxlength="20"></div>
+      <button type="button" class="techLoginButton" id="pinRecoveryComplete" onclick="completePinRecoveryUi()">Salveaza PIN-ul nou</button>
+    </div>
+  </section>`;
+  document.body.appendChild(overlay);
+  setTimeout(()=>document.getElementById('pinRecoveryEmail')?.focus(),50);
+}
+function closePinRecovery(){document.getElementById('ofreshPinRecovery')?.remove();}
+async function requestPinRecoveryUi(){
+  const email=String(document.getElementById('pinRecoveryEmail')?.value||'').trim().toLowerCase();
+  const error=document.getElementById('pinRecoveryError'), button=document.getElementById('pinRecoverySend');
+  if(error)error.textContent='';
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(error)error.textContent='Introdu o adresa de e-mail valida.';return;}
+  if(button){button.disabled=true;button.textContent='Se trimite...';}
+  try{
+    const r=await apiPost({action:'requestPinRecovery',email:email});
+    if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut procesa solicitarea.');
+    const verify=document.getElementById('pinRecoveryVerify');if(verify)verify.style.display='block';
+    if(error)error.textContent=r.message||'Daca exista un cont activ asociat acestei adrese, vei primi un cod de verificare pe e-mail.';
+  }catch(e){if(error)error.textContent=e.message||'Nu am putut trimite solicitarea.';}
+  finally{if(button){button.disabled=false;button.textContent='Trimite din nou codul';}}
+}
+async function completePinRecoveryUi(){
+  const email=String(document.getElementById('pinRecoveryEmail')?.value||'').trim().toLowerCase();
+  const code=String(document.getElementById('pinRecoveryCode')?.value||'').trim();
+  const pin=String(document.getElementById('pinRecoveryNew')?.value||'');
+  const confirm=String(document.getElementById('pinRecoveryConfirm')?.value||'');
+  const error=document.getElementById('pinRecoveryError'),button=document.getElementById('pinRecoveryComplete');
+  if(error)error.textContent='';
+  if(pin.length<4||pin.length>20||/\s/.test(pin)){if(error)error.textContent='PIN-ul trebuie sa aiba intre 4 si 20 de caractere, fara spatii.';return;}
+  if(pin!==confirm){if(error)error.textContent='PIN-urile nu coincid.';return;}
+  if(button){button.disabled=true;button.textContent='Se salveaza...';}
+  try{
+    const r=await apiPost({action:'completePinRecovery',email:email,code:code,newPin:pin});
+    if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut actualiza PIN-ul.');
+    if(error)error.textContent=r.message||'PIN-ul a fost actualizat. Te poti autentifica folosind noul PIN.';
+    const verify=document.getElementById('pinRecoveryVerify');if(verify)verify.style.display='none';
+    if(button)button.textContent='PIN actualizat';
+  }catch(e){if(error)error.textContent=e.message||'Nu am putut actualiza PIN-ul.';if(button){button.disabled=false;button.textContent='Salveaza PIN-ul nou';}}
+}
+
 function openAdminLogin(){
   modal("Acces Administrator",`<div>
     ${inputField("Adresa de e-mail","adminTelefon","","email")}
     ${inputField("Parola (PIN-ul existent)","adminPin","","password")}
+    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
   </div>`,`Intra in Administrator`,`loginAdministrator()`);
   setTimeout(()=>{
     const submit=ev=>{
