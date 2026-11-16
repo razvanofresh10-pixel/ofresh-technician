@@ -696,7 +696,20 @@ function uid(p){return p+"-"+Date.now()+"-"+Math.random().toString(36).slice(2,7
 function setSearch(v){searchTerm=v||"";render()}
 function clearSearch(){searchTerm="";document.getElementById("globalSearch").value="";render()}
 function msg(t,ok=true){const e=document.getElementById("message");e.textContent=t;e.className="message "+(ok?"ok":"err");setTimeout(()=>{e.className="message"},3600)}
-function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const filerTrack=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerUploadPhotoChunk|filerFinalizePhotoUpload|filerFinalizePhotoUploads)$/.test(action);const adminTrack=/^(loginUser|dashboardData|readSheets|technicianData|commercialLogin|commercialData|uploadPhotoChunk|finalizePhotoUpload)$/.test(action);const track=filerTrack||adminTrack;const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d,serverOverride){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshLastApiMs=ms;if(filerTrack)window.__ofreshFilerLastApiMs=ms;const server=serverOverride??d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;const details={action:action,networkMs:ms,serverMs:server,payloadChars:s.src.length,locations:d?.totalLocations,machines:d?.totalMachines};console.info(filerTrack?'[OFRESH FILER PERF]':'[OFRESH PERF]',details);}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();const serverMs=d&&typeof d==='object'?d.__ofreshServerMs:undefined;if(d&&typeof d==='object')try{delete d.__ofreshServerMs}catch{};perf(d,serverMs);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
+let ofreshAdminLoginWarmPromise=null;
+let ofreshAdminLoginWarmAt=0;
+function warmAdminLoginCache(){
+  if(ofreshAdminLoginWarmPromise) return ofreshAdminLoginWarmPromise;
+  // Cache-ul serverului expira in 120s; il consideram pregatit 90s.
+  if(ofreshAdminLoginWarmAt && Date.now()-ofreshAdminLoginWarmAt<90000) return Promise.resolve({success:true,cached:true});
+  ofreshAdminLoginWarmPromise=api({action:'warmAdminLoginCache'})
+    .then(r=>{if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut pregati autentificarea.');ofreshAdminLoginWarmAt=Date.now();console.info('[OFRESH PERF]',{phase:'admin-login-cache-ready',serverMs:r.__ofreshServerMs??r.elapsedMs??null,cached:!!r.cached});return r;})
+    .catch(e=>{console.warn('[OFRESH] Admin login cache warm-up skipped:',e);return null;})
+    .finally(()=>{ofreshAdminLoginWarmPromise=null;});
+  return ofreshAdminLoginWarmPromise;
+}
+
+function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const filerTrack=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerUploadPhotoChunk|filerFinalizePhotoUpload|filerFinalizePhotoUploads)$/.test(action);const adminTrack=/^(loginUser|warmAdminLoginCache|dashboardData|readSheets|technicianData|commercialLogin|commercialData|uploadPhotoChunk|finalizePhotoUpload)$/.test(action);const track=filerTrack||adminTrack;const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d,serverOverride){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshLastApiMs=ms;if(filerTrack)window.__ofreshFilerLastApiMs=ms;const server=serverOverride??d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;const details={action:action,networkMs:ms,serverMs:server,payloadChars:s.src.length,locations:d?.totalLocations,machines:d?.totalMachines};console.info(filerTrack?'[OFRESH FILER PERF]':'[OFRESH PERF]',details);}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();const serverMs=d&&typeof d==='object'?d.__ofreshServerMs:undefined;if(d&&typeof d==='object')try{delete d.__ofreshServerMs}catch{};perf(d,serverMs);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
 function apiPost(params){
   return new Promise((resolve,reject)=>{
     const nonce=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -4485,6 +4498,8 @@ function closeTechLogin(){
   showAccessPage();
 }
 function showAccessPage(){
+  // Incepe incalzirea cache-ului in timp ce utilizatorul se afla pe ecranul de acces.
+  warmAdminLoginCache();
   filerRestoreAppShell();
   document.body.classList.remove("ofreshFilerMode");
   document.body.classList.add("ofreshAccess"); document.querySelector(".sidebar")?.classList.add("accessHiddenForce"); document.querySelector(".topbar")?.classList.add("accessHiddenForce");
@@ -4581,26 +4596,14 @@ async function completePinRecoveryUi(){
 }
 
 function openAdminLogin(){
+  // Refoloseste preincalzirea pornita pe ecranul principal; daca accesul este direct, o porneste acum.
+  warmAdminLoginCache();
   modal("Acces Administrator",`<div>
     ${inputField("Adresa de e-mail","adminTelefon","","email")}
     ${inputField("Parola (PIN-ul existent)","adminPin","","password")}
     <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('admin');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat PIN-ul</button></div>
   </div>`,`Intra in Administrator`,`loginAdministrator()`);
-  setTimeout(()=>{
-    const submit=ev=>{
-      if(ev.key==="Enter"||ev.keyCode===13){
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        if(window.__ofreshAdminLoginBusy)return;
-        window.__ofreshAdminLoginBusy=true;
-        Promise.resolve(loginAdministrator()).finally(()=>window.__ofreshAdminLoginBusy=false);
-      }
-    };
-    const user=document.getElementById("f_adminTelefon"), pin=document.getElementById("f_adminPin");
-    user?.addEventListener("keydown",submit,true);
-    pin?.addEventListener("keydown",submit,true);
-    user?.focus();
-  },50);
+  setTimeout(()=>document.getElementById("f_adminTelefon")?.focus(),50);
 }
 async function loginAdministrator(){
   if(window.__ofreshAdminLoginBusy)return;
@@ -4615,6 +4618,9 @@ async function loginAdministrator(){
   const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
   const openAdmin=(u)=>{const shellStarted=performance.now();cancelAdminDashboardRefresh();adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();console.info('[OFRESH PERF]',{phase:'admin-shell-rendered-from-cache',durationMs:Math.round(performance.now()-shellStarted),totalSinceLoginMs:Math.round(performance.now()-adminLoginStarted)});/* Dashboard-ul se actualizeaza doar daca administratorul ramane pe Dashboard; navigarea spre un modul anuleaza timerul si nu asteapta cererea Dashboard. */scheduleAdminDashboardRefresh(650);};
   try{
+    // Daca utilizatorii sunt in curs de preincalzire, asteptam cache-ul server-side
+    // pentru ca autentificarea sa nu repete o citire lenta din Google Sheets.
+    await warmAdminLoginCache();
     const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
     if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");console.info('[OFRESH PERF]',{phase:'admin-auth-success',totalMs:Math.round(performance.now()-adminLoginStarted)});openAdmin(r.user);return;}
     throw new Error(r?.error||"E-mailul sau parola este gresita.");
@@ -4675,10 +4681,19 @@ document.addEventListener("keydown",function(ev){if(ev.key!=="Enter"||ev.default
   window.__ofreshEnterHandlerInstalled=true;
   document.addEventListener("keydown",function(ev){
     if(ev.key!=="Enter"&&ev.keyCode!==13)return;
-    const id=ev.target&&ev.target.id||""; let fn=null,busy="";
-    if(id==="f_loginTelefon"||id==="f_loginPin"){fn=loginTechnician;busy="__ofreshLoginBusy";}
-    else if(id==="f_adminTelefon"||id==="f_adminPin"){fn=loginAdministrator;busy="__ofreshAdminLoginBusy";}
-    if(!fn)return; ev.preventDefault(); ev.stopImmediatePropagation(); if(window[busy])return; window[busy]=true; Promise.resolve(fn()).finally(()=>window[busy]=false);
+    const id=ev.target&&ev.target.id||"";
+    if(id==="f_adminTelefon"||id==="f_adminPin"){
+      ev.preventDefault();ev.stopImmediatePropagation();
+      if(window.__ofreshAdminLoginBusy)return;
+      // loginAdministrator seteaza si elibereaza propriul flag; nu il blocam inainte de apel.
+      Promise.resolve(loginAdministrator()).catch(e=>console.error('[OFRESH] Admin login:',e));
+      return;
+    }
+    if(id==="f_loginTelefon"||id==="f_loginPin"){
+      ev.preventDefault();ev.stopImmediatePropagation();
+      if(window.__ofreshLoginBusy)return;
+      window.__ofreshLoginBusy=true;Promise.resolve(loginTechnician()).finally(()=>window.__ofreshLoginBusy=false);
+    }
   },true);
 })();
 </script>
