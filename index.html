@@ -2354,6 +2354,7 @@ async function exportCommercialEspressoWorkbook(){
     });
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.json_to_sheet(exportRows.length?exportRows:[{'Informatii':'Nu exista interventii pentru espressoare.'}]);
+    ofreshStyleWorksheetHeader(ws);
     if(exportRows.length&&maxPhotos){const headers=Object.keys(exportRows[0]);for(let r=0;r<photoRows.length;r++)for(let p=0;p<maxPhotos;p++){const photo=photoRows[r].urls[p];if(!photo)continue;const col=headers.indexOf('Fotografie '+(p+1));if(col>=0){const cell=XLSX.utils.encode_cell({r:r+1,c:col});if(ws[cell])ws[cell].l={Target:photo.url,Tooltip:filerNormalizeAccessValue(photo.categorie).includes('aviz')?'Deschide aviz in Google Drive':'Deschide poza in Google Drive'};}}}
     XLSX.utils.book_append_sheet(wb,ws,'Interventii Espressoare');
     XLSX.writeFile(wb,'OFRESH_Export_Interventii_Espressoare_Comercial.xlsx');
@@ -2397,6 +2398,7 @@ async function exportCommercialWorkbook(){
     const wsA=XLSX.utils.json_to_sheet(aparate.length?aparate:[{"Informatii":"Nu exista aparate active."}]);
     const wsF=XLSX.utils.json_to_sheet(filtre.length?filtre:[{"Informatii":"Nu exista inregistrari de filtre."}]);
     const wsI=XLSX.utils.json_to_sheet(excelInterventii.length?excelInterventii:[{"Informatii":"Nu exista interventii returnate de server."}]);
+    [wsA,wsF,wsI].forEach(ofreshStyleWorksheetHeader);
     if(excelInterventii.length&&maxPhotos){
       const headers=Object.keys(excelInterventii[0]);
       for(let r=0;r<intRows.length;r++){
@@ -2424,6 +2426,7 @@ async function exportCommercialWorkbook(){
         return out;
       });
       const wsE=XLSX.utils.json_to_sheet(espressoExportRows.length?espressoExportRows:[{'Informatii':'Nu exista interventii pentru espressoare.'}]);
+      ofreshStyleWorksheetHeader(wsE);
       if(espressoExportRows.length&&maxEspressoPhotos){
         const headers=Object.keys(espressoExportRows[0]);
         for(let r=0;r<espressoPhotoRows.length;r++)for(let p=0;p<maxEspressoPhotos;p++){
@@ -3654,9 +3657,65 @@ async function deleteRecord(sheet,idValue){
 }
 function loadScript(src,check){return new Promise((resolve,reject)=>{if(check())return resolve();const s=document.createElement("script");s.src=src;s.onload=()=>check()?resolve():reject(new Error("Modul indisponibil"));s.onerror=reject;document.head.appendChild(s)})}
 async function excelReady(){await loadScript("https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js",()=>!!window.XLSX)}
-function ofreshStyleWorksheetHeader(ws){if(!ws||!ws["!ref"]||!window.XLSX)return;const range=XLSX.utils.decode_range(ws["!ref"]);for(let c=range.s.c;c<=range.e.c;c++){const cell=ws[XLSX.utils.encode_cell({r:range.s.r,c})];if(!cell)continue;cell.s={...(cell.s||{}),fill:{patternType:"solid",fgColor:{rgb:"1E9B82"}},font:{...(cell.s?.font||{}),bold:true,color:{rgb:"FFFFFF"}},alignment:{...(cell.s?.alignment||{}),vertical:"center",horizontal:"center",wrapText:true},border:{bottom:{style:"thin",color:{rgb:"167A68"}}}};}ws["!rows"]=[{hpt:26},...(ws["!rows"]||[])];}
+function ofreshStyleWorksheetHeader(ws){
+  if(!ws||!ws["!ref"]||!window.XLSX)return;
+  const range=XLSX.utils.decode_range(ws["!ref"]);
+  const headerRow=range.s.r;
+  const thinBorder={
+    top:{style:"thin",color:{rgb:"B8C9C5"}},
+    bottom:{style:"thin",color:{rgb:"B8C9C5"}},
+    left:{style:"thin",color:{rgb:"B8C9C5"}},
+    right:{style:"thin",color:{rgb:"B8C9C5"}}
+  };
+  // Stilizeaza doar celulele existente (nu scaneaza toate celulele goale din interval).
+  const addresses=Object.keys(ws).filter(key=>key[0]!=="!");
+  const widths=Object.create(null);
+  for(const addr of addresses){
+    const cell=ws[addr];
+    const pos=XLSX.utils.decode_cell(addr);
+    const col=pos.c;
+    if(cell&&cell.v!==undefined&&cell.v!==null){
+      const value=String(cell.v);
+      widths[col]=Math.max(widths[col]||10,Math.min(38,value.length+2));
+    }
+    if(!cell)continue;
+    cell.s={...(cell.s||{}),alignment:{...(cell.s?.alignment||{}),vertical:"center",wrapText:true},border:thinBorder};
+    if(pos.r===headerRow){
+      cell.s={...cell.s,fill:{patternType:"solid",fgColor:{rgb:"1E9B82"}},font:{...(cell.s?.font||{}),bold:true,color:{rgb:"FFFFFF"}},alignment:{...(cell.s?.alignment||{}),vertical:"center",horizontal:"center",wrapText:true},border:{...thinBorder,bottom:{style:"medium",color:{rgb:"167A68"}}}};
+    }
+  }
+  ws["!rows"]=ws["!rows"]||[];
+  ws["!rows"][headerRow]={...(ws["!rows"][headerRow]||{}),hpt:30};
+  // Calculeaza latimile numai daca exportul nu are deja latimi definite.
+  if(!ws["!cols"]||!ws["!cols"].length){
+    ws["!cols"]=[];
+    for(let c=range.s.c;c<=range.e.c;c++)ws["!cols"][c]={wch:Math.min(38,Math.max(12,widths[c]||12))};
+  }
+}
 function ofreshPhotoTimestamp(photo){const keys=Object.keys(photo||{});const norm=k=>String(k||"").toLowerCase().replace(/[\s_–—-]+/g,"");const preferred=["Data si ora","Data/Ora","Timestamp","Data incarcare","Data fotografiere","Data fotografie","Created At","CreatedAt","Data","Ora","DateTime","Created"];for(const wanted of preferred){const k=keys.find(x=>norm(x)===norm(wanted));if(k&&photo[k]!==""&&photo[k]!=null)return photo[k];}const k=keys.find(x=>/(timestamp|createdat|data.*(ora|foto|incarc|upload)|ora.*foto)/i.test(x));return k?photo[k]:"";}
-function ofreshAddPhotoDetails(rows,photoSheet){const photos=Array.isArray(photoSheet)?photoSheet:[];const norm=v=>String(v==null?"":v).trim();const idOf=x=>norm(x["ID Interventie"]||x["ID interventie"]||x.interventionId||x.interventieId||x.ID||x.id);const grouped=new Map();photos.forEach(photo=>{const id=idOf(photo);if(!id)return;const fileId=norm(photo["File ID"]||photo["File Id"]||photo.fileId||photo.fileID);const raw=norm(photo["URL poza"]||photo["URL Poza"]||photo.url||photo.URL||photo.Link||photo.link);const url=fileId?`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`:raw;const ts=ofreshPhotoTimestamp(photo);if(!grouped.has(id))grouped.set(id,[]);grouped.get(id).push({url:/^https?:\/\//i.test(url)?url:"",timestamp:ts});});return (rows||[]).map(row=>{const items=grouped.get(idOf(row))||[];const out={...row};items.forEach((item,i)=>{const n=i+1;out["Data/Ora fotografie "+n]=item.timestamp||"";});out.Fotografii=items.map(x=>x.url).filter(Boolean).join("\n");return out;});}
+function ofreshAddPhotoDetails(rows,photoSheet){
+  const photos=Array.isArray(photoSheet)?photoSheet:[];
+  const norm=v=>String(v==null?"":v).trim();
+  const idOf=x=>norm(x["ID Interventie"]||x["ID interventie"]||x.interventionId||x.interventieId||x.ID||x.id);
+  const grouped=new Map();
+  photos.forEach(photo=>{
+    const id=idOf(photo);if(!id)return;
+    const fileId=norm(photo["File ID"]||photo["File Id"]||photo.fileId||photo.fileID);
+    const raw=norm(photo["URL poza"]||photo["URL Poza"]||photo.url||photo.URL||photo.Link||photo.link);
+    const url=fileId?`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`:raw;
+    const categorie=norm(photo.Categorie||photo.categorie||photo.Category||photo.category||photo.Tip||photo.tip);
+    const ts=ofreshPhotoTimestamp(photo);
+    if(!grouped.has(id))grouped.set(id,[]);
+    if(/^https?:\/\//i.test(url))grouped.get(id).push({url,categorie,timestamp:ts});
+  });
+  return (rows||[]).map(row=>{
+    const items=grouped.get(idOf(row))||[];const out={...row};
+    items.forEach((item,i)=>{out["Data/Ora fotografii "+(i+1)]=item.timestamp||"";});
+    // Pastram categoria fotografiei pentru eticheta corecta in Excel (Aviz/poza).
+    out.Fotografii=items.map(item=>({url:item.url,categorie:item.categorie}));
+    return out;
+  });
+}
 function ofreshLinkPhotoCells(ws,rows){if(!ws||!rows?.length||!window.XLSX)return;const headers=Object.keys(rows[0]||{});rows.forEach((row,r)=>headers.forEach((h,c)=>{if(!/^Fotografii? \d+$/i.test(h)||row[h]!=="Deschide poza")return;const link=row.__photoLinks?.[h];if(link){const cell=ws[XLSX.utils.encode_cell({r:r+1,c})];if(cell)cell.l={Target:link,Tooltip:"Deschide fotografia"};}}));}
 async function exportAllClients(){
   try{
@@ -3696,8 +3755,15 @@ function ofreshPhotoUrls(row){
     if(!/(fotografii|fotografie|poze|poza|photos?|image.?urls?)/i.test(k))return;
     const value=row[k],values=Array.isArray(value)?value:[value];
     values.forEach(v=>{
-      const raw=(v&&typeof v==="object")?(v["URL poza"]||v.url||v.URL||""):v;
-      String(raw||"").split(/[\n\r;,]+/).map(x=>x.trim()).filter(Boolean).forEach(url=>{if(/^https?:\/\//i.test(url)&&!found.includes(url))found.push(url)});
+      let raw=(v&&typeof v==="object")?(v["URL poza"]||v["URL Poza"]||v.url||v.URL||v.Link||v.link||""):v;
+      const categorie=(v&&typeof v==="object")?String(v.Categorie||v.categorie||v.Category||v.category||v.Tip||v.tip||v.Nume||""):"";
+      if(v&&typeof v==="object"){
+        const fileId=v["File ID"]||v["File Id"]||v.fileId||v.fileID||"";
+        if(!raw&&fileId)raw="https://drive.google.com/file/d/"+encodeURIComponent(String(fileId))+"/view";
+      }
+      String(raw||"").split(/[\n\r;,]+/).map(x=>x.trim()).filter(Boolean).forEach(url=>{
+        if(/^https?:\/\//i.test(url)&&!found.some(item=>item.url===url))found.push({url,categorie});
+      });
     });
   });
   return found;
@@ -3705,9 +3771,9 @@ function ofreshPhotoUrls(row){
 function ofreshInterventionWorksheet(rows){
   const prepared=(rows||[]).map(row=>{const clean={...row};const urls=ofreshPhotoUrls(clean);["Fotografii","Fotografie","Poze","Poza","Photos","Photo"].forEach(k=>delete clean[k]);return {clean,urls}});
   const maxPhotos=Math.max(0,...prepared.map(x=>x.urls.length));
-  const output=prepared.map(x=>{const row={...x.clean};for(let i=0;i<maxPhotos;i++)row["Fotografie "+(i+1)]=x.urls[i]?"Deschide poza":"";return row});
+  const output=prepared.map(x=>{const row={...x.clean};for(let i=0;i<maxPhotos;i++){const photo=x.urls[i];row["Fotografie "+(i+1)]=photo?(String(photo.categorie||"").toLowerCase().includes("aviz")?"Deschide aviz":"Deschide poza"):"";}return row});
   const ws=XLSX.utils.json_to_sheet(output);
-  if(maxPhotos){const headers=Object.keys(output[0]||{});prepared.forEach((item,r)=>item.urls.forEach((url,i)=>{const c=headers.indexOf("Fotografie "+(i+1));if(c<0)return;const cell=XLSX.utils.encode_cell({r:r+1,c});if(ws[cell])ws[cell].l={Target:url,Tooltip:"Deschide fotografia in Google Drive"};}));}
+  if(maxPhotos){const headers=Object.keys(output[0]||{});prepared.forEach((item,r)=>item.urls.forEach((photo,i)=>{const c=headers.indexOf("Fotografie "+(i+1));if(c<0)return;const cell=ws[XLSX.utils.encode_cell({r:r+1,c})];if(cell)cell.l={Target:photo.url,Tooltip:String(photo.categorie||"").toLowerCase().includes("aviz")?"Deschide aviz in Google Drive":"Deschide poza in Google Drive"};}));}
   return ws;
 }
 async function exportSheet(sheet,filename){try{
@@ -3723,11 +3789,32 @@ async function exportSheet(sheet,filename){try{
     await ensureAdminSheetList(["Interventii Espressoare","Poze Interventii Espressoare"]);
     sourceRows=db["Interventii Espressoare"]||[];photoSheet=db["Poze Interventii Espressoare"]||[];
     rows=ofreshAddPhotoDetails(sourceRows,photoSheet);
-  }else{sourceRows=sheet==="Stoc"?stockGroups():(db[sheet]||[]);rows=sourceRows.map(r=>{const x={...r};delete x.__groupRows;return x});}
+  }else if(sheet==="Stoc"){
+    // Exportul foloseste aceleasi totaluri agregate ca tabelul din aplicatie.
+    sourceRows=stockGroups();
+    rows=sourceRows.map(r=>({
+      "Tip filtru":r.Produs||r.produs||r.tip||"",
+      "Intrat":Number(r.Cantitate||r.cantitate||0)||0,
+      "Consum":Number(r.Consum||r.consum||r.Consumat||r.consumat||0)||0,
+      "Disponibil":stockAvailable(r),
+      "Prag minim":r["Prag minim"]??r.pragMinim??r.Prag??"",
+      "Unitate":r.Unitate||r.unitate||"buc",
+      "Furnizor":r.Furnizor||r.furnizor||"",
+      "Factura":r.Factura||r.factura||"",
+      "Data":r.Data||r.data||r["Data actualizare"]||"",
+      "Locatie":r.Locatie||r.locatie||"",
+      "Observatii":r.Observatii||r.observatii||""
+    }));
+  }else{sourceRows=db[sheet]||[];rows=sourceRows.map(r=>{const x={...r};delete x.__groupRows;return x});}
   const ws=(sheet==="Interventii"||sheet==="Interventii Espressoare")?ofreshInterventionWorksheet(rows):XLSX.utils.json_to_sheet(rows);
   ofreshStyleWorksheetHeader(ws);
+  if(sheet==="Stoc"){
+    ws["!cols"]=[{wch:24},{wch:12},{wch:12},{wch:14},{wch:14},{wch:12},{wch:22},{wch:20},{wch:16},{wch:22},{wch:30}];
+  }
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Raport");XLSX.writeFile(wb,filename);
   if(sheet==="Interventii")msg("Export interventii generat. Fotografiile sunt disponibile prin linkurile Deschide poza, cu data/ora salvata.",true);
+  else if(sheet==="Interventii Espressoare")msg("Export interventii espressoare generat. Avizele si fotografiile sunt linkuri clicabile, ca in aplicatie.",true);
+  else if(sheet==="Stoc")msg("Export stoc generat cu intrari, consum si cantitatea disponibila.",true);
 }catch(e){msg(e?.message||"Export Excel necesita conexiune la internet.",false)}}
 async function exportInvoice(){try{
   await excelReady();
