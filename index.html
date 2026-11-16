@@ -3530,12 +3530,13 @@ async function saveIntervention(){
       await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
       pending.filterUpdated=true;
     }
-    // Confirmam interventia si revenim imediat la ecranul tehnicianului.
-    // Fotografiile continua in fundal, fara sa blocheze urmatorul aparat.
+    // Incarcam fotografiile inainte de inchiderea formularului. Astfel,
+    // utilizatorul vede confirmarea reala, iar la eroare poate reincerca fara
+    // sa creeze o a doua interventie.
     const photosToUpload=pending.photos.slice(pending.photoIndex);
     const photoMeta={interventionId:pending.interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:technician,data:v("data")};
     if(!Array.isArray(db.Interventii))db.Interventii=[];
-    db.Interventii.unshift(pending.rec);
+    if(!db.Interventii.some(x=>String(x["ID Interventie"]||"")===String(pending.interventionId)))db.Interventii.unshift(pending.rec);
     if(interventionType==="Schimbare filtru"){
       const stockLocal=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
       if(stockLocal)stockLocal.Consum=Number(stockLocal.Consum||stockLocal.consum||0)+1;
@@ -3543,14 +3544,22 @@ async function saveIntervention(){
       const filterLocal={"ID Filtru":oldLocal?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":clientId(selectedClient),"Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
       if(oldLocal)Object.assign(oldLocal,filterLocal);else (db.Filtre||(db.Filtre=[])).push(filterLocal);
     }
+    for(let i=0;i<photosToUpload.length;i++){
+      try{
+        msg(`Interventia este salvata. Se incarca fotografia ${i+1} din ${photosToUpload.length}...`,true);
+        await uploadInterventionPhotoFile(photosToUpload[i],photoMeta,pending.photoIndex);
+        pending.photoIndex++;
+      }catch(err){
+        console.error("[OFRESH TECH PHOTO]",err);
+        window.__ofreshPendingIntervention=pending;
+        throw new Error("Interventia este salvata, dar fotografia nu s-a incarcat: "+(err?.message||"eroare necunoscuta")+". Apasa din nou Salveaza pentru reincercare.");
+      }
+    }
     window.__ofreshInterventionPhotos=[];
     window.__ofreshPendingIntervention=null;
     closeModal();
     if(techSession)showTechnicianHome();
-    msg("Interventia a fost salvata. Poti continua cu urmatorul aparat.",true);
-    if(photosToUpload.length){
-      (async()=>{let uploaded=0;for(let i=0;i<photosToUpload.length;i++){try{await uploadInterventionPhotoFile(photosToUpload[i],photoMeta,i);uploaded++;}catch(err){console.error("[OFRESH TECH PHOTO]",err);msg("Interventia este salvata, dar o fotografie nu s-a putut incarca: "+(err?.message||"eroare"),false);break;}}console.info("[OFRESH TECH PERF]",{phase:"background-photo-upload-complete",uploaded,total:photosToUpload.length});})();
-    }
+    msg("Interventia si toate fotografiile au fost salvate.",true);
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
   }finally{
@@ -3769,11 +3778,46 @@ function ofreshPhotoUrls(row){
   return found;
 }
 function ofreshInterventionWorksheet(rows){
-  const prepared=(rows||[]).map(row=>{const clean={...row};const urls=ofreshPhotoUrls(clean);["Fotografii","Fotografie","Poze","Poza","Photos","Photo"].forEach(k=>delete clean[k]);return {clean,urls}});
-  const maxPhotos=Math.max(0,...prepared.map(x=>x.urls.length));
-  const output=prepared.map(x=>{const row={...x.clean};for(let i=0;i<maxPhotos;i++){const photo=x.urls[i];row["Fotografie "+(i+1)]=photo?(String(photo.categorie||"").toLowerCase().includes("aviz")?"Deschide aviz":"Deschide poza"):"";}return row});
+  // Export standardizat: o singura coloana pentru data/ora si fara campuri tehnice duplicate.
+  const get=(row,names)=>{
+    const keys=Object.keys(row||{});
+    for(const name of names){if(Object.prototype.hasOwnProperty.call(row,name)&&row[name]!==undefined&&row[name]!==null&&row[name]!=="")return row[name];}
+    for(const name of names){const found=keys.find(k=>String(k).trim().toLowerCase()===String(name).trim().toLowerCase());if(found&&row[found]!==undefined&&row[found]!==null&&row[found]!=="")return row[found];}
+    return "";
+  };
+  const prepared=(rows||[]).map(row=>({
+    row,
+    photos:ofreshPhotoUrls(row),
+    values:{
+      "Data/Ora interventie":get(row,["Data/Ora interventie","Data ora interventie","Data si ora interventie","Timestamp interventie","Data","data"]),
+      "Client":get(row,["Client","client","Nume client","Locatie","Locație"]),
+      "Aparat":get(row,["Aparat","aparat","Echipament","Model aparat","Tip aparat","Cod OFRESH"]),
+      "Tehnician":get(row,["Tehnician","tehnician","Nume tehnician"]),
+      "Tip interventie":get(row,["Tip interventie","Tip intervenție","tipInterventie"]),
+      "Operatiuni efectuate":get(row,["Operatiuni efectuate","Operatiuni","Operațiuni efectuate","operatiuniEfectuate"]),
+      "Urmatoarea interventie":get(row,["Urmatoarea interventie","Următoarea intervenție","Data urmatoarei interventii","Data următoarei intervenții"]),
+      "De facturat":get(row,["De facturat","deFacturat","Solicitare client","SolicitareClient"]),
+      "Motiv facturare":get(row,["Motiv facturare","Motiv facturării","motivFacturare"]),
+      "Categorie aparat":get(row,["Categorie aparat","Categorie","categorieAparat"])
+    }
+  }));
+  const maxPhotos=Math.max(0,...prepared.map(x=>x.photos.length));
+  const output=prepared.map(item=>{
+    const out={...item.values};
+    for(let i=0;i<maxPhotos;i++){
+      const photo=item.photos[i];
+      out["Fotografie "+(i+1)]=photo?(String(photo.categorie||"").toLowerCase().includes("aviz")?"Deschide aviz":"Deschide poza"):"";
+    }
+    return out;
+  });
   const ws=XLSX.utils.json_to_sheet(output);
-  if(maxPhotos){const headers=Object.keys(output[0]||{});prepared.forEach((item,r)=>item.urls.forEach((photo,i)=>{const c=headers.indexOf("Fotografie "+(i+1));if(c<0)return;const cell=ws[XLSX.utils.encode_cell({r:r+1,c})];if(cell)cell.l={Target:photo.url,Tooltip:String(photo.categorie||"").toLowerCase().includes("aviz")?"Deschide aviz in Google Drive":"Deschide poza in Google Drive"};}));}
+  const headers=Object.keys(output[0]||{});
+  prepared.forEach((item,r)=>item.photos.forEach((photo,i)=>{
+    const c=headers.indexOf("Fotografie "+(i+1));if(c<0)return;
+    const cell=ws[XLSX.utils.encode_cell({r:r+1,c})];
+    if(cell)cell.l={Target:photo.url,Tooltip:String(photo.categorie||"").toLowerCase().includes("aviz")?"Deschide aviz in Google Drive":"Deschide poza in Google Drive"};
+  }));
+  ws["!cols"]=[{wch:22},{wch:30},{wch:34},{wch:24},{wch:22},{wch:55},{wch:22},{wch:14},{wch:28},{wch:22},...Array(maxPhotos).fill({wch:20})];
   return ws;
 }
 async function exportSheet(sheet,filename){try{
