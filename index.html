@@ -4548,12 +4548,16 @@ async function requestPinRecoveryUi(){
   const error=document.getElementById('pinRecoveryError'), button=document.getElementById('pinRecoverySend');
   if(error)error.textContent='';
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(error)error.textContent='Introdu o adresa de e-mail valida.';return;}
-  if(button){button.disabled=true;button.textContent='Se trimite...';}
+  // Afisam imediat campurile de verificare; trimiterea e-mailului continua in fundal.
+  // Nu asteptam raspunsul MailApp pentru a permite utilizatorului sa introduca codul.
+  const verify=document.getElementById('pinRecoveryVerify');
+  if(verify)verify.style.display='block';
+  if(button){button.disabled=true;button.textContent='Se trimite e-mailul...';}
+  if(error)error.textContent='Solicitarea este in curs. Campurile de verificare sunt deja disponibile; introdu codul dupa ce primesti e-mailul.';
   try{
     const r=await apiPost({action:'requestPinRecovery',email:email});
     if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut procesa solicitarea.');
-    const verify=document.getElementById('pinRecoveryVerify');if(verify)verify.style.display='block';
-    if(error)error.textContent=r.message||'Daca exista un cont activ asociat acestei adrese, vei primi un cod de verificare pe e-mail.';
+    if(error)error.textContent=r.message||'Codul a fost trimis. Verifica e-mailul si introdu codul de verificare.';
   }catch(e){if(error)error.textContent=e.message||'Nu am putut trimite solicitarea.';}
   finally{if(button){button.disabled=false;button.textContent='Trimite din nou codul';}}
 }
