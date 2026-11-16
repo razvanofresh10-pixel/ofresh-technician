@@ -2721,7 +2721,10 @@ async function saveClient(old){
 
  // Scrierea in Google Sheets continua in fundal; interfata nu asteapta reincarcarea foilor.
  try{
-   await rawSave("Locatii",rec,"ID Locatie",old? id:"");
+   const saveResult=await rawSave("Locatii",rec,"ID Locatie",old? id:"");
+   if(saveResult && saveResult.clientMasterSync && saveResult.clientMasterSync.success===false){
+     msg("Locatia a fost salvata, dar sincronizarea in foaia Clienti a esuat: "+(saveResult.clientMasterSync.error||"eroare necunoscuta"),false);
+   }
  }catch(e){
    // Revenim la datele anterioare daca Google Sheets nu confirma scrierea.
    db.Locatii=previousRows;
@@ -3287,6 +3290,9 @@ function showSelectedMachineCorrection(){
 }
 
 function openTechMachineEdit(m){
+  // Pastram referinta exacta la randul primit de la Apps Script; identificarea
+  // prin Cod/Serie nu este suficienta pentru unele inregistrari istorice.
+  window.__ofreshTechMachineEditTarget = m;
   const known=["ION TS 400","ION TS 200","ION 905 Cold & Ambient & Hot","Oasis","Borg & Overström","Borg & Overstrom"];
   const current=machineType(m);
   const dynamic=(db.Aparate||[]).map(x=>machineType(x)).filter(Boolean);
@@ -3299,25 +3305,36 @@ function openTechMachineEdit(m){
       ${inputField("Serie aparat","corrSerie",m["Serie Aparat"]||m.Serie||m.serie||"")}
     </div>
     <div class="notice" style="margin-top:10px">Poti modifica Cod OFRESH, tipul si seria din aceeasi fereastra. Dupa salvare ramai pe aceeasi fisa a clientului.</div>
-  `,`Salveaza`,`saveTechMachineEdit(${JSON.stringify(machineId(m))})`);
+  `,`Salveaza`,`saveTechMachineEdit()`);
 }
 
-async function saveTechMachineEdit(id){
-  const m=(db.Aparate||[]).find(x=>String(machineId(x))===String(id));
-  if(!m)return;
-  const oldSerie=String(m["Serie Aparat"]||m.Serie||m.serie||"");
-  const oldId=String(m["ID Aparat"]||m.id||"");
-  const oldCode=String(m["Cod OFRESH"]||m.codOfresh||"");
+async function saveTechMachineEdit(){
+  const m=window.__ofreshTechMachineEditTarget || null;
+  if(!m)return msg("Nu am putut identifica aparatul. Inchide fereastra si selecteaza din nou aparatul.",false);
   const newType=v("corrTip");
   const newSerie=v("corrSerie").trim();
   const newCode=v("corrCod").trim();
   if(!newType||!newSerie)return msg("Completeaza tipul si seria aparatului.",false);
+  const readField=(obj,names)=>{
+    for(const name of names){if(obj[name]!==undefined&&obj[name]!==null&&String(obj[name]).trim()!=="")return String(obj[name]).trim();}
+    const norm=s=>String(s||"").toLocaleLowerCase("ro-RO").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
+    const wanted=new Set(names.map(norm));
+    const key=Object.keys(obj).find(k=>wanted.has(norm(k)));
+    return key?String(obj[key]||"").trim():"";
+  };
+  const oldSerie=readField(m,["Serie Aparat","Serie","serie","Serial","SerialNumber"]);
+  const oldId=readField(m,["ID Aparat","idAparat","id","ID"]);
+  const oldCode=readField(m,["Cod OFRESH","codOfresh","Cod OFRESH "]);
+  const sheetRow=Number(m.__row||m.__sheetRow||m.rowNumber||0);
   const rec={...m,"Cod OFRESH":newCode,"Tip aparat":newType,"Model":newType,"Serie Aparat":newSerie,"Serie":newSerie};
-  let idField="Serie Aparat", old=oldSerie;
-  if(oldId){idField="ID Aparat";old=oldId;}
+  let idField="", old="";
+  // __row este furnizat de sheetToObjects() si identifica fara ambiguitate
+  // randul original, inclusiv aparatele vechi fara ID Aparat.
+  if(Number.isInteger(sheetRow)&&sheetRow>=2){idField="__row";old=String(sheetRow);}
+  else if(oldId){idField="ID Aparat";old=oldId;}
   else if(oldSerie){idField="Serie Aparat";old=oldSerie;}
   else if(oldCode){idField="Cod OFRESH";old=oldCode;}
-  else return msg("Aparatul nu are un identificator pentru salvare.",false);
+  else return msg("Nu pot identifica in siguranta randul aparatului. Reincarca lista aparatelor si incearca din nou.",false);
   const btn=document.querySelector("#modalRoot .modalFooter .primaryButton");
   if(btn){btn.disabled=true;btn.textContent="Se salveaza...";}
   try{
@@ -3325,6 +3342,7 @@ async function saveTechMachineEdit(id){
     const idx=(db.Aparate||[]).findIndex(x=>x===m);
     if(idx>=0) db.Aparate[idx]={...db.Aparate[idx],...rec};
     saveCachedData();
+    window.__ofreshTechMachineEditTarget = null;
     // Inchidem doar fereastra de modificare a aparatului si revenim la
     // aceeasi fisa de interventie, cu acelasi client si acelasi aparat selectat.
     // Astfel tehnicianul poate continua imediat task-urile fara sa caute din nou.
