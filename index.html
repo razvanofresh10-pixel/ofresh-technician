@@ -592,6 +592,60 @@ html body.ofreshFilerMode #app{width:100%!important;max-width:none!important}
 @media(max-width:760px){#app .tableWrap:has(.commercialInterventionsTable){overflow-x:auto!important}#app .commercialInterventionsTable{min-width:980px!important}}
 </style>
 
+
+<style id="ofresh-recovery-polish-v22">
+#ofreshPinRecovery.techOverlay{
+  z-index:10000;
+  background:rgba(18,35,32,.48);
+  backdrop-filter:blur(5px);
+  -webkit-backdrop-filter:blur(5px);
+  padding:22px;
+}
+#ofreshPinRecovery .ofreshRecoveryCard{
+  box-sizing:border-box;
+  width:min(460px,100%);
+  max-height:calc(100vh - 44px);
+  overflow:auto;
+  position:relative;
+  padding:34px 34px 30px;
+  border:1px solid #e0ebe7;
+  border-radius:20px;
+  background:#fff;
+  box-shadow:0 24px 70px rgba(14,43,36,.22);
+  color:#20312e;
+}
+#ofreshPinRecovery .techLoginLogo{
+  color:#168c78;font-size:20px;font-weight:900;letter-spacing:.3px;
+}
+#ofreshPinRecovery .techLoginEyebrow{
+  margin-top:2px;color:#71827d;font-size:10px;letter-spacing:1.2px;font-weight:700;
+}
+#ofreshPinRecovery h2{margin:18px 0 8px;font-size:23px;line-height:1.2;color:#1d302c}
+#ofreshPinRecovery p.small{margin:0 0 18px;color:#73817d;font-size:11px;line-height:1.55}
+#ofreshPinRecovery .techLoginField{display:grid;gap:7px;margin:13px 0}
+#ofreshPinRecovery .techLoginField label,
+#ofreshPinRecovery .techLoginField>label{font-size:12px;font-weight:700;color:#344640}
+#ofreshPinRecovery .techLoginField input{
+  box-sizing:border-box;width:100%;height:44px;padding:0 13px;
+  border:1px solid #cfddd8;border-radius:10px;background:#fff;
+  color:#20312e;font-size:14px;outline:none;
+}
+#ofreshPinRecovery .techLoginField input:focus{
+  border-color:#20977f;box-shadow:0 0 0 3px rgba(32,151,127,.12)
+}
+#ofreshPinRecovery .techLoginButton{
+  width:100%;min-height:44px;margin-top:8px;border:0;border-radius:10px;
+  background:#20977f;color:#fff;font-size:13px;font-weight:800;cursor:pointer;
+}
+#ofreshPinRecovery .techLoginButton:disabled{opacity:.65;cursor:wait}
+#ofreshPinRecovery .techLoginClose{top:14px;right:14px;width:32px;height:32px;font-size:21px}
+#ofreshPinRecovery .techLoginError{
+  margin:10px 0;color:#a43d36;font-size:12px;line-height:1.45
+}
+@media(max-width:520px){
+  #ofreshPinRecovery .ofreshRecoveryCard{padding:28px 22px 24px;border-radius:16px}
+}
+</style>
 </head>
 <body>
 <aside class="sidebar">
@@ -654,7 +708,7 @@ function apiPost(params){
     let done=false;const timeout=setTimeout(()=>finish(new Error('Google Apps Script nu a raspuns. Incearca din nou.')),30000);
     function cleanup(){window.removeEventListener('message',onMessage);form.remove();iframe.remove();}
     function finish(error,data){if(done)return;done=true;clearTimeout(timeout);cleanup();if(error)reject(error);else resolve(data);}
-    function onMessage(event){if(event.source!==iframe.contentWindow)return;const d=event.data;if(!d||d.type!=='ofresh-api-response'||d.nonce!==nonce)return;finish(null,d.data);}
+    function onMessage(event){const d=event.data;if(!d||d.type!=='ofresh-api-response'||d.nonce!==nonce)return;finish(null,d.data);}
     window.addEventListener('message',onMessage);document.body.append(iframe,form);form.submit();
   });
 }
@@ -1200,7 +1254,7 @@ function openTechLogin(){
     <div id="techLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
     <div class="techLoginField"><label for="f_loginTelefon">Telefon</label><input id="f_loginTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon"></div>
     <div class="techLoginField"><label for="f_loginPin">PIN</label><input id="f_loginPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces"></div>
-    <div style="margin:8px 0 14px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
+    
     <button type="button" class="techLoginButton" id="techLoginSubmit">Intra in modul tehnician</button>
   </div>`;
   document.body.appendChild(screen);
@@ -2107,7 +2161,7 @@ function openCommercial(){
   modal("Acces Comercial",`<div>
     ${inputField("Email","commercialEmail","","email")}
     ${inputField("PIN","commercialPin","","password")}
-    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
+    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('comercial');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat PIN-ul</button></div>
   </div>`,`Intra in Comercial`,`loginCommercial()`);
   setTimeout(()=>document.getElementById("f_commercialEmail")?.focus(),50);
 }
@@ -3681,7 +3735,7 @@ function openFilerLogin(){
     <div id="filerLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
     <div class="techLoginField"><label for="f_filerTelefon">Telefon</label><input id="f_filerTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon" required></div>
     <div class="techLoginField"><label for="f_filerPin">PIN</label><input id="f_filerPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces" required></div>
-    <div style="margin:8px 0 14px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
+    
     <button type="submit" class="techLoginButton" id="filerLoginSubmit">Intra in modul Filler</button>
   </form>`;
   document.body.classList.add('techLoginActive');
@@ -4456,12 +4510,14 @@ function showAccessPage(){
     </section>`;
 }
 
-function openPinRecovery(){
+function openPinRecovery(returnRole){
+  window.__ofreshPinRecoveryReturnRole = (String(returnRole || window.__ofreshPinRecoveryReturnRole || 'admin').toLowerCase()==='comercial') ? 'comercial' : 'admin';
+  closeModal();
   document.getElementById('ofreshPinRecovery')?.remove();
   const overlay=document.createElement('div');
   overlay.id='ofreshPinRecovery';
   overlay.className='techOverlay';
-  overlay.innerHTML=`<section class="techLoginCard" role="dialog" aria-modal="true" aria-label="Recuperare PIN OFRESH">
+  overlay.innerHTML=`<section class="techLoginCard ofreshRecoveryCard" role="dialog" aria-modal="true" aria-label="Recuperare parola OFRESH">
     <button type="button" class="techLoginClose" aria-label="Inchide" onclick="closePinRecovery()">×</button>
     <div class="techLoginLogo">OFRESH</div><div class="techLoginEyebrow">OFRESH ONLINE</div>
     <h2>Recuperare PIN</h2>
@@ -4479,7 +4535,14 @@ function openPinRecovery(){
   document.body.appendChild(overlay);
   setTimeout(()=>document.getElementById('pinRecoveryEmail')?.focus(),50);
 }
-function closePinRecovery(){document.getElementById('ofreshPinRecovery')?.remove();}
+window.openPinRecovery = openPinRecovery;
+function closePinRecovery(){
+  document.getElementById('ofreshPinRecovery')?.remove();
+  const returnRole = window.__ofreshPinRecoveryReturnRole || 'admin';
+  window.__ofreshPinRecoveryReturnRole = '';
+  if(returnRole === 'comercial') openCommercial();
+  else openAdminLogin();
+}
 async function requestPinRecoveryUi(){
   const email=String(document.getElementById('pinRecoveryEmail')?.value||'').trim().toLowerCase();
   const error=document.getElementById('pinRecoveryError'), button=document.getElementById('pinRecoverySend');
@@ -4517,7 +4580,7 @@ function openAdminLogin(){
   modal("Acces Administrator",`<div>
     ${inputField("Adresa de e-mail","adminTelefon","","email")}
     ${inputField("Parola (PIN-ul existent)","adminPin","","password")}
-    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="openPinRecovery()">Am uitat PIN-ul</button></div>
+    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('admin');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat PIN-ul</button></div>
   </div>`,`Intra in Administrator`,`loginAdministrator()`);
   setTimeout(()=>{
     const submit=ev=>{
