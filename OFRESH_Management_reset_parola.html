@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OFRESH - Management & Service</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f3f6f5;color:#172522}.sidebar{position:fixed;inset:0 auto 0 0;width:250px;background:linear-gradient(180deg,#242927,#1b1f1d);color:#fff;padding:24px 14px;overflow:auto}.brand{padding:4px 18px 34px}.logo{font-size:31px;font-weight:900;letter-spacing:.3px}.subtitle{margin-top:3px;color:#aebbb7;font-size:13px}.navLabel{font-size:10px;letter-spacing:1.2px;color:#84918e;margin:0 14px 9px}.nav button{display:flex;align-items:center;gap:12px;width:100%;border:0;background:transparent;color:#dce5e2;text-align:left;padding:12px 14px;margin:3px 0;border-radius:10px;font-size:14px;cursor:pointer}.nav button:hover,.nav button.active{background:#287d69;color:#fff}.navIcon{width:20px;text-align:center;font-weight:800}.sidebarBottom{margin-top:26px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)}.userCard{margin:12px 5px 0;padding:11px;border-radius:11px;background:rgba(255,255,255,.05);display:flex;align-items:center;gap:9px}.avatar,.miniAvatar{width:31px;height:31px;border-radius:50%;background:#20977f;color:#fff;display:grid;place-items:center;font-weight:800}.userInfo{min-width:0;flex:1}.userInfo strong,.userInfo span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.userInfo strong{font-size:11px}.userInfo span{font-size:9px;color:#9eaaa7;margin-top:3px}.logoutButton{border:1px solid #53605d;background:transparent;color:#dce5e2;border-radius:7px;padding:6px 7px;font-size:10px;cursor:pointer}.main{margin-left:250px;min-height:100vh}.topbar{background:#fff;border-bottom:1px solid #dfe7e4;padding:18px 34px;display:flex;justify-content:space-between;align-items:center;gap:20px}.breadcrumb{font-size:11px;color:#87938f;margin-bottom:4px}.topbar h1{margin:0;font-size:27px}.topActions{display:flex;align-items:center;gap:12px}.globalSearch{display:flex;align-items:center;gap:8px;border:1px solid #d3dfdb;background:#fff;border-radius:10px;padding:0 11px;width:310px}.globalSearch input{border:0;outline:0;padding:10px 0;width:100%;font-size:13px}.wrap{padding:28px 30px;max-width:1600px;margin:auto}.pageHero,.welcome{background:linear-gradient(135deg,#e9f7f2,#fff);border:1px solid #cfe6de;border-radius:16px;padding:25px 28px;display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:18px}.eyebrow{font-size:10px;letter-spacing:1.2px;font-weight:800;color:#208f77;margin-bottom:7px}.pageHero h2,.welcome h2{margin:0 0 7px;font-size:24px}.pageHero p,.welcome p{margin:0;color:#6e7d79}.quickActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.primaryButton,.secondaryButton,.dangerButton{border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px}.primaryButton{background:#20977f;color:#fff;border:0}.primaryButton:hover{background:#1b856f}.secondaryButton{background:#fff;border:1px solid #ccd8d5;color:#20312e}.secondaryButton:hover{color:#fff;background:#20977f;border-color:#20977f}.dangerButton{background:#fff;border:1px solid #e1b8b2;color:#a32920}.statsGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}.statCard,.reportCard{background:#fff;border:1px solid #dce5e2;border-radius:14px;padding:18px}.statTop{display:flex;justify-content:space-between;color:#6e7d79;font-size:12px}.statIcon{color:#20977f}.statValue{font-size:31px;font-weight:800;color:#20977f;margin:12px 0 2px}.statNote{font-size:11px;color:#8a9692}.alertCard{border-color:#e7cfa0}.contentGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}.panel{background:#fff;border:1px solid #dce5e2;border-radius:15px;padding:20px;margin-bottom:18px}.panelHeader{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:15px}.panelHeader h3{margin:0 0 4px}.panelHeader p{margin:0;color:#84918e;font-size:12px}.countBadge{background:#eef5f2;color:#287d69;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}.alertRow{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:10px;width:100%;border:1px solid #e2e8e6;background:#fff;border-radius:10px;padding:11px;margin-bottom:8px;text-align:left;cursor:pointer}.alertRow:hover{background:#f8fbfa}.alertDot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:800}.alertDot.warning{background:#fff0cf;color:#946700}.alertDot.info{background:#e6f1f8;color:#326c8e}.alertRow strong,.alertRow small{display:block}.alertRow small{color:#788681;margin-top:3px;font-size:11px}.alertRow>b{font-size:11px;color:#287d69}.activity{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #edf1ef}.activity:last-child{border-bottom:0}.activityTime{width:25px;height:25px;border-radius:50%;background:#eef5f2;color:#287d69;display:grid;place-items:center;font-size:10px;font-weight:800}.activity strong,.activity small{display:block}.activity strong{font-size:12px}.activity small{font-size:11px;color:#7c8985;margin-top:2px}.quickGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.quickGrid button{border:1px solid #dce5e2;background:#fff;border-radius:11px;padding:14px;text-align:left;cursor:pointer}.quickGrid button:hover{border-color:#20977f;transform:translateY(-1px)}.quickGrid span{display:block;color:#20977f;font-weight:800;margin-bottom:9px}.quickGrid strong,.quickGrid small{display:block}.quickGrid strong{font-size:13px}.quickGrid small{font-size:10px;color:#84918e;margin-top:3px}.toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:14px}.search{padding:10px 11px;border:1px solid #ccd8d5;border-radius:9px;width:300px;font-size:13px;outline:0}.tableWrap{overflow:auto}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:10px;border-bottom:1px solid #e2e8e6;text-align:left;vertical-align:top;white-space:nowrap}.table th{background:#eef5f2;font-size:11px}.table td{font-size:12px}.table tr:hover td{background:#fbfcfc}.emptyState,.empty{text-align:center;padding:34px;color:#7a8783;border:1px dashed #ccd8d5;border-radius:12px}.locationGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.locationCard{background:#fff;border:1px solid #dce5e2;border-radius:14px;padding:18px}.locationCardTop{display:flex;justify-content:space-between}.locationIcon{width:35px;height:35px;border-radius:9px;background:#e8f7f1;color:#20977f;display:grid;place-items:center;font-weight:800}.statusDot{font-size:10px;color:#176a58;background:#e8f7f1;border-radius:999px;padding:5px 8px}.locationCard h3{margin:15px 0 7px}.locationCard p{margin:3px 0;color:#73817d;font-size:12px}.locationFooter{margin-top:15px;padding-top:13px;border-top:1px solid #edf1ef;display:flex;justify-content:space-between;align-items:center}.locationFooter strong{font-size:18px;color:#20977f}.locationFooter span{display:block;font-size:10px;color:#84918e}.badge,.billingBadge{display:inline-block;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:800;background:#e8f7f1;color:#176a58}.warningBadge,.warn{background:#fff0cf;color:#946700}.billingNo{background:#eef1f0;color:#66736f}.formGrid,.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.field{display:block}.field.wide{grid-column:1/-1}.field>span,.field label{display:block;font-weight:700;font-size:12px;margin-bottom:6px}.field input,.field select,.field textarea{width:100%;padding:10px 11px;border:1px solid #cbd8d5;border-radius:8px;font-size:13px;background:#fff;outline:0}.field textarea{min-height:75px;resize:vertical}.checkList{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.checkRow{display:flex!important;align-items:center;gap:8px;border:1px solid #dce5e2;border-radius:8px;padding:8px;background:#fff;font-weight:400!important}.checkRow input{width:auto}.modalBackdrop{position:fixed;inset:0;background:rgba(18,28,25,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}.modal{background:#fff;border-radius:16px;width:min(900px,100%);max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}.modalHeader{display:flex;justify-content:space-between;align-items:center;padding:17px 21px;border-bottom:1px solid #e2e8e6}.modalHeader h2{margin:0;font-size:18px}.modalBrand{display:flex;align-items:center;gap:12px}.modalMark{font-weight:900;color:#20977f;font-size:20px}.closeButton{border:0;background:transparent;font-size:25px;cursor:pointer;color:#56635f}.modalBody{padding:21px}.modalFooter{display:flex;justify-content:flex-end;gap:8px;padding:15px 21px;border-top:1px solid #e2e8e6}.hint{font-size:11px;color:#71807d;margin-top:5px}.reportGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.reportCard span{display:block;font-size:11px;color:#7a8783}.reportCard strong{display:block;font-size:28px;color:#20977f;margin:8px 0}.reportCard small{font-size:10px;color:#8a9692}.reportList{display:grid;gap:9px;color:#65736f;font-size:12px}.notice{padding:12px;border-radius:10px;background:#e8f7f1;color:#176a58;font-size:12px}.hidden{display:none!important}.right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.message{position:fixed;right:22px;bottom:22px;z-index:80;display:none;padding:12px 15px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);font-size:12px;font-weight:700}.message.ok{display:block;background:#e8f7f1;color:#176a58}.message.err{display:block;background:#fdecea;color:#a32920}.importInfo{padding:10px;background:#f6faf8;border:1px solid #dce8e3;border-radius:9px;font-size:11px;color:#667571;margin-bottom:12px}.small{font-size:11px;color:#71807d}.loading{padding:45px;text-align:center;color:#71807d}.dangerText{color:#a32920}.twoCols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1050px){.sidebar{position:static;width:100%;height:auto}.main{margin-left:0}.statsGrid,.reportGrid{grid-template-columns:repeat(2,1fr)}.locationGrid{grid-template-columns:repeat(2,1fr)}.quickGrid{grid-template-columns:repeat(2,1fr)}.contentGrid,.twoCols{grid-template-columns:1fr}}
+@media(max-width:650px){.topbar,.pageHero,.welcome{align-items:flex-start;flex-direction:column}.globalSearch{width:100%}.topActions{width:100%}.wrap{padding:18px}.statsGrid,.reportGrid,.locationGrid,.formGrid,.grid,.quickGrid,.checkList{grid-template-columns:1fr}.search{width:100%}.toolbar{align-items:stretch;flex-direction:column}.main{min-width:0}}
+
+.techTopButton{border:1px solid #20977f;background:#fff;color:#176a58;border-radius:9px;padding:9px 12px;font-weight:800;cursor:pointer;font-size:12px}
+.techTopButton:hover{background:#20977f;color:#fff}
+.techOverlay{position:fixed;inset:0;background:linear-gradient(135deg,#eef8f5,#f7faf9);z-index:200;display:grid;place-items:center;padding:20px}
+.techLogin{width:min(430px,100%);background:#fff;border:1px solid #dce5e2;border-radius:20px;padding:28px;box-shadow:0 20px 70px rgba(0,0,0,.12)}
+.techLogin h2{margin:8px 0}.techLogin p{color:#71807d;font-size:13px}.techLogo{font-size:25px;font-weight:900;color:#20977f}
+.techHome{display:grid;gap:14px}.techCard{background:#fff;border:1px solid #dce5e2;border-radius:14px;padding:16px}.techCard h3{margin:0 0 6px}.techCard p{margin:4px 0;color:#71807d;font-size:12px}
+.navButtons{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.navButtons a{display:inline-block;text-decoration:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:800;border:1px solid #cbd8d5;background:#fff;color:#20312e}
+.navButtons a.primaryNav{background:#20977f;color:#fff;border-color:#20977f}
+@media(max-width:700px){.topbar{padding:14px 16px}.topbar h1{font-size:21px}.globalSearch{display:none}.topActions{gap:6px}.wrap{padding:16px 12px}.statsGrid,.reportGrid,.locationGrid,.contentGrid,.quickGrid,.formGrid,.grid{grid-template-columns:1fr}.sidebar{padding:14px}.nav{display:grid;grid-template-columns:repeat(2,1fr);gap:4px}.nav button{margin:0}.pageHero,.welcome{padding:18px;align-items:flex-start;flex-direction:column}.table th,.table td{font-size:11px}.techTopButton{padding:8px}.modal{max-height:95vh}}
+</style>
+<link rel="manifest" href="ofresh-manifest.json"><meta name="theme-color" content="#20977f"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="OFRESH Service">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><div class="logo">OFRESH</div><div class="subtitle">Management &amp; Service</div></div>
+  <div class="navLabel">MENIU PRINCIPAL</div><nav class="nav" id="nav"></nav>
+  <div class="sidebarBottom">
+    <button class="navItem" id="settingsNav" onclick="go('setari')"><span class="navIcon">⚙</span><span>Setari</span></button>
+    <div class="userCard"><div class="avatar">O</div><div class="userInfo"><strong>OFRESH</strong><span>Administrator</span></div><button class="logoutButton" onclick="clearSearch()">Reset</button></div>
+  </div>
+</aside>
+<main class="main">
+<header class="topbar"><div><div class="breadcrumb">OFRESH / <span id="crumb">Dashboard</span></div><h1 id="pageTitle">Dashboard</h1></div><div class="topActions"><button class="techTopButton" onclick="openTechLogin()">📱 Mod Tehnician</button><div class="globalSearch"><span>⌕</span><input id="globalSearch" placeholder="Cauta aparat, client..." oninput="setSearch(this.value)"></div><div class="miniAvatar">O</div></div></header>
+<div class="wrap"><div id="app"><div class="loading">Se incarca OFRESH...</div></div></div>
+</main><div id="modalRoot"></div><div id="message" class="message"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+ const SUPABASE_URL="https://zlbgxeaasctnfmjsrvql.supabase.co";
+ const SUPABASE_KEY="sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb";
+ let supabaseClient=null;
+ try{ if(window.supabase) supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY); }catch(e){}
+ async function initPasswordRecovery(){
+   const hash=location.hash.replace(/^#/,"");
+   if(!hash)return;
+   const params=new URLSearchParams(hash);
+   const error=params.get("error_description")||params.get("error");
+   const type=params.get("type");
+   const access=params.get("access_token");
+   const refresh=params.get("refresh_token");
+   if(error){
+     const msgText=decodeURIComponent(error.replace(/\+/g," "));
+     document.getElementById("app").innerHTML='<div class="panel"><div class="empty"><strong>Linkul de resetare nu mai este valabil.</strong><br><br>'+esc(msgText)+"</div></div>";
+     return;
+   }
+   if(type==="recovery" || (access&&refresh)){
+     if(!supabaseClient){document.getElementById("app").innerHTML='<div class="panel"><div class="empty">Nu pot porni modul de resetare Supabase.</div></div>';return;}
+     try{
+       const r=await supabaseClient.auth.setSession({access_token:access||"",refresh_token:refresh||""});
+       if(r.error)throw r.error;
+       document.getElementById("app").innerHTML=`<section class="panel" style="max-width:520px;margin:50px auto">
+         <div class="eyebrow">OFRESH MANAGEMENT</div><h2>Seteaza parola noua</h2>
+         <p class="small">Introdu parola noua pentru contul tau OFRESH.</p>
+         <div class="grid" style="margin-top:18px">
+           <label class="field"><span>Parola noua</span><input id="newPassword" type="password" autocomplete="new-password" placeholder="Minim 6 caractere"></label>
+           <label class="field"><span>Confirma parola</span><input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Repeta parola"></label>
+         </div>
+         <div id="passwordError" class="hint dangerText" style="margin-top:10px"></div>
+         <div class="quickActions" style="margin-top:18px"><button class="primaryButton" onclick="finishPasswordRecovery()">Schimba parola</button></div>
+       </section>`;
+     }catch(e){
+       document.getElementById("app").innerHTML='<div class="panel"><div class="empty"><strong>Nu pot valida linkul de resetare.</strong><br><br>'+esc(e.message||e)+"</div></div>";
+     }
+   }
+ }
+ async function finishPasswordRecovery(){
+   const p=document.getElementById("newPassword")?.value||"";
+   const c=document.getElementById("confirmPassword")?.value||"";
+   const er=document.getElementById("passwordError");
+   if(er)er.textContent="";
+   if(p.length<6){if(er)er.textContent="Parola trebuie sa aiba cel putin 6 caractere.";return;}
+   if(p!==c){if(er)er.textContent="Parolele nu coincid.";return;}
+   try{
+     const r=await supabaseClient.auth.updateUser({password:p});
+     if(r.error)throw r.error;
+     document.getElementById("app").innerHTML='<section class="panel" style="max-width:520px;margin:50px auto"><div class="notice"><strong>Parola a fost schimbata cu succes.</strong><br><br>Poti inchide aceasta pagina si te poti conecta in OFRESH Management cu noua parola.</div></section>';
+     history.replaceState(null,"",location.pathname+location.search);
+   }catch(e){if(er)er.textContent=e.message||String(e);}
+ }
+
+ const API_URL="https://script.google.com/macros/s/AKfycbzYEWqvDMYS3sFb8Q9Sd1yd24ubRBm4z5W9Ukz8DX1eqiZ2V0TXAoilqag6iZMMKH00/exec";
+const pages={dashboard:"Dashboard",clienti:"Clienti",aparate:"Aparate",interventii:"Interventii",filtre:"Filtre",stoc:"Stoc",tehnicieni:"Tehnicieni",rapoarte:"Rapoarte",setari:"Setari"};
+const icons={dashboard:"D",clienti:"C",aparate:"A",interventii:"I",filtre:"F",stoc:"S",tehnicieni:"T",rapoarte:"R",setari:"⚙"};
+const interventionTypes=["Igienizare","Schimbare filtru","Inlocuire piese","Verificare aparat / testare","Mentenanta 6 luni","Mentenanta 1 an","Interventie la cerere client","Alta interventie"];
+const filterTypes=["Brita","Oasis","BWT","FLUUX VH IEN 6000","Alt tip de filtru"];
+const operations=["Igienizare aparat","Curatare rezervor","Curatare tava / zona dozare","Schimbare filtru","Verificare etanseitate","Verificare alimentare apa","Verificare functionare aparat","Testare apa / dozare","Inlocuire piesa","Reglaj / calibrare","Resetare / verificare sistem","Alta operatiune"];
+let db={Locatii:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[]};let current="dashboard",searchTerm="";
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
+function uid(p){return p+"-"+Date.now()+"-"+Math.random().toString(36).slice(2,7).toUpperCase()}
+function setSearch(v){searchTerm=v||"";render()}
+function clearSearch(){searchTerm="";document.getElementById("globalSearch").value="";render()}
+function msg(t,ok=true){const e=document.getElementById("message");e.textContent=t;e.className="message "+(ok?"ok":"err");setTimeout(()=>{e.className="message"},3600)}
+function api(params){return new Promise((resolve,reject)=>{const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};s.remove()}const to=setTimeout(()=>{if(done)return;done=true;clean();reject(new Error("Google Sheet nu a raspuns. Verifica deployment-ul Web app."))},15000);window[cb]=d=>{if(done)return;done=true;clean();resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
+async function load(){try{const data=await api({action:"read"});db={Locatii:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...data};render()}catch(e){document.getElementById("app").innerHTML='<div class="panel"><div class="empty">Nu pot incarca datele din Google Sheet.<br><br>'+esc(e.message)+'</div></div>';msg(e.message,false)}}
+function nav(){document.getElementById("nav").innerHTML=Object.entries(pages).filter(([k])=>k!=="setari").map(([k,v])=>`<button class="${k===current?"active":""}" onclick="go('${k}')"><span class="navIcon">${icons[k]}</span><span>${v}</span></button>`).join("");document.getElementById("settingsNav").className="navItem "+(current==="setari"?"active":"")}
+function go(p){current=p;document.getElementById("pageTitle").textContent=pages[p];document.getElementById("crumb").textContent=pages[p];render()}
+
+const TECH_KEY="ofresh_tehnicieni";
+let techSession=null;
+function getTechnicians(){
+  const remote=Array.isArray(db.Tehnicieni)?db.Tehnicieni:[];
+  let local=[];
+  try{local=JSON.parse(localStorage.getItem(TECH_KEY)||"[]");if(!Array.isArray(local))local=[]}catch(e){}
+  const all=[...remote,...local];
+  const map=new Map();
+  all.forEach(x=>{const id=technicianId(x)||String(technicianPhone(x));if(id)map.set(id,x)});
+  return [...map.values()];
+}
+function saveTechnicians(a){localStorage.setItem(TECH_KEY,JSON.stringify(a));}
+async function saveTechnicianCentral(rec,oldId){
+  await rawSave("Tehnicieni",rec,"ID Tehnician",oldId||"");
+}
+function technicianId(x){return x.id||x["ID Tehnician"]||""}
+function technicianName(x){return x.nume||x["Nume tehnician"]||x.Nume||""}
+function technicianPhone(x){return x.telefon||x.Telefon||""}
+function technicianPin(x){return String(x.pin||x.PIN||"")}
+function techniciansPage(){
+  const arr=getTechnicians();
+  document.getElementById("app").innerHTML=
+    `<div class="page">${pageHero("ECHIPA SERVICE","Tehnicieni","Adauga si gestioneaza tehnicienii care efectueaza interventiile.",
+      `<button class="primaryButton" onclick="openTechnician()">+ Adauga tehnician</button>`)}
+      <section class="panel">
+        <div class="toolbar"><strong>${arr.length} tehnicieni</strong><span class="notice">Tehnicienii activi se pot autentifica de pe telefon cu numarul si PIN-ul lor.</span></div>
+        ${arr.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Nume</th><th>Telefon</th><th>Email</th><th>Status</th><th>Observatii</th><th>Actiuni</th></tr></thead><tbody>
+        ${arr.map(x=>`<tr><td><strong>${esc(technicianName(x))}</strong></td><td>${esc(technicianPhone(x))}</td><td>${esc(x.email||x.Email||"")}</td><td><span class="statusBadge">${esc(x.status||x.Status||"Activ")}</span></td><td>${esc(x.observatii||x.Observatii||"")}</td><td><div class="miniActions"><button onclick='openTechnician(${JSON.stringify(x)})'>Modifica</button><button onclick='deleteTechnician("${esc(technicianId(x))}")'>Sterge</button></div></td></tr>`).join("")}
+        </tbody></table></div>`:'<div class="empty">Nu exista tehnicieni. Adauga primul tehnician.</div>'}
+      </section>
+    </div>`;
+}
+function openTechLogin(){
+  const techs=getTechnicians().filter(x=>(x.status||x.Status||"Activ")==="Activ");
+  modal("Acces tehnician",`<div class="techLogin" style="box-shadow:none;border:0;padding:0">
+    <div class="techLogo">OFRESH</div><h2>Acces echipa service</h2>
+    <p>Introdu numarul de telefon si PIN-ul primit de la OFRESH.</p>
+    ${inputField("Telefon","loginTelefon","","tel")}
+    ${inputField("PIN","loginPin","","password")}
+    <div class="hint">${techs.length?techs.length+" tehnicieni activi disponibili.":"Nu exista tehnicieni activi. Adauga-i din modul Administrator."}</div>
+  </div>`,`Intra in modul tehnician`,`loginTechnician()`)}
+function loginTechnician(){
+  const phone=v("loginTelefon").replace(/\s+/g,"");
+  const pin=v("loginPin");
+  const t=getTechnicians().find(x=>technicianPhone(x).replace(/\s+/g,"")===phone && technicianPin(x)===pin && (x.status||x.Status||"Activ")==="Activ");
+  if(!t)return msg("Telefon sau PIN incorect.",false);
+  techSession={id:technicianId(t),name:technicianName(t),phone:technicianPhone(t)};
+  closeModal();showTechnicianHome();
+}
+function logoutTechnician(){techSession=null;openTechLogin()}
+function locationNavLinks(l){
+  const address=[l.Adresa||l.adresa||"",l.Oras||l.oras||"",l.Judet||l.judet||""].filter(Boolean).join(", ");
+  const lat=l.Latitudine||l.latitudine||l.Lat||l.lat;
+  const lon=l.Longitudine||l.longitudine||l.Lon||l.lon||l.lng;
+  const waze=lat&&lon?`https://www.waze.com/ul?ll=${encodeURIComponent(lat+","+lon)}&navigate=yes`:`https://www.waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
+  const maps=lat&&lon?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat+","+lon)}`:`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+  return `<div class="navButtons"><a class="primaryNav" target="_blank" rel="noopener" href="${waze}">📍 Waze</a><a target="_blank" rel="noopener" href="${maps}">🗺 Google Maps</a></div>`;
+}
+function showTechnicianHome(){
+  const t=techSession;if(!t)return openTechLogin();
+  const my=(db.Interventii||[]).filter(i=>String(i.Tehnician||i.tehnician||"").toLowerCase()===String(t.name).toLowerCase());
+  const today=new Date().toISOString().slice(0,10);
+  const upcoming=my.filter(i=>(i.Data||i.data||"")>=today).slice(0,12);
+  document.getElementById("app").innerHTML=`<div class="techHome">
+    <section class="welcome"><div><div class="eyebrow">MOD TEHNICIAN</div><h2>Buna, ${esc(t.name)}!</h2><p>Aici ai doar informatiile necesare pentru lucrul din teren.</p></div><button class="secondaryButton" onclick="logoutTechnician()">Iesire</button></section>
+    <div class="quickGrid"><button onclick="openInterventionForTechnician()"><span>🔧 INTERVENTIE</span><strong>Inregistreaza interventie</strong><small>Completeaza lucrarea din teren</small></button><button onclick="goTechLocations()"><span>📍 CLIENTI</span><strong>Gaseste un client</strong><small>Deschide Waze sau Google Maps</small></button></div>
+    <section class="panel"><div class="panelHeader"><div><h3>Interventiile mele</h3><p>${upcoming.length} interventii afisate</p></div></div>
+    ${upcoming.length?upcoming.map(i=>{const loc=(db.Locatii||[]).find(l=>clientName(l)===(i.Client||i.Locatie||""));return `<div class="techCard"><h3>${esc(i.Client||i.Locatie||"Client")}</h3><p><strong>${esc(i.Aparat||i["ID Aparat"]||"")}</strong> · ${esc(i.Data||i.data||"")} · ${esc(i["Tip interventie"]||i.tipInterventie||"")}</p>${loc?locationNavLinks(loc):locationNavLinks({Adresa:i.Client||i.Locatie||""})}<div class="navButtons"><a class="primaryNav" href="#" onclick='openIntervention(${JSON.stringify(i)});return false'>Deschide interventia</a></div></div>`}).join(""):'<div class="empty">Nu ai interventii alocate in lista.</div>'}
+    </section>
+  </div>`;
+}
+function goTechLocations(){
+  const rows=db.Locatii||[];
+  document.getElementById("app").innerHTML=`<section class="panel"><div class="panelHeader"><div><h3>Clienti OFRESH</h3><p>Alege clientul si porneste navigarea.</p></div><button class="secondaryButton" onclick="showTechnicianHome()">Inapoi</button></div>
+  <div class="locationGrid">${rows.map(l=>`<div class="locationCard"><h3>${esc(clientName(l))}</h3><p>${esc(l.Adresa||"Adresa nespecificata")}</p><p>${esc(l.Oras||"")} ${esc(l.Judet||"")}</p>${locationNavLinks(l)}</div>`).join("")||'<div class="empty">Nu exista clienti.</div>'}</div></section>`;
+}
+function openInterventionForTechnician(){
+  openIntervention();
+  setTimeout(()=>{const e=document.getElementById("f_tehnician");if(e){e.value=techSession?.name||"";e.disabled=true}},50);
+}
+function openTechnician(old={},fromIntervention=false){technicianReturnToIntervention=!!fromIntervention;
+  const edit=!!technicianId(old);
+  modal(edit?"Modifica tehnician":"Adauga tehnician",
+    `<div class="grid">
+      ${inputField("Nume si prenume","tnume",technicianName(old))}
+      ${inputField("Telefon","ttelefon",old.telefon||"","tel")}${inputField("PIN acces","tpin",technicianPin(old),"password")}
+      ${inputField("Email","temail",old.email||"","email")}
+      ${selectField("Status","tstatus",old.status||"Activ",["Activ","Inactiv"])}
+      ${inputField("Observatii","tobs",old.observatii||"","text",true)}
+    </div>`,
+    edit?"Salveaza modificarile":"Salveaza tehnicianul",
+    `saveTechnician(${JSON.stringify(old)})`
+  );
+}
+async function saveTechnician(old={}){
+  const name=v("tnume");
+  if(!name)return msg("Completeaza numele tehnicianului.",false);
+  const rec={"ID Tehnician":technicianId(old)||uid("TECH"),"Nume":name,"Telefon":v("ttelefon"),"PIN":v("tpin"),"Email":v("temail"),"Status":v("tstatus")||"Activ","Observatii":v("tobs"),"Data creare":old["Data creare"]||new Date().toISOString().slice(0,10)};
+  try{
+    // Tehnicienii existenti doar local nu exista inca in Google Sheet. In acest caz facem ADD, nu UPDATE.
+    const remote=Array.isArray(db.Tehnicieni)?db.Tehnicieni:[];
+    const existsRemote=remote.some(x=>String(technicianId(x)).trim()===String(rec["ID Tehnician"]).trim());
+    await saveTechnicianCentral(rec,existsRemote?rec["ID Tehnician"]:"");
+    const arr=getTechnicians().filter(x=>technicianId(x)!==rec["ID Tehnician"]); arr.unshift(rec); saveTechnicians(arr);
+    closeModal();msg("Tehnician salvat in Google Sheet."); await load();
+    if(technicianReturnToIntervention){ technicianReturnToIntervention=false; openIntervention(); }
+  }catch(e){
+    const arr=getTechnicians().filter(x=>technicianId(x)!==rec["ID Tehnician"]); arr.unshift(rec); saveTechnicians(arr);
+    closeModal();msg("Eroare la sincronizarea cu Google Sheet: "+(e.message||e),false);
+    if(technicianReturnToIntervention){ technicianReturnToIntervention=false; openIntervention(); } else techniciansPage();
+  }
+}
+async function deleteTechnician(id){
+  if(!id||!confirm("Sigur vrei sa stergi acest tehnician?"))return;
+  try{await api({action:"delete",sheet:"Tehnicieni",idField:"ID Tehnician",idValue:id});}catch(e){}
+  saveTechnicians(getTechnicians().filter(x=>technicianId(x)!==id));
+  msg("Tehnician sters.");await load();techniciansPage();
+}
+function render(){if(techSession){showTechnicianHome();return}nav();({dashboard:dashboard,clienti:clientsPage,aparate:machinesPage,interventii:interventionsPage,filtre:filtersPage,stoc:stockPage,tehnicieni:techniciansPage,rapoarte:reportsPage,setari:settingsPage}[current]||dashboard)()}
+function matches(r){return !searchTerm||Object.values(r||{}).join(" ").toLowerCase().includes(searchTerm.toLowerCase())}
+function machineId(m){return m["ID Aparat"]||m.id||""}
+function machineCode(m){return m["Cod OFRESH"]||m.codOfresh||m.Serie||m.serie||m.Model||m.model||""}
+function machineClient(m){return m.Client||m.client||m.Locatie||m.locatie||m.numeLocatie||m["Nume locatie"]||clientNameById(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie)||""}
+function machineFloor(m){return m.Etaj||m.etaj||m.Floor||m.floor||m.Zona||m.zona||""}
+function clientId(l){return l["ID Client"]||l["ID Locatie"]||l.id||""}
+function clientName(l){return l.Client||l.client||l["Nume client"]||l["Nume locatie"]||l.nume||l.locatie||""}
+function clientNameById(id){const l=(db.Locatii||[]).find(x=>String(clientId(x))===String(id||""));return l?clientName(l):""}
+function machineCount(l){const id=clientId(l),name=clientName(l);return (db.Aparate||[]).filter(m=>String(m["ID Client"]||m["ID Locatie"]||"")===String(id)||machineClient(m)===name).length}
+function soonDate(d){if(!d)return false;const x=new Date(d);const now=new Date();const limit=new Date(Date.now()+30*86400000);return x<=limit}
+function dashboard(){
+  const ints=db.Interventii||[], fl=db.Filtre||[], st=db.Stoc||[], tech=getTechnicians();
+  const soon=fl.filter(f=>soonDate(f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb)).length;
+  const lowStoc=st.filter(s=>stockAvailable(s)<=Number(s["Prag minim"]||s.prag||0)).length;
+  const recent=ints.slice(0,7);
+  const activeTech=tech.filter(x=>(x.status||"Activ")==="Activ").length;
+  document.getElementById("app").innerHTML=`
+    <section class="welcome">
+      <div>
+        <div class="eyebrow">PANOU CENTRAL</div>
+        <h2>Controlul operatiunilor OFRESH</h2>
+        <p>Monitorizare service, filtre, stoc si echipa tehnica.</p>
+      </div>
+      <div class="quickActions">
+        <button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>
+        <button class="secondaryButton" onclick="go('tehnicieni')">Echipa tehnica</button>
+      </div>
+    </section>
+
+    <section class="contentGrid">
+      <div class="panel">
+        <div class="panelHeader">
+          <div><h3>Atentie</h3><p>Lucruri care necesita actiune</p></div>
+          <span class="countBadge">${soon+lowStoc}</span>
+        </div>
+        ${soon
+          ? `<button class="alertRow" onclick="go('filtre')"><span class="alertDot warning">!</span><span><strong>Filtre de schimbat</strong><small>${soon} filtre au termen in urmatoarele 30 zile</small></span><b>Vezi →</b></button>`
+          : `<div class="empty">Nu exista filtre scadente in urmatoarele 30 zile.</div>`}
+        ${lowStoc
+          ? `<button class="alertRow" onclick="go('stoc')"><span class="alertDot warning">!</span><span><strong>Stoc sub prag</strong><small>${lowStoc} pozitii necesita reaprovizionare</small></span><b>Vezi →</b></button>`
+          : `<div class="alertRow"><span class="alertDot info">✓</span><span><strong>Stoc in regula</strong><small>Nu exista pozitii sub pragul minim.</small></span><b>OK</b></div>`}
+      </div>
+
+      <div class="panel">
+        <div class="panelHeader">
+          <div><h3>Echipa tehnica</h3><p>Tehnicieni disponibili pentru interventii</p></div>
+          <span class="countBadge">${activeTech}</span>
+        </div>
+        ${tech.length
+          ? tech.slice(0,6).map(t=>`<div class="activity"><span class="activityTime">T</span><span><strong>${esc(technicianName(t))}</strong><small>${esc(t.telefon||"")} · ${esc(t.status||"Activ")}</small></span></div>`).join("")
+          : `<div class="empty">Nu exista tehnicieni. Adauga echipa din pagina Tehnicieni.</div>`}
+        <div class="quickActions" style="margin-top:12px"><button class="secondaryButton" onclick="go('tehnicieni')">Gestionare tehnicieni</button></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panelHeader">
+        <div><h3>Activitate recenta</h3><p>Ultimele interventii inregistrate</p></div>
+        <span class="countBadge">${ints.length}</span>
+      </div>
+      ${recent.length
+        ? recent.map((i,n)=>`<div class="activity"><span class="activityTime">${n+1}</span><span><strong>${esc(i["Tip interventie"]||i.tipInterventie||"Interventie")}</strong><small>${esc(i.Aparat||i.aparat||i["ID Aparat"]||"")} · ${esc(i.Tehnician||i.tehnician||"")} · ${esc(i.Data||i.data||"")}</small></span></div>`).join("")
+        : `<div class="empty">Nu exista interventii inregistrate.</div>`}
+    </section>
+
+    <section class="contentGrid">
+      <div class="panel">
+        <div class="panelHeader"><div><h3>Filtre</h3><p>Situatia filtrelor si a scadentelor</p></div></div>
+        <div class="reportGrid">
+          <div class="reportCard"><span>Total filtre</span><strong>${fl.length}</strong><small>inregistrate</small></div>
+          <div class="reportCard"><span>Atentie 30 zile</span><strong>${soon}</strong><small>de verificat</small></div>
+        </div>
+        <div class="quickActions" style="margin-top:12px"><button class="secondaryButton" onclick="go('filtre')">Deschide Filtre</button></div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHeader"><div><h3>Stoc filtre</h3><p>Consum si disponibilitate</p></div></div>
+        <div class="reportGrid">
+          <div class="reportCard"><span>Pozitii stoc</span><strong>${st.length}</strong><small>inregistrate</small></div>
+          <div class="reportCard"><span>Sub prag</span><strong>${lowStoc}</strong><small>necesita actiune</small></div>
+        </div>
+        <div class="quickActions" style="margin-top:12px"><button class="secondaryButton" onclick="go('stoc')">Deschide Stoc</button></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panelHeader"><div><h3>Rapoarte</h3><p>Analiza si exporturi operationale</p></div></div>
+      <div class="quickActions">
+        <button class="secondaryButton" onclick="go('rapoarte')">Deschide Rapoarte</button>
+        <button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button>
+      </div>
+    </section>`;
+}
+function pageHero(ey,title,text,actions){return `<section class="pageHero"><div><div class="eyebrow">${ey}</div><h2>${title}</h2><p>${text}</p></div><div class="quickActions">${actions||""}</div></section>`}
+function clientsPage(){const rows=(db.Locatii||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("BAZA COMERCIALA","Clienti","Gestioneaza clientii OFRESH si datele lor de contact",`<button class="primaryButton" onclick="openClient()">+ Adauga client</button>`)+`<section class="locationGrid">${rows.map(l=>`<div class="locationCard"><div class="locationCardTop"><span class="locationIcon">C</span><span class="statusDot">${esc(l.Status||"Activ")}</span></div><h3>${esc(clientName(l))}</h3><p>${esc(l.Adresa||l.adresa||"Adresa nespecificata")}</p><p>${esc(l.Oras||l.oras||"")} ${esc(l.Judet||l.judet||"")}</p><p>${esc(l["Persoana contact"]||l.contact||"")} ${esc(l.Telefon||l.telefon||"")}</p><div class="locationFooter"><div><strong>${machineCount(l)}</strong><span>aparate</span></div><div class="right"><button class="secondaryButton" onclick='openClient(${JSON.stringify(l)})'>Modifica</button><button class="dangerButton" onclick='deleteRecord("Locatii",${JSON.stringify(clientId(l))})'>Sterge</button></div></div>${locationNavLinks(l)}</div>`).join("")||'<div class="emptyState">Nu exista clienti.</div>'}</section>`}function machinesPage(){const rows=(db.Aparate||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("GESTIONARE ECHIPAMENTE","Aparate","Tine evidenta tuturor echipamentelor instalate la clienti",`<button class="secondaryButton" onclick="document.getElementById('excelFile').click()">Import Excel</button><button class="secondaryButton" onclick="exportSheet('Aparate','OFRESH_Aparate.xlsx')">Export Excel</button><button class="primaryButton" onclick="openMachine()">+ Adauga aparat</button><input id="excelFile" class="hidden" type="file" accept=".xlsx,.xls,.csv" onchange="prepareImport(this)">`)+`<section class="panel"><div class="panelHeader"><div><h3>Lista aparate</h3><p>${rows.length} aparate afisate</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Cod OFRESH</th><th>Client</th><th>Etaj / Zona</th><th>Model</th><th>Producator</th><th>Serie</th><th>Instalare</th><th>Status</th><th>Actiuni</th></tr></thead><tbody>${rows.map(r=>`<tr><td><strong>${esc(machineCode(r))}</strong></td><td>${esc(machineClient(r))}</td><td>${esc(machineFloor(r))}</td><td>${esc(r.Model||r.model||"")}</td><td>${esc(r.Producator||r.producator||"")}</td><td>${esc(r.Serie||r.serie||"")}</td><td>${esc(r["Data instalare"]||r.dataInstalare||"")}</td><td><span class="badge">${esc(r.Status||r.status||"Activ")}</span></td><td><div class="right"><button class="secondaryButton" onclick='openMachine(${JSON.stringify(r)})'>Modifica</button><button class="secondaryButton" onclick='qrMachine(${JSON.stringify(r)})'>QR</button></div></td></tr>`).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista aparate. Importa Excel-ul existent sau adauga un aparat individual.</div>'}</section>`}function interventionsPage(){const rows=(db.Interventii||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("SERVICE","Interventii","Istoricul lucrarilor si interventiilor tehnice",`<button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${rows.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Etaj</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th></tr></thead><tbody>${rows.map(i=>{const bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";const sf=i.tipFiltru||i["Tip filtru"]||"";const next=i.urmatorSchimbFiltru||i["Urmator schimb"]||"";return `<tr><td>${esc(i.data||i.Data||"")}</td><td><strong>${esc(i.aparat||i.Aparat||i["ID Aparat"]||"")}</strong></td><td>${esc(i.Client||i.client||i.locatie||i.Locatie||"")}</td><td>${esc(i.Etaj||i.etaj||"")}</td><td>${esc(i.tehnician||i.Tehnician||"")}</td><td>${esc(i.tipInterventie||i["Tip interventie"]||"")}</td><td>${esc(Array.isArray(i.operatiuni)?i.operatiuni.join(", "):i.operatiuni||i["Operatiuni efectuate"]||"")}</td><td>${esc(sf)}${next?`<div class="small">Urmator: ${esc(next)}</div>`:""}</td><td>${esc(i.urmatoareaInterventie||i["Urmatoarea interventie"]||"")}</td><td><span class="billingBadge ${bill?"":"billingNo"}">${bill?"DE FACTURAT":"NU SE FACTUREAZA"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista interventii.</div>'}</section>`}
+function filtersPage(){const rows=(db.Filtre||[]).filter(matches);document.getElementById("app").innerHTML=pageHero("MENTENANTA","Filtre","Urmarirea schimburilor si a termenelor pentru filtre",`<button class="primaryButton" onclick="openFilter()">+ Adauga filtru</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Monitorizare filtre</h3><p>${rows.length} filtre inregistrate</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Aparat</th><th>Client</th><th>Etaj</th><th>Tip filtru</th><th>Montat la</th><th>Scadenta</th><th>Status</th></tr></thead><tbody>${rows.map(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb||"";const s=soonDate(d);return `<tr><td>${esc(f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(f.Client||f.client||f.Locatie||f.locatie||"")}</td><td>${esc(f.Etaj||f.etaj||"")}</td><td>${esc(f["Tip filtru"]||f.tipFiltru||f.tip||"")}</td><td>${esc(f["Data montare"]||f.montat||f.dataSchimbare||"")}</td><td>${esc(d)}</td><td><span class="badge ${s?"warningBadge":""}">${s?"NECESITA ATENTIE":"OK"}</span></td></tr>`}).join("")}</tbody></table></div>`:'<div class="emptyState">Nu exista filtre.</div>'}</section>`}
+function stockRows(){return (db.Stoc||[]).filter(matches)}
+function stockAvailable(r){return Math.max(0,(Number(r.Cantitate||r.cantitate||0)||0)-(Number(r.Consumat||r.consumat||0)||0))}
+function stockPage(){const rows=stockRows();document.getElementById("app").innerHTML=pageHero("GESTIUNE","Stoc","Gestiunea stocului de filtre si evidenta consumului.",`<button class="primaryButton" onclick="openStoc()">+ Adauga in stoc</button><button class="secondaryButton" onclick="exportSheet('Stoc','OFRESH_Stoc.xlsx')">Export Stoc</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Stoc disponibil</h3><p>Filtre disponibile pentru interventiile tehnice.</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Tip filtru</th><th>Intrat</th><th>Consum</th><th>Disponibil</th><th>Furnizor</th><th>Factura</th><th>Data</th><th>Actiuni</th></tr></thead><tbody>${rows.map(s=>`<tr><td><strong>${esc(s.tip||s.Produs||s.produs||"")}</strong></td><td>${Number(s.Cantitate||s.cantitate||0)}</td><td>${Number(s.Consumat||s.consumat||0)}</td><td><span class="badge">${stockAvailable(s)}</span></td><td>${esc(s.Furnizor||s.furnizor||"")}</td><td>${esc(s.Factura||s.factura||"")}</td><td>${esc(s.Data||s.data||s["Data actualizare"]||"")}</td><td><button class="secondaryButton" onclick='openStoc(${JSON.stringify(s)})'>Modifica</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="emptyState">Stocul de filtre este gol. Adauga filtrele receptionate pentru a putea urmari consumul.</div>'}</section><section class="panel"><div class="panelHeader"><div><h3>Situatie rapida</h3><p>Stoc disponibil pe fiecare tip de filtru.</p></div></div><div class="reportGrid">${filterTypes.map(t=>`<div class="reportCard"><span>${esc(t)}</span><strong>${(db.Stoc||[]).filter(s=>String(s.tip||s.Produs||s.produs||"").toLowerCase()===t.toLowerCase()).reduce((n,s)=>n+stockAvailable(s),0)}</strong><small>bucati disponibile</small></div>`).join("")}</div></section>`}
+function reportsPage(){const loc=db.Locatii||[],mac=db.Aparate||[],ints=db.Interventii||[],fl=db.Filtre||[],st=db.Stoc||[],bill=ints.filter(i=>i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA").length;document.getElementById("app").innerHTML=pageHero("ANALIZA","Rapoarte","Rezumat operational pentru baza OFRESH","")+`<section class="reportGrid"><div class="reportCard"><span>Clienti</span><strong>${loc.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Aparate</span><strong>${mac.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Interventii</span><strong>${ints.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Filtre</span><strong>${fl.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>De facturat</span><strong>${bill}</strong><small>interventii</small></div><div class="reportCard"><span>Nu se factureaza</span><strong>${ints.length-bill}</strong><small>interventii</small></div><div class="reportCard"><span>Stoc</span><strong>${st.length}</strong><small>pozitii</small></div></section><section class="panel"><div class="panelHeader"><div><h3>Export rapoarte</h3><p>Toate exporturile OFRESH sunt centralizate aici.</p></div></div><div class="quickActions"><button class="secondaryButton" onclick="exportSheet('Locatii','OFRESH_Clienti.xlsx')">Export Clienti</button><button class="secondaryButton" onclick="exportSheet('Aparate','OFRESH_Aparate.xlsx')">Export Aparate</button><button class="secondaryButton" onclick="exportSheet('Interventii','OFRESH_Interventii.xlsx')">Export Interventii</button><button class="secondaryButton" onclick="exportSheet('Filtre','OFRESH_Filtre.xlsx')">Export Filtre</button><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button><button class="secondaryButton" onclick="exportSheet('Stoc','OFRESH_Stoc.xlsx')">Export Stoc</button></div></section><section class="panel"><h3>Ce urmarim</h3><div class="reportList"><div>• Aparatele instalate si statusul lor</div><div>• Interventiile si istoricul tehnic</div><div>• Schimbarile de filtre si scadentele</div><div>• Situatia clientilor si a stocului</div><div>• Interventiile care trebuie facturate</div></div></section>`}
+function settingsPage(){document.getElementById("app").innerHTML=pageHero("CONFIGURARE","Setari","Informatii si conexiuni ale aplicatiei OFRESH","")+`<section class="panel"><div class="notice">Aplicatia ruleaza ca HTML independent, fara Vite. Datele sunt citite si salvate in Google Sheet prin Google Apps Script.</div><br><div class="twoCols"><div><strong>Tehnicieni</strong><p class="small">Echipa de service se gestioneaza din pagina Tehnicieni, iar tehnicienii activi apar automat in formularul de interventie.</p></div><div><strong>QR / coduri aparate</strong><p class="small">Fiecare aparat poate avea un QR generat direct din lista de aparate.</p></div><div><strong>Operatiuni tehnice</strong><p class="small">Lista include igienizare, schimbare filtru, piese, testare, mentenante, solicitare client, curatare rezervor si reglaj/calibrare.</p></div></div></section>`}
+function modal(title,body,saveText="Salveaza",saveFn="closeModal()") {document.getElementById("modalRoot").innerHTML=`<div class="modalBackdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>${title}</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody">${body}</div><div class="modalFooter"><button class="secondaryButton" onclick="closeModal()">Anuleaza</button><button class="primaryButton" onclick="${saveFn}">${saveText}</button></div></div></div>`}
+function closeModal(){document.getElementById("modalRoot").innerHTML=""}
+function inputField(label,key,val="",type="text",wide=false,extra=""){return `<label class="field ${wide?"wide":""}"><span>${esc(label)}</span><input id="f_${key}" type="${type}" value="${esc(val)}" ${extra}></label>`}
+function selectField(label,key,val,opts,wide=false){return `<label class="field ${wide?"wide":""}"><span>${esc(label)}</span><select id="f_${key}"><option value="">Selecteaza</option>${opts.map(o=>`<option value="${esc(o)}" ${String(o)===String(val)?"selected":""}>${esc(o)}</option>`).join("")}</select></label>`}
+function clientInputField(val=""){const clients=(db.Locatii||[]).map(clientName).filter(Boolean);return `<label class="field"><span>Client</span><input id="f_client" list="clientList" value="${esc(val)}" autocomplete="off" placeholder="Scrie clientul, ex. MICRO"><datalist id="clientList">${clients.map(c=>`<option value="${esc(c)}"></option>`).join("")}</datalist></label>`}
+function getMachineModels(){const base=["TS 400","TS 200"];try{return [...new Set(base.concat(JSON.parse(localStorage.getItem("ofresh_modele_aparate")||"[]")).map(x=>String(x).trim()).filter(Boolean))]}catch(e){return base}}
+function addMachineModel(){const name=prompt("Introdu numele modelului nou:");if(!name||!name.trim())return;const clean=name.trim();const models=getMachineModels();if(!models.some(x=>x.toLowerCase()===clean.toLowerCase())){localStorage.setItem("ofresh_modele_aparate",JSON.stringify([...models,clean]));}const sel=document.getElementById("f_model");if(sel){sel.innerHTML=`<option value="">Selecteaza modelul</option>${getMachineModels().map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join("")}`;sel.value=clean}}
+function v(k){const e=document.getElementById("f_"+k);return e?e.value.trim():""}
+function plusYear(d){if(!d)return"";const x=new Date(d);x.setFullYear(x.getFullYear()+1);return x.toISOString().slice(0,10)}
+function openClient(r={}){const old=clientId(r);modal(old?"Modifica client":"Adauga client",`<div class="grid">${inputField("Client","client",clientName(r))}${inputField("Adresa","adresa",r.Adresa||r.adresa||"","text",true)}${inputField("Oras","oras",r.Oras||r.oras||"")}${inputField("Judet","judet",r.Judet||r.judet||"")}${inputField("Persoana contact","contact",r["Persoana contact"]||r.contact||"")}${inputField("Telefon","telefon",r.Telefon||r.telefon||"","tel")}${inputField("Email","email",r.Email||r.email||"","email")}${inputField("Latitudine","lat",r.Latitudine||r.latitudine||"")}${inputField("Longitudine","lon",r.Longitudine||r.longitudine||"")}${inputField("Observatii","obs",r.Observatii||r.observatii||"","text",true)}</div>`,`Salveaza client`,`saveClient(${JSON.stringify(old)})`)}
+async function saveClient(old){const id=old||uid("CLI"),rec={"ID Locatie":id,"ID Client":id,Client:v("client"),"Nume client":v("client"),Adresa:v("adresa"),Oras:v("oras"),Judet:v("judet"),"Persoana contact":v("contact"),Telefon:v("telefon"),Email:v("email"),Latitudine:v("lat"),Longitudine:v("lon"),Status:"Activ",Observatii:v("obs")};if(!rec.Client||!rec.Adresa)return msg("Completeaza Client si Adresa.",false);await saveSheet("Locatii",rec,"ID Locatie",old)}
+function openMachine(r={}){const old=machineId(r),cl=machineClient(r),models=getMachineModels(),currentModel=r.Model||r.model||"";if(currentModel&&!models.some(x=>x.toLowerCase()===String(currentModel).toLowerCase()))models.push(currentModel);modal(old?"Modifica aparat":"Adauga aparat",`<div class="grid">${inputField("Cod OFRESH","cod",r["Cod OFRESH"]||r.codOfresh||"")}${inputField("Serie aparat","serie",r.Serie||r.serie||"")}${clientInputField(cl)}${inputField("Etaj / Zona","etaj",machineFloor(r))}<label class="field"><span>Model</span><div style="display:flex;gap:8px"><select id="f_model" style="flex:1"><option value="">Selecteaza modelul</option>${models.map(o=>`<option value="${esc(o)}" ${String(o)===String(currentModel)?"selected":""}>${esc(o)}</option>`).join("")}</select><button type="button" class="secondaryButton" onclick="addMachineModel()">+ Adauga</button></div></label>${inputField("Producator","prod",r.Producator||r.producator||"")}${inputField("Data instalare","instalare",r["Data instalare"]||r.dataInstalare||"","date")}${inputField("Data retragere","retragere",r["Data retragere"]||r.dataRetragere||"","date")}${selectField("Status","status",r.Status||r.status||"Activ",["Activ","Inactiv","Retras"])}${inputField("Observatii","obs",r.Observatii||r.observatii||"","text",true)}</div>`,`Salveaza aparatul`,`saveMachine(${JSON.stringify(old)})`)}
+async function saveMachine(old){const cl=v("client"),c=(db.Locatii||[]).find(x=>clientName(x).toLowerCase()===cl.toLowerCase());const rec={"ID Aparat":old||uid("APR"),"Cod OFRESH":v("cod"),"ID Client":c?clientId(c):"","ID Locatie":c?clientId(c):"",Client:cl,Etaj:v("etaj"),Producator:v("prod"),Model:v("model"),Serie:v("serie"),"Data instalare":v("instalare"),"Data retragere":v("retragere"),Status:v("status")||"Activ",Observatii:v("obs")};if(!rec["Cod OFRESH"]||!cl)return msg("Completeaza Cod OFRESH si Client.",false);await saveSheet("Aparate",rec,"ID Aparat",old)}
+function openIntervention(existing={}){const machines=db.Aparate||[];const opts=machines.map((m,i)=>({id:machineId(m)||String(i),label:machineCode(m)||`Aparat ${i+1}`}));modal("Inregistreaza interventie",`<div class="grid">${inputField("Data","data",new Date().toISOString().slice(0,10),"date")}<label class="field"><span>Tehnician</span><div style="display:flex;gap:8px"><select id="f_tehnician" style="flex:1"><option value="">Selecteaza tehnicianul</option>${getTechnicians().filter(x=>(x.status||x.Status||"Activ")==="Activ").map(x=>`<option value="${esc(technicianName(x))}" ${techSession&&technicianName(x)===techSession.name?"selected":""}>${esc(technicianName(x))}</option>`).join("")}</select><button type="button" class="secondaryButton" onclick="openTechnician({},true)">+ Adauga</button></div></label>${selectField("Aparat","aparatId","",opts.map(o=>o.id).map(id=>{const m=machines.find(x=>machineId(x)===id);return machineCode(m)||id}),false)}<div class="field"><span>Client</span><input id="f_clientInterv" readonly placeholder="Se completeaza automat"></div><div class="field"><span>Etaj / Zona</span><input id="f_etajInterv" readonly placeholder="Se completeaza automat"></div>${selectField("Tip interventie","tipInterventie","",interventionTypes,true)}<label class="field wide"><span>Operatiuni efectuate</span><div class="checkList">${operations.map((o,i)=>`<label class="checkRow"><input type="checkbox" id="op_${i}" value="${esc(o)}">${esc(o)}</label>`).join("")}</div></label><div id="filterFields" class="wide"></div>${inputField("Urmatoarea interventie","urmatoare","","date")}<label class="field"><span>Facturare</span><label class="checkRow"><input id="f_fact" type="checkbox">Solicitare client</label></label>${inputField("Observatii","obs","","text",true)}</div>`,`Salveaza interventia`,`saveIntervention()`);const sel=document.getElementById("f_aparatId");sel.addEventListener("change",()=>{const m=machines.find((x,i)=>machineCode(x)===(sel.options[sel.selectedIndex]?.text||"")||machineId(x)==sel.value);document.getElementById("f_clientInterv").value=machineClient(m||{});document.getElementById("f_etajInterv").value=machineFloor(m||{})});document.getElementById("f_tipInterventie").addEventListener("change",toggleFilterFields)}
+function toggleFilterFields(){const on=v("tipInterventie")==="Schimbare filtru";const root=document.getElementById("filterFields");root.innerHTML=on?`<div class="grid">${selectField("Tip filtru","tipFiltru","",filterTypes)}${inputField("Alt tip de filtru","filtruCustom","")}${inputField("Urmatoarea schimbare","urmatorSchimb",plusYear(v("data")),"date",false,"readonly")}</div>`:"";if(on&&document.getElementById("f_data"))document.getElementById("f_data").addEventListener("change",()=>{const e=document.getElementById("f_urmatorSchimb");if(e)e.value=plusYear(v("data"))})}
+async function saveIntervention(){const sel=document.getElementById("f_aparatId"),label=sel.options[sel.selectedIndex]?.text||"",m=(db.Aparate||[]).find(x=>machineId(x)===sel.value||machineCode(x)===label);if(!m||!v("tipInterventie"))return msg("Selecteaza aparatul si tipul interventiei.",false);let tip=v("tipFiltru")==="Alt tip de filtru"?v("filtruCustom"):v("tipFiltru");if(v("tipInterventie")==="Schimbare filtru"&&!tip)return msg("Selecteaza tipul filtrului.",false);const ops=[...document.querySelectorAll('.checkList input:checked')].map(x=>x.value),bill=document.getElementById("f_fact").checked,next=v("urmatorSchimb")||plusYear(v("data"));if(v("tipInterventie")==="Schimbare filtru"){const s=(db.Stoc||[]).find(x=>String(x.tip||x.Produs||x.produs||"").toLowerCase()===String(tip).toLowerCase());if(!s)return msg(`Filtrul "${tip}" nu exista in stoc.`,false);if(stockAvailable(s)<=0)return msg(`Filtrul "${tip}" nu mai exista in stoc.`,false)}const rec={"ID Interventie":uid("INT"),"ID Aparat":machineId(m),Aparat:machineCode(m),Client:machineClient(m),Etaj:machineFloor(m),Locatie:machineClient(m),Data:v("data"),Tehnician:v("tehnician"),"Tip interventie":v("tipInterventie"),"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":v("tipInterventie")==="Schimbare filtru"?next:"","Urmatoarea interventie":v("urmatoare"),"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};try{await rawSave("Interventii",rec,"ID Interventie","");if(v("tipInterventie")==="Schimbare filtru"){const s=(db.Stoc||[]).find(x=>String(x.tip||x.Produs||x.produs||"").toLowerCase()===String(tip).toLowerCase());const updated={...s,Consumat:Number(s.Consumat||s.consumat||0)+1};await rawSave("Stoc",updated,"ID Stoc",s["ID Stoc"]||s.id||"");const old=(db.Filtre||[]).find(f=>String(f["ID Aparat"]||f.aparatId||"")===String(machineId(m)));const fr={"ID Filtru":old?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),Aparat:machineCode(m),Client:machineClient(m),Etaj:machineFloor(m),Locatie:machineClient(m),"Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,Status:"Activ",Observatii:"Schimbat prin interventie"};await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"")}closeModal();msg("Interventia a fost salvata.");await load()}catch(e){msg(e.message,false)}}
+function openFilter(){const opts=(db.Aparate||[]).map(m=>machineCode(m));modal("Adauga filtru",`<div class="grid">${selectField("Aparat","aparat", "",opts)}${selectField("Tip filtru","tip","",filterTypes)}${inputField("Data montare","montat",new Date().toISOString().slice(0,10),"date")}${inputField("Observatii","obs","","text",true)}</div>`,`Salveaza filtrul`,`saveFilter()`)}
+async function saveFilter(){const ap=v("aparat"),m=(db.Aparate||[]).find(x=>machineCode(x)===ap),d=v("montat");if(!m||!v("tip")||!d)return msg("Completeaza aparatul, tipul si data.",false);const rec={"ID Filtru":uid("FLT"),"ID Aparat":machineId(m),Aparat:ap,Client:machineClient(m),Etaj:machineFloor(m),Locatie:machineClient(m),"Tip filtru":v("tip"),"Data montare":d,"Data urmatoarei schimbari":plusYear(d),Status:"Activ",Observatii:v("obs")};await saveSheet("Filtre",rec,"ID Filtru","")}
+function openStoc(r={}){const old=r["ID Stoc"]||r.id||"";modal(old?"Modifica stoc":"Adauga filtre in stoc",`<div class="grid">${selectField("Tip filtru","tip",r.tip||r.Produs||r.produs||"",filterTypes)}${inputField("Cantitate","cant",r.Cantitate||r.cantitate||"","number",false,'min="1"')}${inputField("Consum","cons",r.Consumat||r.consumat||0,"number",false,'min="0"')}${inputField("Furnizor","furnizor",r.Furnizor||r.furnizor||"")}${inputField("Factura","factura",r.Factura||r.factura||"")}${inputField("Locatie","loc",r.Locatie||r.locatie||"")}${inputField("Prag minim","prag",r["Prag minim"]||r.prag||0,"number")}</div>`,`Salveaza stoc`,`saveStoc(${JSON.stringify(old)})`)}
+async function saveStoc(old){const rec={"ID Stoc":old||uid("STK"),tip:v("tip"),Produs:v("tip"),Cantitate:Number(v("cant")||0),Consumat:Number(v("cons")||0),Furnizor:v("furnizor"),Factura:v("factura"),Locatie:v("loc"),"Prag minim":Number(v("prag")||0),"Data actualizare":new Date().toISOString().slice(0,10)};if(!rec.tip||rec.Cantitate<=0)return msg("Completeaza tipul filtrului si cantitatea.",false);await saveSheet("Stoc",rec,"ID Stoc",old)}
+async function rawSave(sheet,rec,idField,old){const p={action:old?"update":"add",sheet,record:JSON.stringify(rec)};if(old){p.idField=idField;p.idValue=old}const res=await api(p);if(res&&res.success===false)throw new Error(res.error||"Eroare salvare")}
+async function saveSheet(sheet,rec,idField,old){try{await rawSave(sheet,rec,idField,old);closeModal();msg("Salvat cu succes.");await load()}catch(e){msg(e.message,false)}}
+async function deleteRecord(sheet,idValue){if(!idValue)return;if(!confirm("Sigur vrei sa stergi aceasta inregistrare?"))return;try{const res=await api({action:"delete",sheet,idField:sheet==="Locatii"?"ID Locatie":sheet==="Aparate"?"ID Aparat":sheet==="Filtre"?"ID Filtru":sheet==="Stoc"?"ID Stoc":sheet==="Tehnicieni"?"ID Tehnician":"ID Produs",idValue});if(res&&res.success===false)throw new Error(res.error||"Eroare stergere");msg("Sters cu succes.");await load()}catch(e){msg(e.message,false)}}
+function loadScript(src,check){return new Promise((resolve,reject)=>{if(check())return resolve();const s=document.createElement("script");s.src=src;s.onload=()=>check()?resolve():reject(new Error("Modul indisponibil"));s.onerror=reject;document.head.appendChild(s)})}
+async function excelReady(){await loadScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",()=>!!window.XLSX)}
+async function exportSheet(sheet,filename){try{await excelReady();const rows=(db[sheet]||[]).map(r=>({...r}));const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Raport");XLSX.writeFile(wb,filename)}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
+async function exportInvoice(){try{await excelReady();const rows=(db.Interventii||[]).filter(i=>i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA");const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"De facturat");XLSX.writeFile(wb,"OFRESH_De_facturat.xlsx")}catch(e){msg("Export Excel necesita conexiune la internet.",false)}}
+async function prepareImport(input){try{await excelReady();const file=input.files[0];if(!file)return;const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});const mapped=rows.map((r,i)=>({"ID Aparat":r["ID Aparat"]||r.ID||uid("APR"),"Cod OFRESH":r["Cod OFRESH"]||r["Cod Ofresh"]||r.Cod||r.Asset||`OF-${String(i+1).padStart(4,"0")}`,Client:r.Client||r.Clienti||r.Locatie||r.Location||r["Client locatie"]||r["Nume client"]||r["Nume locatie"]||"",Etaj:r.Etaj||r.Etage||r.Floor||r.floor||r.Zona||r.Zone||"",Adresa:r.Adresa||r.Address||"",Judet:r.Judet||r["Jud."]||"",Producator:r.Producator||r.Manufacturer||r.Brand||"",Model:r.Model||r["Tip aparat"]||r.Aparat||"",Serie:r.Serie||r.Serial||r["Serial number"]||r.SN||"",Status:r.Status||"Activ"})).filter(r=>r["Cod OFRESH"]);const existing=new Set((db.Aparate||[]).map(m=>`${m.Serie||m.serie||""}|${m["Cod OFRESH"]||m.codOfresh||""}`));const fresh=mapped.filter(m=>!existing.has(`${m.Serie||""}|${m["Cod OFRESH"]||""}`));document.getElementById("modalRoot").innerHTML=`<div class="modalBackdrop"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>Import Excel</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody"><p class="small"><strong>${esc(file.name)}</strong> - ${fresh.length} aparate noi din ${mapped.length} randuri.</p><div class="importInfo">Sunt recunoscute automat coloane precum Client, Etaj/Zona, Adresa, Judet, Producator, Model, Serie, Cod Ofresh si Status. Duplicatele dupa Serie + Cod OFRESH nu sunt importate.</div><div class="tableWrap"><table class="table"><thead><tr><th>Client</th><th>Etaj</th><th>Model</th><th>Serie</th><th>Cod OFRESH</th><th>Status</th></tr></thead><tbody>${fresh.slice(0,50).map(m=>`<tr><td>${esc(m.Client)}</td><td>${esc(m.Etaj)}</td><td>${esc(m.Model)}</td><td>${esc(m.Serie)}</td><td>${esc(m["Cod OFRESH"])}</td><td>${esc(m.Status)}</td></tr>`).join("")}</tbody></table></div>${fresh.length>50?`<p class="small">Se afiseaza primele 50 randuri.</p>`:""}</div><div class="modalFooter"><button class="secondaryButton" onclick="closeModal()">Anuleaza</button><button class="primaryButton" onclick='confirmImport(${JSON.stringify(fresh)})'>Importa ${fresh.length} aparate</button></div></div></div>`}catch(e){msg(e.message||"Fisierul nu a putut fi citit.",false)}input.value=""}
+async function confirmImport(rows){try{closeModal();if(!rows.length)return msg("Nu exista aparate noi de importat.",false);let done=0;for(const r of rows){await rawSave("Aparate",r,"ID Aparat","");done++}msg(`Import finalizat: ${done} aparate.`);await load()}catch(e){msg(`Import oprit: ${e.message}`,false);await load()}}
+async function qrMachine(r){const text=[machineCode(r),machineClient(r),r.Producator||r.producator||"",r.Model||r.model||"",r.Serie||r.serie||""].filter(Boolean).join(" | ");document.getElementById("modalRoot").innerHTML=`<div class="modalBackdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>QR aparat</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody" style="text-align:center"><div id="qrBox" style="display:inline-block;margin:15px"></div><p class="small">${esc(text)}</p></div><div class="modalFooter"><button class="secondaryButton" onclick="closeModal()">Inchide</button></div></div></div>`;try{await loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",()=>!!window.QRCode);new QRCode(document.getElementById("qrBox"),{text,width:220,height:220})}catch(e){msg("QR necesita conexiune la internet.",false)}}
+if("serviceWorker" in navigator && location.protocol!=="file:"){navigator.serviceWorker.register("ofresh-sw.js").catch(()=>{});}
+if(location.hash.includes("access_token=") || location.hash.includes("type=recovery") || location.hash.includes("error_code=")){ initPasswordRecovery(); }
+else if(new URLSearchParams(location.search).get("tehnician")==="1"){load().then(()=>setTimeout(openTechLogin,100));}
+else{load();}
+</script>
+</body></html>
