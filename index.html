@@ -3443,7 +3443,7 @@ async function uploadInterventionPhotoFile(file,meta,index){
   const prepared=await compressInterventionImage(file);
   const base64=prepared.dataUrl.split(",")[1]||"";
   const uploadId="UPL-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);
-  // Upload optimizat pentru mobil: fragmente de 30 KB (backend max. 40 KB), 5 cereri paralele si retry la erori.
+  // Upload foto prin POST (nu JSONP/GET): evita URL-uri de 30 KB care sunt respinse/trunchiate de browser sau Google Apps Script. Fragmente de 30 KB, 5 cereri paralele si retry la erori.
   const chunkSize=30000;
   const totalChunks=Math.ceil(base64.length/chunkSize);
   if(!base64 || totalChunks<1 || totalChunks>100) throw new Error("Fotografia este prea mare pentru incarcare. Fa o poza mai mica.");
@@ -3453,7 +3453,7 @@ async function uploadInterventionPhotoFile(file,meta,index){
     let lastError=null;
     for(let attempt=0;attempt<3;attempt++){
       try{
-        const r=await api({action:"uploadPhotoChunk",uploadId,chunkIndex:i,totalChunks,chunk});
+        const r=await apiPost({action:"uploadPhotoChunk",uploadId,chunkIndex:i,totalChunks,chunk});
         if(!r || r.success!==true) throw new Error(r?.error||"Serverul nu a confirmat fragmentul foto "+(i+1)+".");
         return r;
       }catch(e){lastError=e;if(attempt<2)await new Promise(resolve=>setTimeout(resolve,350*(attempt+1)));}
@@ -3466,7 +3466,7 @@ async function uploadInterventionPhotoFile(file,meta,index){
     await Promise.all(batch);
   }
   const standardFileName=`OFRESH_${meta.interventionId}_FOTO_${String(index+1).padStart(2,"0")}.jpg`;
-  const result=await api({action:"finalizePhotoUpload",uploadId,totalChunks,interventionId:meta.interventionId,client:meta.client,aparat:meta.aparat,tehnician:meta.tehnician,data:meta.data,photoIndex:index+1,fileName:standardFileName,mimeType:prepared.mimeType});
+  const result=await apiPost({action:"finalizePhotoUpload",uploadId,totalChunks,interventionId:meta.interventionId,client:meta.client,aparat:meta.aparat,tehnician:meta.tehnician,data:meta.data,photoIndex:index+1,fileName:standardFileName,mimeType:prepared.mimeType});
   if(!result||result.success===false)throw new Error(result?.error||"Fotografia nu a putut fi salvata.");
   return result;
 }
