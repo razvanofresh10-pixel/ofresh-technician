@@ -3536,18 +3536,34 @@ async function saveIntervention(){
       await rawSave("Interventii",pending.rec,"ID Interventie","");
       pending.interventionSaved=true;
     }
-    if(interventionType==="Schimbare filtru"&&!pending.stockUpdated){
-      const stock=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
-      if(!stock)throw new Error("Interventia este salvata, dar nu am gasit produsul in stoc pentru actualizarea consumului. Nu repeta interventia; apasa din nou Salveaza dupa verificare.");
-      const updated={...stock,Consum:Number(stock.Consum||stock.consum||stock.Consumat||stock.consumat||0)+1};
-      await rawSave("Stoc",updated,"ID Stoc",stock["ID Stoc"]||stock.id||"");
-      pending.stockUpdated=true;
-    }
-    if(interventionType==="Schimbare filtru"&&!pending.filterUpdated){
-      const old=(db.Filtre||[]).find(f=>String(f["ID Aparat"]||"")===String(machineId(m)));
-      const fr={"ID Filtru":old?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":clientId(selectedClient),"Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
-      await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
-      pending.filterUpdated=true;
+    if(interventionType==="Schimbare filtru"&&(!pending.stockUpdated||!pending.filterUpdated)){
+      if(techSession){
+        const filterResult=await api({
+          action:"technicianCompleteFilterChange",
+          interventionId:pending.interventionId,
+          tipFiltru:tip,
+          dataMontare:v("data"),
+          dataUrmatoareiSchimbari:next,
+          intervalLuni:Number(v("intervalFiltru"))||6
+        });
+        if(!filterResult||filterResult.success!==true)throw new Error(filterResult?.error||"Nu s-a confirmat actualizarea filtrului si stocului.");
+        pending.stockUpdated=true;
+        pending.filterUpdated=true;
+      }else{
+        if(!pending.stockUpdated){
+          const stock=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
+          if(!stock)throw new Error("Interventia este salvata, dar nu am gasit produsul in stoc pentru actualizarea consumului. Nu repeta interventia; verifica produsul in Stoc.");
+          const updated={...stock,Consum:Number(stock.Consum||stock.consum||stock.Consumat||stock.consumat||0)+1};
+          await rawSave("Stoc",updated,"ID Stoc",stock["ID Stoc"]||stock.id||"");
+          pending.stockUpdated=true;
+        }
+        if(!pending.filterUpdated){
+          const old=(db.Filtre||[]).find(f=>String(f["ID Aparat"]||"")===String(machineId(m)));
+          const fr={"ID Filtru":old?.["ID Filtru"]||uid("FLT"),"ID Aparat":machineId(m),"ID Locatie":clientId(selectedClient),"Tip filtru":tip,"Data montare":v("data"),"Data urmatoarei schimbari":next,"Interval luni":Number(v("intervalFiltru"))||6,Status:"Activ",Observatii:"Schimbat prin interventie"};
+          await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
+          pending.filterUpdated=true;
+        }
+      }
     }
     // Incarcam fotografiile inainte de inchiderea formularului. Astfel,
     // utilizatorul vede confirmarea reala, iar la eroare poate reincerca fara
