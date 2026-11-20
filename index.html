@@ -721,6 +721,8 @@ async function api(params){
   }
   const headers={"Content-Type":"application/json","apikey":SUPABASE_PUBLISHABLE_KEY};
   if(token)headers.Authorization="Bearer "+token;
+  const activeRole=String(window.__ofreshSupabaseRole||"").trim().toLowerCase();
+  if(token&&activeRole)headers["x-ofresh-role"]=activeRole;
   const response=await fetch(SUPABASE_FUNCTION_URL,{method:"POST",headers,body:JSON.stringify(params||{}),credentials:"omit"});
   let result;
   try{result=await response.json();}catch(_){throw new Error("Serverul Supabase a returnat un răspuns invalid.");}
@@ -735,11 +737,17 @@ async function ofreshSupabaseSignIn(email,password,allowedRoles){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))throw new Error("Introdu adresa de e-mail a contului OFRESH.");
   const auth=await supabaseClient.auth.signInWithPassword({email:normalizedEmail,password:String(password||"")});
   if(auth.error)throw new Error(auth.error.message||"E-mail sau parolă incorectă.");
+  window.__ofreshSupabaseRole="";
   const identity=await api({action:"whoami"});
-  if(!identity?.success||!identity.profile)throw new Error("Contul nu are profil OFRESH activ în Supabase.");
-  const role=String(identity.profile.rol||"").trim().toLowerCase();
-  if(!allowedRoles.includes(role)){await supabaseClient.auth.signOut();throw new Error("Contul nu are rolul necesar pentru acest modul.");}
-  return {auth:auth.data,identity,profile:identity.profile};
+  if(!identity?.success||!identity.profile){await supabaseClient.auth.signOut();throw new Error("Contul nu are profil OFRESH activ în Supabase.");}
+  const profile=identity.profile, rights=profile.drepturi&&typeof profile.drepturi==="object"?profile.drepturi:{};
+  const assignedRoles=new Set([String(profile.rol||"").trim().toLowerCase()]);
+  if(Array.isArray(rights.roles))rights.roles.forEach(role=>assignedRoles.add(String(role||"").trim().toLowerCase()));
+  if(rights["Mod Tehnician"]===true||rights["mod tehnician"]===true)assignedRoles.add("tehnician");
+  const selectedRole=allowedRoles.map(role=>String(role||"").trim().toLowerCase()).find(role=>assignedRoles.has(role));
+  if(!selectedRole){await supabaseClient.auth.signOut();throw new Error("Contul nu are rolul necesar pentru acest modul.");}
+  window.__ofreshSupabaseRole=selectedRole;
+  return {auth:auth.data,identity,profile,role:selectedRole};
 }
 async function ofreshLoginFiler(email,password){
   const signed=await ofreshSupabaseSignIn(email,password,["filer"]);
@@ -1355,8 +1363,8 @@ function logoutTechnician(){
   techView="home";
   techSession=null;
   try{localStorage.removeItem("ofresh_tech_session");}catch(e){}
-  if(adminSession){current="dashboard";enterAdminCleanMode();render();load(true);return;}
-  showAccessPage();
+  if(adminSession){window.__ofreshSupabaseRole=String(adminSession.Rol||"administrator").trim().toLowerCase();current="dashboard";enterAdminCleanMode();render();load(true);return;}
+  window.__ofreshSupabaseRole="";showAccessPage();
 }
 function openNavigation(url){ try{ window.location.href=url; }catch(e){ window.open(url,'_self'); } return false; }
 function openWazeNavigation(address,lat,lon){
