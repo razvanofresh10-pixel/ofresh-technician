@@ -3463,10 +3463,10 @@ async function uploadInterventionPhotoFile(file,meta,index){
   const base64=prepared.dataUrl.split(",")[1]||"";
   const uploadId="UPL-"+Date.now()+"-"+Math.random().toString(36).slice(2,9);
   // Upload foto prin POST (nu JSONP/GET): evita URL-uri de 30 KB care sunt respinse/trunchiate de browser sau Google Apps Script. Fragmente de 30 KB, 5 cereri paralele si retry la erori.
-  const chunkSize=30000;
+  const chunkSize=36000; // sub limita serverului de 38000 caractere
   const totalChunks=Math.ceil(base64.length/chunkSize);
   if(!base64 || totalChunks<1 || totalChunks>100) throw new Error("Fotografia este prea mare pentru incarcare. Fa o poza mai mica.");
-  const batchSize=5;
+  const batchSize=8;
   async function sendPhotoChunk(i){
     const chunk=base64.slice(i*chunkSize,(i+1)*chunkSize);
     let lastError=null;
