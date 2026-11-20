@@ -212,13 +212,28 @@ async function main(req:Request) {
     const result:any={success:true}; for(const n of names) result[n]=await fetchSheet(n); return Response.json(result,{headers:CORS});
   }
   if(action==="dashboardData"){
-    const [machines,locations,filters,interventions]=await Promise.all([
-      fetchSheet("Aparate"),fetchSheet("Locatii"),allowed.includes("Filtre")?fetchSheet("Filtre"):Promise.resolve([]),
-      allowed.includes("Interventii")?fetchSheet("Interventii"):Promise.resolve([])
+    const [machines,locations,filters,recentResult,countResult]=await Promise.all([
+      fetchSheet("Aparate"),
+      fetchSheet("Locatii"),
+      allowed.includes("Filtre")?fetchSheet("Filtre"):Promise.resolve([]),
+      allowed.includes("Interventii")
+        ? sb.from("interventii").select("*").order("data_interventie",{ascending:false}).limit(6)
+        : Promise.resolve({data:[],error:null}),
+      allowed.includes("Interventii")
+        ? sb.from("interventii").select("id",{count:"exact",head:true})
+        : Promise.resolve({count:0,error:null})
     ]);
-    const recent=interventions.slice().sort((a:any,b:any)=>String(b.Data||"").localeCompare(String(a.Data||""))).slice(0,6);
-    const data={Aparate:machines,Locatii:locations,Filtre:filters,Interventii:recent};
-    return Response.json({success:true,...data,data,totals:{aparate:machines.length,locatii:locations.length,filtre:filters.length,interventii:interventions.length}},{headers:CORS});
+    if(recentResult.error) throw new Error("Interventii recente: "+recentResult.error.message);
+    if(countResult.error) throw new Error("Total interventii: "+countResult.error.message);
+    const recent=(recentResult.data||[]).map((r:any)=>legacy("Interventii",r));
+    return Response.json({
+      success:true,
+      Aparate:machines,
+      Locatii:locations,
+      Filtre:filters,
+      Interventii:recent,
+      totals:{aparate:machines.length,locatii:locations.length,filtre:filters.length,interventii:countResult.count||0}
+    },{headers:CORS});
   }
   if(action==="commercialData" || action==="commercialHistory" || action==="commercialEspressoHistory"){
     if(role!=="comercial" && role!=="administrator" && role!=="admin") return new Response(JSON.stringify({success:false,error:"Acces interzis."}),{status:403,headers:CORS});
