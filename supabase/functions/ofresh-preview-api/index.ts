@@ -1,4 +1,4 @@
-// OFRESH V37 — Supabase migration adapter (candidate; NOT deployed)
+// OFRESH V38 — Supabase migration adapter (preview; read-only)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -131,9 +131,9 @@ async function main(req:Request) {
   if(authErr||!auth.user) return new Response(JSON.stringify({success:false,error:"Sesiune invalida."}),{status:401,headers:CORS});
   const {data:profile,error:profileErr}=await sb.from("profiluri").select("*").eq("id",auth.user.id).maybeSingle();
   if(profileErr||!profile||profile.activ===false) return new Response(JSON.stringify({success:false,error:"Profil OFRESH inactiv sau lipsa."}),{status:403,headers:CORS});
-  if(!["administrator","admin"].includes(norm(profile.rol))) return new Response(JSON.stringify({success:false,error:"Prima previzualizare este limitată la Administrator. Conturile Comercial, Tehnician și Filer trebuie provisionate și asociate explicit în Supabase Auth."}),{status:403,headers:CORS});
-  if(action==="whoami") return Response.json({success:true,user:{id:auth.user.id,email:auth.user.email},profile},{headers:CORS});
   const role=norm(profile.rol);
+  if(!Object.prototype.hasOwnProperty.call(READ_ROLES,role)) return new Response(JSON.stringify({success:false,error:"Rol OFRESH necunoscut sau neautorizat."}),{status:403,headers:CORS});
+  if(action==="whoami") return Response.json({success:true,user:{id:auth.user.id,email:auth.user.email},profile},{headers:CORS});
   const isAdmin = role === "administrator" || role === "admin";
   const isFiler = role === "filer";
   const isTech = role === "tehnician" || role === "technician";
