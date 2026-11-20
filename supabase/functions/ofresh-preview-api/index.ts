@@ -6,7 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS: Record<string,string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ofresh-role",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Content-Type": "application/json; charset=utf-8",
 };
@@ -131,8 +131,13 @@ async function main(req:Request) {
   if(authErr||!auth.user) return new Response(JSON.stringify({success:false,error:"Sesiune invalida."}),{status:401,headers:CORS});
   const {data:profile,error:profileErr}=await sb.from("profiluri").select("*").eq("id",auth.user.id).maybeSingle();
   if(profileErr||!profile||profile.activ===false) return new Response(JSON.stringify({success:false,error:"Profil OFRESH inactiv sau lipsa."}),{status:403,headers:CORS});
-  const role=norm(profile.rol);
-  if(!Object.prototype.hasOwnProperty.call(READ_ROLES,role)) return new Response(JSON.stringify({success:false,error:"Rol OFRESH necunoscut sau neautorizat."}),{status:403,headers:CORS});
+  const rights=profile.drepturi||{};
+  const primaryRole=norm(profile.rol);
+  const assignedRoles=new Set<string>([primaryRole]);
+  if(Array.isArray(rights.roles)) for(const item of rights.roles) assignedRoles.add(norm(item));
+  if(rights["Mod Tehnician"]===true || rights["mod tehnician"]===true) assignedRoles.add("tehnician");
+  const role=norm(req.headers.get("x-ofresh-role")||primaryRole);
+  if(!assignedRoles.has(role) || !Object.prototype.hasOwnProperty.call(READ_ROLES,role)) return new Response(JSON.stringify({success:false,error:"Rol OFRESH necunoscut sau neautorizat pentru acest cont."}),{status:403,headers:CORS});
   if(action==="whoami") return Response.json({success:true,user:{id:auth.user.id,email:auth.user.email},profile},{headers:CORS});
   const isAdmin = role === "administrator" || role === "admin";
   const isFiler = role === "filer";
@@ -146,7 +151,6 @@ async function main(req:Request) {
     if((techRows||[]).length>1) throw new Error("Contul este asociat mai multor inregistrari de tehnician. Solicita verificarea administratorului.");
     technicianRecord=(techRows||[])[0]||null;
   }
-  const rights=profile.drepturi||{};
   const hasEspressoRight=rights["Service Espressoare"]===true || rights["service espressoare"]===true || (Array.isArray(rights)&&rights.some((x:any)=>norm(x)==="service espressoare"));
   const allowed=(READ_ROLES[role]||[]).filter(name=>!(role==="comercial" && ["InterventiiEspressoare","PozeInterventiiEspressoare"].includes(name) && !hasEspressoRight));
   const physicalRowsCache = new Map<string, any[]>();
