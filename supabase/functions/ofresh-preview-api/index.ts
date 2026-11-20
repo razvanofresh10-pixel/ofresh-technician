@@ -107,8 +107,8 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewWrites=new Set(["add","insert","upsert","update","delete","filerSaveVisit","filerUpdateMachine","technicianUpdateMachine","filerUploadPhotoChunk","filerFinalizePhotoUpload","filerFinalizePhotoUploads","filerUpdateLocation","filerUpdateGps","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload"]);
-  if(previewWrites.has(action)) return Response.json({success:false,error:"Versiunea OFRESH Supabase Preview este numai pentru vizualizare. Salvările sunt dezactivate până la validarea completă."},{status:403,headers:CORS});
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","interventionExportData","list"]);
+  if(!previewReadActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview numai-citire."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
     const lookup=String(body.id||"").trim();
@@ -213,7 +213,8 @@ async function main(req:Request) {
       allowed.includes("Interventii")?fetchSheet("Interventii"):Promise.resolve([])
     ]);
     const recent=interventions.slice().sort((a:any,b:any)=>String(b.Data||"").localeCompare(String(a.Data||""))).slice(0,6);
-    return Response.json({success:true,data:{Aparate:machines,Locatii:locations,Filtre:filters,Interventii:recent},totals:{aparate:machines.length,locatii:locations.length,filtre:filters.length,interventii:interventions.length}},{headers:CORS});
+    const data={Aparate:machines,Locatii:locations,Filtre:filters,Interventii:recent};
+    return Response.json({success:true,...data,data,totals:{aparate:machines.length,locatii:locations.length,filtre:filters.length,interventii:interventions.length}},{headers:CORS});
   }
   if(action==="commercialData" || action==="commercialHistory" || action==="commercialEspressoHistory"){
     if(role!=="comercial" && role!=="administrator" && role!=="admin") return new Response(JSON.stringify({success:false,error:"Acces interzis."}),{status:403,headers:CORS});
