@@ -667,7 +667,7 @@ html body.ofreshFilerMode #app{width:100%!important;max-width:none!important}
 </aside>
 <main class="main">
 <header class="topbar"><div><div class="breadcrumb">OFRESH / <span id="crumb">Dashboard</span></div><h1 id="pageTitle">Dashboard</h1></div></header>
-<div class="wrap"><div id="app"><div class="loading">Se incarca OFRESH...</div></div></div>
+<div class="wrap"><div id="ofreshSupabasePreviewBanner" style="display:none;margin:0 0 14px;padding:12px 16px;border:1px solid #e2c98f;border-radius:12px;background:#fff8e7;color:#73551b;font-size:12px;font-weight:700">OFRESH SUPABASE PREVIEW · CONECTAT LA BAZA REALĂ · MOD NUMAI-CITIRE. Modificările și intervențiile nu se salvează din această versiune.</div><div id="app"><div class="loading">Se incarca OFRESH...</div></div></div>
 </main><div id="modalRoot"></div><div id="message" class="message"></div>
 <script>
 /* OFRESH: clear old service workers/caches so an older mobile/desktop build cannot override the current app. */
@@ -681,10 +681,17 @@ if ("serviceWorker" in navigator) {
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
  // Recuperarea PIN-ului se face exclusiv prin Google Apps Script.
 
- const API_URL="https://script.google.com/macros/s/AKfycbwJbdx7a7lG2OpxKW53zzXQ20rQ1IKWLlYIo5UZ7rH7_EjAwiZFXCCozlndzt56O4Ml/exec";
+ const SUPABASE_URL="https://zlbgxeaasctnfmjsrvql.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb";
+const SUPABASE_FUNCTION_URL=SUPABASE_URL+"/functions/v1/ofresh-preview-api";
+const supabaseClient=window.supabase?.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{
+  auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+});
+const API_URL=SUPABASE_FUNCTION_URL;
 const pages={dashboard:"Dashboard",clienti:"Clienti",aparate:"Aparate",interventii:"Interventii",interventiiEspresso:"Service Espressoare",filtre:"Filtre",stoc:"Stoc",tehnicieni:"Tehnicieni",rapoarte:"Rapoarte",utilizatori:"Utilizatori",comercial:"Comercial",setari:"Setari"};
 const icons={dashboard:"D",clienti:"C",aparate:"A",interventii:"I",interventiiEspresso:"☕",filtre:"F",stoc:"S",tehnicieni:"T",rapoarte:"R",utilizatori:"U",comercial:"💼",setari:"⚙"};
 const interventionTypes=["Igienizare","Schimbare filtru","Inlocuire piese","Verificare aparat / testare","Mentenanta 6 luni","Mentenanta 1 an","Interventie la cerere client","Alta interventie"];
@@ -698,32 +705,47 @@ function clearSearch(){searchTerm="";document.getElementById("globalSearch").val
 function msg(t,ok=true){const e=document.getElementById("message");e.textContent=t;e.className="message "+(ok?"ok":"err");setTimeout(()=>{e.className="message"},3600)}
 let ofreshAdminLoginWarmPromise=null;
 let ofreshAdminLoginWarmAt=0;
-function warmAdminLoginCache(){
-  if(ofreshAdminLoginWarmPromise) return ofreshAdminLoginWarmPromise;
-  // Cache-ul serverului expira in 120s; il consideram pregatit 90s.
-  if(ofreshAdminLoginWarmAt && Date.now()-ofreshAdminLoginWarmAt<90000) return Promise.resolve({success:true,cached:true});
-  ofreshAdminLoginWarmPromise=api({action:'warmAdminLoginCache'})
-    .then(r=>{if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut pregati autentificarea.');ofreshAdminLoginWarmAt=Date.now();console.info('[OFRESH PERF]',{phase:'admin-login-cache-ready',serverMs:r.__ofreshServerMs??r.elapsedMs??null,cached:!!r.cached});return r;})
-    .catch(e=>{console.warn('[OFRESH] Admin login cache warm-up skipped:',e);return null;})
-    .finally(()=>{ofreshAdminLoginWarmPromise=null;});
-  return ofreshAdminLoginWarmPromise;
+function warmAdminLoginCache(){return Promise.resolve({success:true,cached:true,provider:"supabase"});}
+async function api(params){
+  const action=String(params?.action||"");
+  const started=performance.now();
+  if(action==="warmAdminLoginCache")return {success:true,cached:true};
+  if(!supabaseClient)throw new Error("Biblioteca Supabase nu s-a încărcat. Reîncarcă pagina.");
+  const publicAction=action==="publicMachine";
+  let token="";
+  if(!publicAction){
+    const sessionResult=await supabaseClient.auth.getSession();
+    if(sessionResult.error)throw new Error(sessionResult.error.message||"Nu pot verifica sesiunea Supabase.");
+    token=sessionResult.data?.session?.access_token||"";
+    if(!token)throw new Error("Sesiunea Supabase a expirat. Autentifică-te din nou.");
+  }
+  const headers={"Content-Type":"application/json","apikey":SUPABASE_PUBLISHABLE_KEY};
+  if(token)headers.Authorization="Bearer "+token;
+  const response=await fetch(SUPABASE_FUNCTION_URL,{method:"POST",headers,body:JSON.stringify(params||{}),credentials:"omit"});
+  let result;
+  try{result=await response.json();}catch(_){throw new Error("Serverul Supabase a returnat un răspuns invalid.");}
+  if(!response.ok)throw new Error(String(result?.error||result?.message||("Eroare Supabase HTTP "+response.status)));
+  console.info("[OFRESH SUPABASE PERF]",{action,networkMs:Math.round(performance.now()-started)});
+  return result;
 }
-
-function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const filerTrack=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerUploadPhotoChunk|filerFinalizePhotoUpload|filerFinalizePhotoUploads)$/.test(action);const adminTrack=/^(loginUser|warmAdminLoginCache|dashboardData|readSheets|technicianData|commercialLogin|commercialData|uploadPhotoChunk|finalizePhotoUpload)$/.test(action);const track=filerTrack||adminTrack;const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d,serverOverride){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshLastApiMs=ms;if(filerTrack)window.__ofreshFilerLastApiMs=ms;const server=serverOverride??d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;const details={action:action,networkMs:ms,serverMs:server,payloadChars:s.src.length,locations:d?.totalLocations,machines:d?.totalMachines};console.info(filerTrack?'[OFRESH FILER PERF]':'[OFRESH PERF]',details);}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();const serverMs=d&&typeof d==='object'?d.__ofreshServerMs:undefined;if(d&&typeof d==='object')try{delete d.__ofreshServerMs}catch{};perf(d,serverMs);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
-function apiPost(params){
-  return new Promise((resolve,reject)=>{
-    const nonce=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x=>x.toString(16).padStart(2,'0')).join('');
-    const frameName='ofresh_post_'+nonce;
-    const iframe=document.createElement('iframe');iframe.name=frameName;iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
-    const form=document.createElement('form');form.method='POST';form.action=API_URL;form.target=frameName;form.style.display='none';
-    const payload={...params,__ofreshPostBridge:'1',__ofreshPostNonce:nonce};
-    Object.entries(payload).forEach(([key,value])=>{const input=document.createElement('input');input.type='hidden';input.name=key;input.value=String(value??'');form.appendChild(input);});
-    let done=false;const timeout=setTimeout(()=>finish(new Error('Google Apps Script nu a raspuns. Incearca din nou.')),30000);
-    function cleanup(){window.removeEventListener('message',onMessage);form.remove();iframe.remove();}
-    function finish(error,data){if(done)return;done=true;clearTimeout(timeout);cleanup();if(error)reject(error);else resolve(data);}
-    function onMessage(event){const d=event.data;if(!d||d.type!=='ofresh-api-response'||d.nonce!==nonce)return;finish(null,d.data);}
-    window.addEventListener('message',onMessage);document.body.append(iframe,form);form.submit();
-  });
+async function apiPost(params){return api(params);}
+async function ofreshSupabaseSignIn(email,password,allowedRoles){
+  if(!supabaseClient)throw new Error("Biblioteca Supabase nu este disponibilă.");
+  const normalizedEmail=String(email||"").trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))throw new Error("Introdu adresa de e-mail a contului OFRESH.");
+  const auth=await supabaseClient.auth.signInWithPassword({email:normalizedEmail,password:String(password||"")});
+  if(auth.error)throw new Error(auth.error.message||"E-mail sau parolă incorectă.");
+  const identity=await api({action:"whoami"});
+  if(!identity?.success||!identity.profile)throw new Error("Contul nu are profil OFRESH activ în Supabase.");
+  const role=String(identity.profile.rol||"").trim().toLowerCase();
+  if(!allowedRoles.includes(role)){await supabaseClient.auth.signOut();throw new Error("Contul nu are rolul necesar pentru acest modul.");}
+  return {auth:auth.data,identity,profile:identity.profile};
+}
+async function ofreshLoginFiler(email,password){
+  const signed=await ofreshSupabaseSignIn(email,password,["filer"]);
+  const data=await api({action:"filerData"});
+  if(!data?.success||!Array.isArray(data.locations))throw new Error(data?.error||"Nu am putut încărca portofoliul Filer.");
+  return {...data,user:{...signed.profile,"ID Utilizator":signed.profile.id,Nume:signed.profile.nume,Email:signed.auth.user.email}};
 }
 
 function buildClientsFromMachines(machines){
@@ -1265,7 +1287,7 @@ function openTechLogin(){
       <button type="button" class="techRoleChoice" data-role="filer" aria-pressed="false">Filler</button>
     </div>
     <div id="techLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
-    <div class="techLoginField"><label for="f_loginTelefon">Telefon</label><input id="f_loginTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon"></div>
+    <div class="techLoginField"><label for="f_loginTelefon">E-mail</label><input id="f_loginTelefon" type="email" inputmode="email" autocomplete="username" placeholder="E-mail cont OFRESH"></div>
     <div class="techLoginField"><label for="f_loginPin">PIN</label><input id="f_loginPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces"></div>
     
     <button type="button" class="techLoginButton" id="techLoginSubmit">Intra in modul tehnician</button>
@@ -1295,7 +1317,7 @@ function openTechLogin(){
     if(!phone||!pin){if(error){error.textContent="Completeaza telefonul si PIN-ul.";error.style.display="block";}window.__ofreshFilerLoginBusy=false;return;}
     submitButton.disabled=true;submitButton.textContent="Se verifica...";
     try{
-      const r=await api({action:"loginFiler",telefon:phone,pin:pin});
+      const r=await ofreshLoginFiler(phone,pin);
       if(!r||r.success!==true)throw new Error(r?.error||"Nu am putut valida contul Filer.");
       if(!Array.isArray(r.locations))throw new Error("Autentificarea a reusit, dar lista de clienti nu a fost returnata.");
       filerSession={id:r.user?.["ID Utilizator"]||"",name:r.user?.Nume||"Filer",phone:phone,pin:pin,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
@@ -1311,29 +1333,22 @@ function openTechLogin(){
   setTimeout(()=>document.getElementById("f_loginTelefon")?.focus(),50);
 }
 async function loginTechnician(){
-  const phone=v("loginTelefon").replace(/\s+/g,"").replace(/-/g,"");
-  const pin=v("loginPin").trim();
+  const email=v("loginTelefon").trim().toLowerCase(),password=v("loginPin").trim();
   const err=document.getElementById("techLoginError");
-  const showTechError=(message)=>{if(err){err.textContent=message;err.style.display="block";}else{msg(message,false)}};
-  if(!phone||!pin){showTechError("Completeaza telefonul si PIN-ul.");return false;}
+  const showTechError=message=>{if(err){err.textContent=message;err.style.display="block";}else msg(message,false);};
+  if(!email||!password){showTechError("Completează e-mailul și parola.");return false;}
   if(err)err.style.display="none";
   try{
-    const r=await api({action:"login",telefon:phone,pin:pin});
-    if(!r||!r.success)throw new Error(r?.error||"Telefonul sau PIN-ul este gresit.");
-    const t=r.technician||r.user||{};
-    const matchedLocal=getTechnicians().find(x=>String(technicianPhone(x)).replace(/\D/g,"")===phone.replace(/\D/g,""));
-    const resolvedName=t.nume||t.Nume||t["Nume tehnician"]||t.name||t.fullName||t["Nume complet"]||t["Nume si prenume"]|| (matchedLocal?technicianName(matchedLocal):"");
-    techSession={id:t.id||t["ID Tehnician"]||t["ID Utilizator"]||"",name:String(resolvedName||"").trim(),phone:t.telefon||t.Telefon||phone};
-    try{localStorage.setItem("ofresh_tech_session",JSON.stringify(techSession));}catch(e){}
-    techView="home";
-    technicianDataLoading=true;
-    console.info('[OFRESH TECH PERF]',{phase:'login-success',hasName:!!techSession.name,technicianFields:Object.keys(t)});
-    document.getElementById("techLoginScreen")?.remove();
-    document.body.classList.remove("techLoginActive");
-    showTechnicianHome();
-    load(true);
-    return true;
-  }catch(e){showTechError(e.message||"Nu am putut valida accesul Tehnician.");return false}
+    const signed=await ofreshSupabaseSignIn(email,password,["tehnician","technician"]);
+    const data=await api({action:"technicianData"});
+    if(!data||data.success!==true||!data.technician)throw new Error(data?.error||"Contul Tehnician nu este asociat explicit unei înregistrări active în Supabase.");
+    const t=data.technician;
+    techSession={id:t.id||t["ID Tehnician"]||"",name:String(t.Nume||t.nume||signed.profile.nume||signed.auth.user.email).trim(),phone:t.Telefon||signed.profile.telefon||email};
+    try{localStorage.setItem("ofresh_tech_session",JSON.stringify(techSession));}catch(_){}
+    techView="home";technicianDataLoading=true;
+    document.getElementById("techLoginScreen")?.remove();document.body.classList.remove("techLoginActive");
+    showTechnicianHome();load(true);return true;
+  }catch(e){showTechError(e.message||"Nu am putut valida contul Tehnician.");return false;}
 }
 
 function logoutTechnician(){
@@ -2185,9 +2200,8 @@ async function loginCommercial(){
   if(!email||!pin)return msg("Completeaza adresa de email si PIN-ul.",false);
   window.__ofreshCommercialLoginBusy=true;
   try{
-    const r=await api({action:"commercialLogin",email:email,pin:pin});
-    if(!r||!r.success)throw new Error(r?.error||"Emailul sau PIN-ul este gresit.");
-    commercialSession=r.user||{Email:email,Rol:"comercial"};commercialAuthPin=pin;
+    const signed=await ofreshSupabaseSignIn(email,pin,["comercial"]);
+    commercialSession={...signed.profile,Email:signed.auth.user.email||email,Rol:signed.profile.rol||"comercial"};commercialAuthPin="";
     commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};
     commercialEspressoHistory=[];commercialEspressoHistoryLoaded=false;commercialEspressoLoading=false;
     commercialDataLoading=true;
@@ -3895,7 +3909,7 @@ function openFilerLogin(){
     <div class="techLoginEyebrow">OFRESH ONLINE</div>
     <h2>Acces Filler</h2>
     <div id="filerLoginError" class="techLoginError" role="alert" aria-live="polite"></div>
-    <div class="techLoginField"><label for="f_filerTelefon">Telefon</label><input id="f_filerTelefon" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numar de telefon" required></div>
+    <div class="techLoginField"><label for="f_filerTelefon">E-mail</label><input id="f_filerTelefon" type="email" inputmode="email" autocomplete="username" placeholder="E-mail cont OFRESH" required></div>
     <div class="techLoginField"><label for="f_filerPin">PIN</label><input id="f_filerPin" type="password" inputmode="text" autocomplete="current-password" placeholder="PIN sau cod de acces" required></div>
     
     <button type="submit" class="techLoginButton" id="filerLoginSubmit">Intra in modul Filler</button>
@@ -3912,7 +3926,7 @@ function openFilerLogin(){
     const submitButton=document.getElementById('filerLoginSubmit');
     if(submitButton){submitButton.disabled=true;submitButton.textContent='Se verifica...';}
     try{
-      const r=await api({action:'loginFiler',telefon:phone,pin:pin});
+      const r=await ofreshLoginFiler(phone,pin);
       if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut valida contul Filer.');
       if(!Array.isArray(r.locations))throw new Error('Autentificarea a reusit, dar lista de clienti nu a fost returnata.');
       filerSession={id:r.user?.['ID Utilizator']||'',name:r.user?.Nume||'Filer',phone:phone,pin:pin,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
@@ -4756,31 +4770,24 @@ function openAdminLogin(){
 }
 async function loginAdministrator(){
   if(window.__ofreshAdminLoginBusy)return;
-  const adminLoginStarted=performance.now();
   window.__ofreshAdminLoginBusy=true;
+  const started=performance.now();
   try{
-  const email=String(document.getElementById("f_adminTelefon")?.value||"").trim().toLowerCase();
-  const pin=String(document.getElementById("f_adminPin")?.value||"").trim();
-  if(!email||!pin)return msg("Completeaza adresa de e-mail si parola.",false);
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
-  const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
-  const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{const shellStarted=performance.now();cancelAdminDashboardRefresh();adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();console.info('[OFRESH PERF]',{phase:'admin-shell-rendered-from-cache',durationMs:Math.round(performance.now()-shellStarted),totalSinceLoginMs:Math.round(performance.now()-adminLoginStarted)});/* Dashboard-ul se actualizeaza doar daca administratorul ramane pe Dashboard; navigarea spre un modul anuleaza timerul si nu asteapta cererea Dashboard. */scheduleAdminDashboardRefresh(650);};
-  try{
-    // Daca utilizatorii sunt in curs de preincalzire, asteptam cache-ul server-side
-    // pentru ca autentificarea sa nu repete o citire lenta din Google Sheets.
-    await warmAdminLoginCache();
-    const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
-    if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");console.info('[OFRESH PERF]',{phase:'admin-auth-success',totalMs:Math.round(performance.now()-adminLoginStarted)});openAdmin(r.user);return;}
-    throw new Error(r?.error||"E-mailul sau parola este gresita.");
-  }catch(e){
-    // Cache fallback permits login only when a matching active administrator exists locally.
-    const localUser=(db.Utilizatori||[]).find(matchesAdmin);
-    if(localUser){openAdmin(localUser);return;}
-    console.info('[OFRESH PERF]',{phase:'admin-auth-failed',totalMs:Math.round(performance.now()-adminLoginStarted),error:String(e?.message||e)});
-    msg(e.message||"E-mailul sau parola este gresita.",false);return;
-  }
-  } finally { window.__ofreshAdminLoginBusy=false; }
+    const email=String(document.getElementById("f_adminTelefon")?.value||"").trim().toLowerCase();
+    const password=String(document.getElementById("f_adminPin")?.value||"").trim();
+    if(!email||!password)throw new Error("Completează adresa de e-mail și parola Supabase.");
+    const signed=await ofreshSupabaseSignIn(email,password,["administrator","admin"]);
+    const p=signed.profile;
+    const user={"ID Utilizator":p.id,Nume:p.nume||signed.auth.user.email,Email:signed.auth.user.email||p.email||email,Telefon:p.telefon||"",Rol:p.rol||"administrator",Status:"Activ",Drepturi:p.drepturi||{},"Orase acces":p.orase_acces||[],"Tip echipament acces":p.tip_echipament_acces||[],"Zone aparate acces":p.zone_aparate_acces||[]};
+    cancelAdminDashboardRefresh();
+    adminSession=user;commercialSession=null;techSession=null;
+    const previewBanner=document.getElementById("ofreshSupabasePreviewBanner");if(previewBanner)previewBanner.style.display="block";
+    db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};
+    ofreshLoadedSheets.clear();restoreCachedData(user);closeModal();enterAdminCleanMode();current="dashboard";render();
+    console.info("[OFRESH SUPABASE PERF]",{phase:"admin-authenticated",totalMs:Math.round(performance.now()-started)});
+    scheduleAdminDashboardRefresh(250);
+  }catch(e){console.error("[OFRESH SUPABASE AUTH]",e);msg(e.message||"Nu am putut valida contul Administrator.",false);}
+  finally{window.__ofreshAdminLoginBusy=false;}
 }
 
 const publicParams=new URLSearchParams(location.search);
