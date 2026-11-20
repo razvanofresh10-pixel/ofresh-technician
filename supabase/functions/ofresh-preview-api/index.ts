@@ -1,4 +1,4 @@
-// OFRESH V38 — Supabase migration adapter (preview; read-only)
+// OFRESH V38 — Supabase migration adapter (preview; scoped intervention/photo writes)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -458,9 +458,9 @@ async function main(req:Request) {
   // Legacy V5 `add` compatibility for standard technician interventions.
   // This intentionally accepts only the intervention payload and derives relational IDs server-side.
   if(action==="add" && String(body.sheet||"").trim()==="Interventii"){
-    if(!isTech) throw new Error("Adaugarea interventiilor standard este disponibila doar contului Tehnician.");
-    if(!technicianRecord) throw new Error("Contul Tehnician nu este asociat unei inregistrari din lista Tehnicieni. Administratorul trebuie sa faca asocierea explicita inainte de salvare.");
-    if(norm(technicianRecord.status) && !["activ","active"].includes(norm(technicianRecord.status))) throw new Error("Contul de tehnician este inactiv.");
+    if(!isTech&&!isAdmin) throw new Error("Adaugarea interventiilor este disponibila doar Tehnicianului sau Administratorului.");
+    if(isTech&&!technicianRecord) throw new Error("Contul Tehnician nu este asociat unei inregistrari din lista Tehnicieni. Administratorul trebuie sa faca asocierea explicita inainte de salvare.");
+    if(technicianRecord && norm(technicianRecord.status) && !["activ","active"].includes(norm(technicianRecord.status))) throw new Error("Contul de tehnician este inactiv.");
     let record:any={};
     try { record=typeof body.record==="string"?JSON.parse(body.record):body.record||{}; }
     catch { throw new Error("Datele interventiei nu sunt valide."); }
@@ -498,8 +498,8 @@ async function main(req:Request) {
       locatie_id:location.id,
       client_id:location.client_id||null,
       data_interventie:now,
-      tehnician_id:technicianRecord.id,
-      tehnician:technicianRecord.nume||profile.nume||auth.user.email||"",
+      tehnician_id:technicianRecord?.id||null,
+      tehnician:technicianRecord?.nume||profile.nume||auth.user.email||"",
       tip:record.Tip||record.tip||visitType,
       tip_interventie:visitType,
       descriere:record.Descriere||record.descriere||record["Operatiuni efectuate"]||"",
