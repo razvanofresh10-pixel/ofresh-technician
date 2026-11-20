@@ -1328,7 +1328,7 @@ function openTechLogin(){
       const r=await ofreshLoginFiler(phone,pin);
       if(!r||r.success!==true)throw new Error(r?.error||"Nu am putut valida contul Filer.");
       if(!Array.isArray(r.locations))throw new Error("Autentificarea a reusit, dar lista de clienti nu a fost returnata.");
-      filerSession={id:r.user?.["ID Utilizator"]||"",name:r.user?.Nume||"Filer",phone:phone,pin:pin,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
+      filerSession={id:r.user?.["ID Utilizator"]||"",name:r.user?.Nume||"Filer",phone:phone,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
       techSession=null;commercialSession=null;adminSession=null;filerState=r;
       filerView="home";filerSelectedLocationKey="";filerSelectedMachineRow=0;filerSearchTerm="";
       document.getElementById("techLoginScreen")?.remove();document.body.classList.remove("techLoginActive");
@@ -2216,7 +2216,7 @@ async function loginCommercial(){
     closeModal();commercialTab='aparate';commercialActiveButton='aparate';commercialCounty='';commercialPageNum=1;searchTerm='';commercialPage();
     document.getElementById("pageTitle").textContent="Comercial";document.getElementById("crumb").textContent="Comercial";
     // Datele portofoliului se incarca dupa afisarea interfetei, fara sa tina utilizatorul pe login.
-    api({action:"commercialData",email:email,pin:pin}).then(data=>{
+    api({action:"commercialData"}).then(data=>{
       if(!data||!data.success)throw new Error(data?.error||"Nu am putut incarca datele Comerciale.");
       commercialDb={Aparate:Array.isArray(data.data?.Aparate)?data.data.Aparate:[],Filtre:Array.isArray(data.data?.Filtre)?data.data.Filtre:[],Interventii:Array.isArray(data.data?.Interventii)?data.data.Interventii:[],Clienti:Array.isArray(data.data?.Clienti)?data.data.Clienti:[],Locatii:Array.isArray(data.data?.Locatii)?data.data.Locatii:[],InterventiiLoaded:!!data.data?.InterventiiLoaded};
       commercialDataLoading=false;
@@ -2255,12 +2255,10 @@ async function ensureCommercialHistory(){
     commercialDb.InterventiiLoaded=true;
     return true;
   }
-  const email=String(commercialSession?.Email||commercialSession?.email||"").trim().toLowerCase();
-  const pin=String(commercialAuthPin||"").trim();
-  if(!email||!pin) { msg("Nu am putut valida sesiunea Comercial. Iesi si autentifica-te din nou.",false); return false; }
+  if(!commercialSession) { msg("Sesiunea Comercial a expirat. Autentifica-te din nou.",false); return false; }
   window.__ofreshCommercialHistoryPromise=(async()=>{
     try{
-      let r=await api({action:"commercialHistory",email,pin});
+      let r=await api({action:"commercialHistory"});
       if(r && r.success){
         commercialDb.Interventii=Array.isArray(r.data?.Interventii)?r.data.Interventii:[];
         commercialDb.InterventiiLoaded=true;
@@ -2298,8 +2296,9 @@ async function openCommercialHistory(){
 }
 function commercialHasEspressoAccess(){
   if(adminSession)return true; // Administratorul poate previzualiza toate modulele Comercial.
-  const raw=String(commercialSession?.Drepturi||commercialSession?.drepturi||"");
-  return raw.split(/[,;|]/).map(x=>x.trim().toLowerCase()).includes("service espressoare");
+  const raw=commercialSession?.Drepturi||commercialSession?.drepturi||{};
+  if(raw && typeof raw==="object" && !Array.isArray(raw))return raw["Service Espressoare"]===true||raw["service espressoare"]===true;
+  return String(raw).split(/[,;|]/).map(x=>x.trim().toLowerCase()).includes("service espressoare");
 }
 async function ensureCommercialEspressoHistory(){
   if(commercialEspressoHistoryLoaded)return true;
@@ -2329,10 +2328,8 @@ async function ensureCommercialEspressoHistory(){
         commercialEspressoHistoryLoaded=true;
         return true;
       }
-      const email=String(commercialSession?.Email||commercialSession?.email||"").trim().toLowerCase();
-      const pin=String(commercialAuthPin||"").trim();
-      if(!email||!pin)throw new Error("Sesiunea Comercial nu este valida. Autentifica-te din nou.");
-      const r=await api({action:"commercialEspressoHistory",email,pin});
+      if(!commercialSession)throw new Error("Sesiunea Comercial nu este valida. Autentifica-te din nou.");
+      const r=await api({action:"commercialEspressoHistory"});
       if(!r||!r.success)throw new Error(r?.error||"Nu am putut incarca istoricul espressoarelor.");
       commercialEspressoHistory=Array.isArray(r.data?.InterventiiEspressoare)?r.data.InterventiiEspressoare:[];
       commercialEspressoHistoryLoaded=true;
@@ -3937,7 +3934,7 @@ function openFilerLogin(){
       const r=await ofreshLoginFiler(phone,pin);
       if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut valida contul Filer.');
       if(!Array.isArray(r.locations))throw new Error('Autentificarea a reusit, dar lista de clienti nu a fost returnata.');
-      filerSession={id:r.user?.['ID Utilizator']||'',name:r.user?.Nume||'Filer',phone:phone,pin:pin,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
+      filerSession={id:r.user?.['ID Utilizator']||'',name:r.user?.Nume||'Filer',phone:phone,zones:r.allowedZones||[],equipmentTypes:r.allowedEquipmentTypes||[]};
       techSession=null;commercialSession=null;adminSession=null;
       filerState=r;
       filerView='home';filerSelectedLocationKey='';filerSelectedMachineRow=0;filerSearchTerm='';
