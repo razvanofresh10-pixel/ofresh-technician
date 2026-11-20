@@ -758,13 +758,16 @@ async function main(req:Request) {
     const visit=await canAccessStandardVisit(String(body.interventionId||""));
     const uploadId=String(body.uploadId||"").trim(),totalChunks=Number(body.totalChunks);
     if(!/^[a-zA-Z0-9_-]{8,100}$/.test(uploadId)||!Number.isInteger(totalChunks)||totalChunks<1||totalChunks>100) throw new Error("Date incarcare foto invalide.");
-    let base64=""; const tempPaths:string[]=[];
-    for(let i=0;i<totalChunks;i++){
-      const path=`tmp-standard/${auth.user.id}/${uploadId}/${i}.b64`; tempPaths.push(path);
-      const {data:blob,error}=await sb.storage.from(PHOTO_BUCKET).download(path);
+    const tempPaths=Array.from({length:totalChunks},(_,i)=>`tmp-standard/${auth.user.id}/${uploadId}/${i}.b64`);
+    // Descarca fragmentele in paralel; concatenarea ramane in ordinea indexului.
+    const chunkResults=await Promise.all(tempPaths.map(path=>sb.storage.from(PHOTO_BUCKET).download(path)));
+    const chunks:string[]=[];
+    for(let i=0;i<chunkResults.length;i++){
+      const {data:blob,error}=chunkResults[i];
       if(error||!blob) throw new Error(`Lipseste fragmentul foto ${i+1} din ${totalChunks}.`);
-      base64+=await blob.text();
+      chunks.push(await blob.text());
     }
+    const base64=chunks.join("");
     const mimeType=String(body.mimeType||"image/jpeg").split(";")[0];
     const bytes=decodeBase64(base64);
     const photo=await saveStandardPhoto(visit,bytes,mimeType,String(body.fileName||"interventie.jpg"),Math.max(1,Math.min(50,Number(body.photoIndex)||1)));
