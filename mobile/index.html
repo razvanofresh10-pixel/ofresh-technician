@@ -5,6 +5,12 @@
 </style></head><body>
 <header><strong>OFRESH VENDING SOLUTIONS</strong><small>Aplicatie mobila · Tehnicieni & Fileri</small></header>
 <main class="wrap">
+<section id="installCard" class="card">
+<strong>Instaleaza aplicatia OFRESH pe telefon</strong>
+<p class="muted">Adauga OFRESH pe ecranul principal pentru acces direct, ca la orice aplicatie.</p>
+<button id="installBtn" class="secondary" type="button">Instaleaza OFRESH</button>
+<p id="installHelp" class="muted hidden">Pe iPhone: apasa butonul Partajare din Safari, apoi „Adauga la ecranul principal”. Pe Android: foloseste „Instaleaza aplicatia” sau „Adauga la ecranul principal” din meniul browserului.</p>
+</section>
 <section id="login" class="card"><h2>Autentificare</h2><p class="muted">Tehnicieni si fileri: introdu numarul de telefon si PIN-ul primit de la administrator.</p><label>Numar de telefon</label><input id="phone" type="tel" inputmode="tel" autocomplete="username" placeholder="07xx xxx xxx"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" autocomplete="current-password" placeholder="PIN personal"><button id="loginBtn">Intra in aplicatie</button><div id="loginMsg" class="status hidden"></div></section>
 <section id="app" class="hidden">
 <div class="topline"><div><b id="who"></b><div class="muted" id="role"></div></div><button class="secondary" id="logout">Iesire</button></div>
@@ -57,6 +63,15 @@ $('filerSearch').oninput=e=>renderFiler(e.target.value);
 function openFilerMachine(id){currentFilerMachine=filerMachines.find(m=>m['ID Aparat']===id);if(!currentFilerMachine)return;$('filerMachineTitle').textContent=currentFilerMachine.Client||currentFilerMachine._location.Client;$('filerMachineInfo').textContent=machineText(currentFilerMachine);$('filerTasks').innerHTML=tasks.map(t=>'<label class="check"><input type="checkbox" value="'+t+'"> '+t+'</label>').join('');$('filerPhotos').value='';$('filerNotes').value='';show('filerVisit')}
 $('saveFiler').onclick=async()=>{try{if(!currentFilerMachine)throw new Error('Selecteaza un aparat.');const selected=[...$('filerTasks').querySelectorAll('input:checked')].map(x=>x.value);if(!selected.length)throw new Error('Selecteaza cel putin o operatiune.');const files=[...$('filerPhotos').files];if(files.length>5)throw new Error('Sunt permise maximum 5 fotografii.');message('filerMsg','Salvez interventia...');const r=await api('filerSaveVisit',{machineId:currentFilerMachine['ID Aparat'],tasks:selected,observatii:$('filerNotes').value,photoCount:files.length});if(files.length){const uploads=[];for(let i=0;i<files.length;i++)uploads.push(await sendChunks('filerUploadPhotoChunk',r.visitId,r.photoToken,files[i],i+1,i===0?'Aviz':'Aparat dupa curatare'));await api('filerFinalizePhotoUploads',{visitId:r.visitId,photoToken:r.photoToken,photos:uploads})}message('filerMsg','Interventia si '+files.length+' fotografii salvate in Supabase. ID: '+r.visitId)}catch(e){message('filerMsg',e.message,true)}};
 const {data:{session}}=await sb.auth.getSession();if(session){try{await loadProfile()}catch{await sb.auth.signOut();show('login')}}
+let deferredInstallPrompt=null;
+const installButton=document.getElementById('installBtn');
+const installHelp=document.getElementById('installHelp');
+const installCard=document.getElementById('installCard');
+function standaloneMode(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}
+if(standaloneMode()){installCard.classList.add('hidden')}
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;installButton.classList.remove('hidden');installHelp.classList.add('hidden')});
+installButton.addEventListener('click',async()=>{if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;return}installHelp.classList.toggle('hidden')});
+window.addEventListener('appinstalled',()=>installCard.classList.add('hidden'));
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 if(mobileToken){loadProfile().catch(()=>{mobileToken='';localStorage.removeItem('ofresh_mobile_token');show('login')})}
 </script></body></html>
