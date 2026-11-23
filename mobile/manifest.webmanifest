@@ -1,0 +1,11 @@
+{
+  "name":"OFRESH Mobile",
+  "short_name":"OFRESH",
+  "description":"Aplicatie mobila OFRESH pentru tehnicieni si fileri",
+  "lang":"ro",
+  "start_url":"./index.html",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#f3f7f5",
+  "theme_color":"#123d35"
+}
