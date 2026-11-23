@@ -95,7 +95,7 @@ $('saveTech').onclick=async()=>{try{
   const type=$('visitType').value;
   if(!type)throw new Error('Selecteaza tipul interventiei.');
   const selectedOperations=[...$('operationTasks').querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);
-  if(!selectedOperations.length)throw new Error('Bifeaza cel putin o operatiune efectuata.');
+  if($('techPhotos').files.length>5)throw new Error('Poti adauga maximum 5 fotografii.');
   let filterData=null;
   if(type==='Schimbare filtru'){
     let ft=$('filterType').value;
