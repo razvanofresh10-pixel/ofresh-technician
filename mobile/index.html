@@ -106,6 +106,9 @@ $('saveTech').onclick=async()=>{try{
     if(!due)throw new Error('Completeaza data urmatoarei schimbari.');
     if(!Number.isFinite(months)||months<1||months>36)throw new Error('Intervalul de schimbare trebuie sa fie intre 1 si 36 luni.');
     filterData={tipFiltru:ft,dataMontare:mount,dataUrmatoareiSchimbari:due,intervalLuni:months};
+    message('techMsg','Verific disponibilitatea filtrului in stoc...');
+    const stockCheck=await api('checkFilterStock',{filterType:ft});
+    filterData.stockId=stockCheck.stockId;
   }
   const visitDate=$('visitDate').value;
   if(!visitDate)throw new Error('Completeaza data interventiei.');
