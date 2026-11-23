@@ -15,6 +15,7 @@
 <section id="app" class="hidden">
 <div class="topline"><div><b id="who"></b><div class="muted" id="role"></div></div><button class="secondary" id="logout">Iesire</button></div>
 <div id="techPanel" class="hidden">
+<div class="card"><h2>Schimbari filtre</h2><div id="techFilterAlerts" class="muted">Se verifica scadentele filtrelor...</div></div>
 <div class="card"><h2>Interventie tehnica</h2><label>1. Cauta clientul (scrie minimum 3 litere)</label><input id="machineSearch" placeholder="Incepe sa scrii numele clientului..." autocomplete="off"><button id="searchMachine" type="button" class="hidden">Cauta</button><div id="clientSuggestions" class="muted"></div><div id="machineResult" class="muted"></div><button class="secondary scan" id="scanBtn">▣ Scaneaza QR cu camera</button><div id="cameraBox" class="hidden"><video id="qrVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button class="secondary" id="stopScan">Opreste camera</button></div><input id="qrFile" type="file" accept="image/*" capture="environment" class="hidden">
 <div class="grid"><div><label>Data</label><input id="visitDate" type="date"></div><div><label>Tehnician</label><input id="technicianName" readonly></div></div><label>Client / locatie</label><input id="visitClient" readonly placeholder="Se completeaza dupa selectarea aparatului">
 <label>Tip interventie</label><select id="visitType"><option value="">Selecteaza</option><option>Igienizare</option><option>Schimbare filtru</option><option>Inlocuire piese</option><option>Verificare aparat / testare</option><option>Mentenanta 6 luni</option><option>Mentenanta 1 an</option><option>Interventie la cerere client</option><option>Alta interventie</option></select>
@@ -45,7 +46,24 @@ async function api(action,data={}){if(!mobileToken)throw new Error('Sesiunea a e
 async function loadProfile(){const r=await api('whoami');profile=r.profile;role=String(profile.rol||'').toLowerCase();$('who').textContent=profile.nume||profile.email||'Utilizator';$('role').textContent='Rol: '+role;if($('technicianName'))$('technicianName').value=profile.nume||'';show('login',false);show('app');show('techPanel',role==='tehnician'||role==='administrator'||role==='admin');show('filerPanel',role==='filer'||role==='administrator'||role==='admin');if(role==='tehnician'||role==='administrator'||role==='admin')await loadTechData();if(role==='filer'||role==='administrator'||role==='admin')await loadFilerData()}
 $('loginBtn').onclick=async()=>{try{$('loginBtn').disabled=true;message('loginMsg','Se verifica datele de autentificare...');let phone=$('phone').value.replace(/[^0-9+]/g,'');if(phone.startsWith('0'))phone='+4'+phone;else if(!phone.startsWith('+'))phone='+40'+phone;if(!/^[+]40[0-9]{9}$/.test(phone))throw new Error('Introdu un numar de telefon valid.');const pin=$('pin').value.trim();if(!/^[0-9]{6,12}$/.test(pin))throw new Error('PIN-ul trebuie sa aiba intre 6 si 12 cifre.');const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify({action:'mobileLogin',phone,pin})});const data=await res.json();if(!res.ok||!data.success)throw new Error(data.error||'Autentificare esuata.');mobileToken=data.token;localStorage.setItem('ofresh_mobile_token',mobileToken);await loadProfile()}catch(e){message('loginMsg',e.message,true)}finally{$('loginBtn').disabled=false}}
 $('logout').onclick=async()=>{try{await api('mobileLogout')}catch(e){}mobileToken='';localStorage.removeItem('ofresh_mobile_token');profile=null;role='';show('app',false);show('login')};
-async function loadTechData(){$('machineResult').textContent='Cauta aparatul dupa Cod OFRESH sau scaneaza eticheta QR.'}
+async function loadTechData(){
+ $('machineResult').textContent='Cauta aparatul dupa Cod OFRESH sau scaneaza eticheta QR.';
+ const box=$('techFilterAlerts');
+ try{
+  const r=await api('technicianData'), machines=r.Aparate||[], byId=new Map(machines.map(m=>[String(m['ID Aparat']||m.id),m]));
+  const today=new Date();today.setHours(0,0,0,0);
+  const upcoming=(r.Filtre||[]).filter(f=>String(f.Status||'Activ').toLowerCase()==='activ').map(f=>{
+   const due=String(f['Urmatoarea schimbare']||'').slice(0,10);
+   if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(due))return null;
+   const dt=new Date(due+'T00:00:00'),days=Math.round((dt-today)/86400000),m=byId.get(String(f['ID Aparat']||''));
+   return {f,days,m,due};
+  }).filter(x=>x&&x.days<=15).sort((a,b)=>a.days-b.days);
+  box.innerHTML=upcoming.length?upcoming.map(x=>{
+   const label=x.days<0?'Intarziat cu '+Math.abs(x.days)+' zile':x.days===0?'Scadent astazi':'Scadent in '+x.days+' zile';
+   return '<div class="item"><b>'+escapeHtml(x.m?.Client||'Aparat')+'</b><span class="muted">'+escapeHtml(x.m?.Serie||x.m?.['Cod OFRESH']||'')+' · '+escapeHtml(x.f['Tip filtru']||'Filtru')+'</span><div>'+escapeHtml(label)+' · '+escapeHtml(x.due)+'</div></div>';
+  }).join(''):'Nu exista filtre scadente in urmatoarele 15 zile.';
+ }catch(e){box.textContent='Nu am putut incarca scadentele: '+e.message}
+}
 function machineText(m){return [m.Client,m['Cod OFRESH'],m.Producator,m.Model,m.Serie,m.Adresa,m.Zona].filter(Boolean).join(' · ')}
 const operationOptions=['Igienizare aparat','Curatare rezervor','Curatare tava / zona dozare','Schimbare filtru','Verificare etanseitate','Verificare alimentare apa','Verificare functionare aparat','Testare apa / dozare','Inlocuire piesa','Reglaj / calibrare','Resetare / verificare sistem','Alta operatiune'];
 $('operationTasks').innerHTML=operationOptions.map(t=>'<label class="check"><input type="checkbox" value="'+escapeHtml(t)+'"> '+escapeHtml(t)+'</label>').join('');
