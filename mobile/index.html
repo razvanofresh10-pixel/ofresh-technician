@@ -21,12 +21,12 @@
 <div id="filterFields" class="hidden"><label>Tip filtru</label><select id="filterType"><option value="">Selecteaza tipul filtrului</option><option>Brita</option><option>Oasis</option><option>BWT</option><option>FLUUX VH IEN 6000</option><option>Alt tip de filtru</option></select><div id="customFilterWrap" class="hidden"><label>Introdu tipul filtrului</label><input id="customFilterType" placeholder="Denumirea filtrului"></div><div class="grid"><div><label>Data montare</label><input id="filterMountDate" type="date"></div><div><label>Interval luni</label><select id="filterMonths"><option value="6">6</option><option value="12">12</option></select></div></div><label>Urmatoarea schimbare filtru</label><input id="filterNextDate" type="date" readonly></div>
 <label>Operatiuni efectuate</label><div id="operationTasks" class="card" style="margin:8px 0;padding:10px"></div>
 <div class="grid"><div id="nextVisitWrap"><label>Urmatoarea interventie</label><input id="nextVisitDate" type="date"></div><div><label>Facturare</label><label class="check"><input id="solicitareClient" type="checkbox"> Solicitare client</label></div></div>
-<label>Observatii</label><textarea id="notes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="techCameraBtn">📷 Deschide camera si fotografiaza</button><div id="techCameraBox" class="hidden"><video id="techCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="techCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="techCameraClose">Inchide camera</button></div><div id="techPhotoPreview" class="muted"></div><button id="saveTech">Salveaza interventia</button><div id="techMsg" class="status hidden"></div></div>
+<label>Observatii</label><textarea id="notes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="techCameraBtn">📷 Deschide camera si fotografiaza</button><div id="techCameraBox" class="hidden"><video id="techCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="techCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="techCameraClose">Inchide camera</button></div><div id="techPhotoPreview" class="muted"></div><button id="saveTech">Salveaza interventia</button><div id="techMsg" class="status hidden"></div><button type="button" class="secondary" id="techHistoryBtn">Vezi istoricul interventiilor mele</button><div id="techHistory" class="hidden"></div></div>
 </div>
 <div id="filerPanel" class="hidden">
 <div class="card"><h2>Service espressoare</h2><label>Cauta client, cod OFRESH sau serie</label><input id="filerSearch" placeholder="Cauta in aparatele alocate"><div id="filerResults"></div></div>
 <div id="filerVisit" class="card hidden"><h3 id="filerMachineTitle">Interventie filer</h3><div id="filerMachineInfo" class="muted"></div><button type="button" class="secondary" id="filerGpsBtn">Salveaza pozitia GPS a locatiei</button><div id="filerGpsMsg" class="status hidden"></div><div id="filerMapLinks" class="muted"></div><label>Operatiuni</label>
-<div id="filerTasks"></div><label>Observatii</label><textarea id="filerNotes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="filerCameraBtn">📷 Deschide camera si fotografiaza</button><div id="filerCameraBox" class="hidden"><video id="filerCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="filerCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="filerCameraClose">Inchide camera</button></div><div id="filerPhotoPreview" class="muted"></div><button id="saveFiler">Salveaza interventia si fotografiile</button><div id="filerMsg" class="status hidden"></div></div>
+<div id="filerTasks"></div><label>Observatii</label><textarea id="filerNotes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="filerCameraBtn">📷 Deschide camera si fotografiaza</button><div id="filerCameraBox" class="hidden"><video id="filerCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="filerCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="filerCameraClose">Inchide camera</button></div><div id="filerPhotoPreview" class="muted"></div><button id="saveFiler">Salveaza interventia si fotografiile</button><div id="filerMsg" class="status hidden"></div><button type="button" class="secondary" id="filerHistoryBtn">Vezi istoricul vizitelor mele</button><div id="filerHistory" class="hidden"></div></div>
 </div>
 </section>
 <div class="footer">OFRESH Online · Conectat la Supabase Preview</div></main>
@@ -162,6 +162,26 @@ $('filerGpsBtn').onclick=async()=>{
 function openFilerMachine(id){currentFilerMachine=filerMachines.find(m=>m['ID Aparat']===id);if(!currentFilerMachine)return;$('filerMachineTitle').textContent=currentFilerMachine.Client||currentFilerMachine._location.Client;$('filerMachineInfo').textContent=machineText(currentFilerMachine);$('filerGpsMsg').classList.add('hidden');renderFilerMapLinks();$('filerTasks').innerHTML=tasks.map(t=>'<label class="check"><input type="checkbox" value="'+t+'"> '+t+'</label>').join('');filerCapturedPhotos=[];renderCaptured('filerPhotoPreview',filerCapturedPhotos);$('filerNotes').value='';show('filerVisit')}
 $('saveFiler').onclick=async()=>{try{if(!currentFilerMachine)throw new Error('Selecteaza un aparat.');const selected=[...$('filerTasks').querySelectorAll('input:checked')].map(x=>x.value);if(!selected.length)throw new Error('Selecteaza cel putin o operatiune.');const files=[...filerCapturedPhotos];if(files.length>5)throw new Error('Sunt permise maximum 5 fotografii.');message('filerMsg','Salvez interventia...');const r=await api('filerSaveVisit',{machineId:currentFilerMachine['ID Aparat'],tasks:selected,observatii:$('filerNotes').value,photoCount:files.length});if(files.length){const uploads=[];for(let i=0;i<files.length;i++)uploads.push(await sendChunks('filerUploadPhotoChunk',r.visitId,r.photoToken,files[i],i+1,i===0?'Aviz':'Aparat dupa curatare'));await api('filerFinalizePhotoUploads',{visitId:r.visitId,photoToken:r.photoToken,photos:uploads})}message('filerMsg','Interventia si '+files.length+' fotografii salvate in Supabase. ID: '+r.visitId)}catch(e){message('filerMsg',e.message,true)}};
 
+async function loadMobileHistory(target){
+ const box=$(target),button=$(target+'Btn');
+ button.disabled=true;box.classList.remove('hidden');box.innerHTML='<p class="muted">Se incarca istoricul...</p>';
+ try{
+  const r=await api('mobileInterventionHistory',{limit:50});
+  const rows=r.visits||[];
+  box.innerHTML=rows.length?rows.map(v=>{
+   const date=v.Data||v["Data interventie"]||v.data_interventie||'';
+   const client=v.Client||v.client||v.Locatie||v.locatie||'';
+   const machine=v.Aparat||v.aparat||v["ID Aparat"]||v["Serie aparat"]||'';
+   const tasks=v.Operatiuni||v.operatiuni||v["Tip interventie"]||v.tip||'';
+   const taskText=Array.isArray(tasks)?tasks.join(', '):String(tasks||'');
+   const photos=(v.photos||[]).map(p=>p.url?'<a target="_blank" rel="noopener" href="'+escapeHtml(p.url)+'">Fotografie '+p.numar_poza+'</a>':'<span class="muted">Fotografie indisponibila</span>').join(' · ');
+   return '<div class="item"><b>'+escapeHtml(client)+'</b><span class="muted">'+escapeHtml(date)+' · '+escapeHtml(machine)+'</span><div>'+escapeHtml(taskText)+'</div>'+(v.Observatii||v.observatii?'<div class="muted">'+escapeHtml(v.Observatii||v.observatii)+'</div>':'')+(photos?'<div>'+photos+'</div>':'')+'</div>';
+  }).join(''):'<p class="muted">Nu exista interventii in istoricul acestui cont.</p>';
+ }catch(e){box.innerHTML='<p class="status">'+escapeHtml(e.message)+'</p>'}
+ finally{button.disabled=false}
+}
+$('techHistoryBtn').onclick=()=>loadMobileHistory('techHistory');
+$('filerHistoryBtn').onclick=()=>loadMobileHistory('filerHistory');
 let deferredInstallPrompt=null;
 const installButton=document.getElementById('installBtn');
 const installHelp=document.getElementById('installHelp');
