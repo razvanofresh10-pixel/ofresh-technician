@@ -25,6 +25,17 @@
   <section class="card hidden" id="adminCard">
     <div class="top"><div><span class="tag">ADMINISTRATOR VERIFICAT</span><h1 style="margin-top:10px">Alocare telefon si PIN</h1></div><button class="btn secondary" id="logoutBtn" type="button">Iesire</button></div>
     <p>Contul mobil se asociaza unei inregistrari OFRESH existente. Nu se creeaza adrese de email fictive si nu se modifica profilurile de baza.</p>
+    <div class="card" style="padding:18px;margin:18px 0;background:#f8fbf9;box-shadow:none">
+      <h1 style="font-size:18px">Resetare PIN pentru cont existent</h1>
+      <p>Selecteaza un tehnician sau filer care are deja cont asociat. Nu se creeaza un cont nou.</p>
+      <label class="field"><span>Cont mobil existent</span><select id="linkedUser"><option value="">Se incarca...</option></select></label>
+      <div class="grid">
+        <label class="field"><span>PIN nou (6–12 cifre)</span><input id="resetPin" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="new-password"></label>
+        <label class="field"><span>Confirma PIN-ul</span><input id="resetPinConfirm" type="password" inputmode="numeric" minlength="6" maxlength="12" autocomplete="new-password"></label>
+      </div>
+      <button class="btn" id="resetPinBtn" type="button">Salveaza PIN nou</button>
+      <div class="status" id="resetPinStatus" role="status"></div>
+    </div>
     <div class="grid">
       <label class="field"><span>Utilizator existent</span><select id="candidate"><option value="">Selecteaza un utilizator...</option></select></label>
       <label class="field"><span>Tip utilizator</span><select id="personType"><option value="filer">Filer</option><option value="tehnician">Tehnician</option></select></label>
@@ -57,6 +68,11 @@ async function api(action,extra={}){
  if(!res.ok||data.success===false)throw new Error(data.error||("Eroare API ("+res.status+")."));
  return data;
 }
+async function loadLinkedUsers(){
+ const select=$("linkedUser");select.innerHTML='<option value="">Selecteaza contul...</option>';
+ const result=await api("listMobileLinkedUsers");
+ for(const user of result.users||[]){const option=document.createElement("option");option.value=user.id;option.textContent=user.nume+" — "+(user.rol==="tehnician"?"Tehnician":"Filer")+" — "+(user.telefon||"fara telefon");select.appendChild(option);}
+}
 async function loadCandidates(){
  const select=$("candidate");select.innerHTML='<option value="">Selecteaza un utilizator...</option>';
  const result=await api("listMobileProvisionCandidates");
@@ -79,7 +95,7 @@ async function verifyAdmin(){
   const result=await api("whoami");
   if(!["administrator","admin"].includes(String(result.profile?.rol||"").toLowerCase()))throw new Error("Contul autentificat nu are rol de administrator.");
   $("loginCard").classList.add("hidden");$("adminCard").classList.remove("hidden");
-  await loadCandidates();
+  await Promise.all([loadCandidates(),loadLinkedUsers()]);
   return true;
  }catch(e){await client.auth.signOut();showStatus("loginStatus",e.message);return false}
 }
@@ -95,6 +111,17 @@ $("adminLoginForm").addEventListener("submit",async(event)=>{
   if(ok)showStatus("provisionStatus","Autentificare administrator confirmata.",true);
  }catch(e){showStatus("loginStatus",e.message||String(e))}
  finally{button.disabled=false}
+});
+$("resetPinBtn").addEventListener("click",async()=>{
+ const userId=$("linkedUser").value,pin=$("resetPin").value.trim(),confirmPin=$("resetPinConfirm").value.trim();
+ if(!userId)return showStatus("resetPinStatus","Selecteaza un cont mobil existent.");
+ if(!/^\\d{6,12}$/.test(pin))return showStatus("resetPinStatus","PIN-ul trebuie sa contina intre 6 si 12 cifre.");
+ if(pin!==confirmPin)return showStatus("resetPinStatus","PIN-urile nu coincid.");
+ if(!window.confirm("Confirmi resetarea PIN-ului pentru contul selectat?"))return;
+ $("resetPinBtn").disabled=true;
+ try{await api("setMobilePin",{userId,pin});showStatus("resetPinStatus","PIN-ul a fost actualizat. Utilizatorul se poate autentifica folosind telefonul si noul PIN.",true);$("resetPin").value="";$("resetPinConfirm").value="";}
+ catch(e){showStatus("resetPinStatus",e.message||String(e))}
+ finally{$("resetPinBtn").disabled=false}
 });
 $("logoutBtn").addEventListener("click",async()=>{await client.auth.signOut();$("adminCard").classList.add("hidden");$("loginCard").classList.remove("hidden");$("adminPassword").value=""});
 $("provisionBtn").addEventListener("click",async()=>{
