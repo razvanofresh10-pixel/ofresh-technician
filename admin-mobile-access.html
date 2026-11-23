@@ -115,7 +115,7 @@ $("adminLoginForm").addEventListener("submit",async(event)=>{
 $("resetPinBtn").addEventListener("click",async()=>{
  const userId=$("linkedUser").value,pin=$("resetPin").value.trim(),confirmPin=$("resetPinConfirm").value.trim();
  if(!userId)return showStatus("resetPinStatus","Selecteaza un cont mobil existent.");
- if(!/^\\d{6,12}$/.test(pin))return showStatus("resetPinStatus","PIN-ul trebuie sa contina intre 6 si 12 cifre.");
+ if(!/^\d{6,12}$/.test(pin))return showStatus("resetPinStatus","PIN-ul trebuie sa contina intre 6 si 12 cifre.");
  if(pin!==confirmPin)return showStatus("resetPinStatus","PIN-urile nu coincid.");
  if(!window.confirm("Confirmi resetarea PIN-ului pentru contul selectat?"))return;
  $("resetPinBtn").disabled=true;
