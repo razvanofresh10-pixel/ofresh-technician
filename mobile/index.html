@@ -16,8 +16,12 @@
 <div class="topline"><div><b id="who"></b><div class="muted" id="role"></div></div><button class="secondary" id="logout">Iesire</button></div>
 <div id="techPanel" class="hidden">
 <div class="card"><h2>Interventie tehnica</h2><label>Cauta aparat / Cod OFRESH</label><div class="grid"><input id="machineSearch" placeholder="Cod OFRESH sau serie"><button id="searchMachine">Cauta aparat</button></div><button class="secondary scan" id="scanBtn">▣ Scaneaza QR cu camera</button><div id="cameraBox" class="hidden"><video id="qrVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button class="secondary" id="stopScan">Opreste camera</button></div><input id="qrFile" type="file" accept="image/*" capture="environment" class="hidden"><div id="machineResult" class="muted"></div>
-<label>Tip interventie</label><select id="visitType"><option value="">Selecteaza</option><option>Igienizare</option><option>Schimbare filtru</option><option>Inlocuire piese</option><option>Verificare aparat / testare</option><option>Mentenanta 6 luni</option><option>Mentenanta 1 an</option></select>
-<div id="filterFields" class="hidden"><label>Tip filtru schimbat</label><select id="filterType"><option value="">Selecteaza filtrul</option><option>Brita</option><option>BWT</option><option>FLUUX</option><option>Oasis</option><option>Alt tip de filtru</option></select><div class="grid"><div><label>Data montarii</label><input id="filterMountDate" type="date"></div><div><label>Interval (luni)</label><select id="filterMonths"><option value="6">6 luni</option><option value="12">12 luni</option></select></div></div></div><label>Operatiuni efectuate (bifeaza toate operatiunile realizate)</label><div id="operationTasks" class="card" style="margin:8px 0;padding:10px"></div><label class="check"><input id="solicitareClient" type="checkbox"> Solicitare client</label><label>Observatii</label><textarea id="notes"></textarea><label>Fotografii (max. 5 MB total; JPG/PNG/WEBP)</label><input id="techPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple><button id="saveTech">Salveaza interventia</button><div id="techMsg" class="status hidden"></div></div>
+<div class="grid"><div><label>Data</label><input id="visitDate" type="date"></div><div><label>Tehnician</label><input id="technicianName" readonly></div></div><label>Client / locatie</label><input id="visitClient" readonly placeholder="Se completeaza dupa selectarea aparatului">
+<label>Tip interventie</label><select id="visitType"><option value="">Selecteaza</option><option>Igienizare</option><option>Schimbare filtru</option><option>Inlocuire piese</option><option>Verificare aparat / testare</option><option>Mentenanta 6 luni</option><option>Mentenanta 1 an</option><option>Interventie la cerere client</option><option>Alta interventie</option></select>
+<div id="filterFields" class="hidden"><label>Tip filtru</label><select id="filterType"><option value="">Selecteaza tipul filtrului</option><option>Brita</option><option>Oasis</option><option>BWT</option><option>FLUUX VH IEN 6000</option><option>Alt tip de filtru</option></select><div id="customFilterWrap" class="hidden"><label>Introdu tipul filtrului</label><input id="customFilterType" placeholder="Denumirea filtrului"></div><div class="grid"><div><label>Data montare</label><input id="filterMountDate" type="date"></div><div><label>Interval luni</label><select id="filterMonths"><option value="6">6</option><option value="12">12</option></select></div></div><label>Urmatoarea schimbare filtru</label><input id="filterNextDate" type="date" readonly></div>
+<label>Operatiuni efectuate</label><div id="operationTasks" class="card" style="margin:8px 0;padding:10px"></div>
+<div class="grid"><div id="nextVisitWrap"><label>Urmatoarea interventie</label><input id="nextVisitDate" type="date"></div><div><label>Facturare</label><label class="check"><input id="solicitareClient" type="checkbox"> Solicitare client</label></div></div>
+<label>Observatii</label><textarea id="notes"></textarea><label>Fotografii (max. 5 MB total; JPG/PNG/WEBP)</label><input id="techPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple><button id="saveTech">Salveaza interventia</button><div id="techMsg" class="status hidden"></div></div>
 </div>
 <div id="filerPanel" class="hidden">
 <div class="card"><h2>Service espressoare</h2><label>Cauta client, cod OFRESH sau serie</label><input id="filerSearch" placeholder="Cauta in aparatele alocate"><div id="filerResults"></div></div>
@@ -51,6 +55,7 @@ async function searchMachines(term){
 }
 function selectTechMachine(m){
   selectedMachine=m;
+  $('visitClient').value=m.Client||m.Locatie||'';
   $('machineResult').innerHTML='<div class="item"><b>'+escapeHtml(machineText(m))+'</b><span class="pill">Aparat selectat</span></div>';
 }
 $('searchMachine').onclick=async()=>{
@@ -67,7 +72,15 @@ $('searchMachine').onclick=async()=>{
   }catch(e){message('techMsg',e.message,true)}
   finally{$('searchMachine').disabled=false}
 };
-$('visitType').onchange=()=>show('filterFields',$('visitType').value==='Schimbare filtru');$('filterMountDate').value=new Date().toISOString().slice(0,10);let qrStream=null,qrTimer=null;
+$('visitDate').value=new Date().toISOString().slice(0,10);$('technicianName').value=profile?.nume||'';$('filterMountDate').value=new Date().toISOString().slice(0,10);
+function addMonthsISO(date,months){if(!date)return '';const d=new Date(date+'T12:00:00');d.setMonth(d.getMonth()+months);return d.toISOString().slice(0,10)}
+function refreshOriginalInterventionFields(){const type=$('visitType').value;show('filterFields',type==='Schimbare filtru');show('nextVisitWrap',type!=='Schimbare filtru');if(type==='Mentenanta 6 luni')$('nextVisitDate').value=addMonthsISO($('visitDate').value,6);else if(type==='Mentenanta 1 an')$('nextVisitDate').value=addMonthsISO($('visitDate').value,12);else if(type==='Schimbare filtru')$('nextVisitDate').value='';}
+$('visitType').onchange=refreshOriginalInterventionFields;
+$('visitDate').onchange=refreshOriginalInterventionFields;
+$('filterType').onchange=()=>show('customFilterWrap',$('filterType').value==='Alt tip de filtru');
+function refreshFilterDue(){ $('filterNextDate').value=addMonthsISO($('filterMountDate').value,Number($('filterMonths').value)||6) }
+$('filterMountDate').onchange=refreshFilterDue;$('filterMonths').onchange=refreshFilterDue;refreshFilterDue();
+let qrStream=null,qrTimer=null;
 async function stopQr(){if(qrTimer)clearInterval(qrTimer);qrTimer=null;if(qrStream)qrStream.getTracks().forEach(t=>t.stop());qrStream=null;$('qrVideo').srcObject=null;show('cameraBox',false)}
 $('stopScan').onclick=stopQr;
 $('scanBtn').onclick=async()=>{try{if(!('BarcodeDetector'in window)){ $('qrFile').click();return }const detector=new BarcodeDetector({formats:['qr_code']});qrStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});$('qrVideo').srcObject=qrStream;await $('qrVideo').play();show('cameraBox');qrTimer=setInterval(async()=>{try{if(!$('qrVideo').videoWidth)return;const codes=await detector.detect($('qrVideo'));if(codes.length){let value=codes[0].rawValue.trim();try{const u=new URL(value);value=u.searchParams.get('id')||u.searchParams.get('code')||u.pathname.split('/').filter(Boolean).pop()||value}catch{};$('machineSearch').value=value;await stopQr();$('searchMachine').click()}}catch{}},350)}catch(e){message('techMsg','Nu pot porni camera. Verifica permisiunea camerei sau introdu manual codul. '+e.message,true)}};
@@ -85,14 +98,20 @@ $('saveTech').onclick=async()=>{try{
   if(!selectedOperations.length)throw new Error('Bifeaza cel putin o operatiune efectuata.');
   let filterData=null;
   if(type==='Schimbare filtru'){
-    const ft=$('filterType').value,mount=$('filterMountDate').value,months=Number($('filterMonths').value);
-    if(!ft)throw new Error('Selecteaza tipul filtrului schimbat.');
+    let ft=$('filterType').value;
+    if(ft==='Alt tip de filtru')ft=$('customFilterType').value.trim();
+    const mount=$('filterMountDate').value,months=Number($('filterMonths').value),due=$('filterNextDate').value;
+    if(!ft)throw new Error('Selecteaza sau introdu tipul filtrului.');
     if(!mount)throw new Error('Completeaza data montarii filtrului.');
+    if(!due)throw new Error('Completeaza data urmatoarei schimbari.');
     if(!Number.isFinite(months)||months<1||months>36)throw new Error('Intervalul de schimbare trebuie sa fie intre 1 si 36 luni.');
-    const due=new Date(mount+'T12:00:00');due.setMonth(due.getMonth()+months);
-    filterData={tipFiltru:ft,dataMontare:mount,dataUrmatoareiSchimbari:due.toISOString().slice(0,10),intervalLuni:months};
+    filterData={tipFiltru:ft,dataMontare:mount,dataUrmatoareiSchimbari:due,intervalLuni:months};
   }
-  const record={'ID Aparat':selectedMachine.id,'Tip interventie':type,'Tip':type,'Operatiuni efectuate':selectedOperations.join(', '),'SolicitareClient':$('solicitareClient').checked,'Observatii':$('notes').value,'ID Interventie':crypto.randomUUID()};
+  const visitDate=$('visitDate').value;
+  if(!visitDate)throw new Error('Completeaza data interventiei.');
+  const visitNext=type==='Schimbare filtru'?'':$('nextVisitDate').value;
+  const billed=$('solicitareClient').checked;
+  const record={'ID Aparat':selectedMachine.id,'Data':visitDate,'Tehnician':profile?.nume||'','Client':selectedMachine.Client||selectedMachine.Locatie||'','Locatie':selectedMachine.Client||selectedMachine.Locatie||'','Tip interventie':type,'Tip':type,'Operatiuni efectuate':selectedOperations.join(', '),'Tip filtru':filterData?.tipFiltru||'','Urmator schimb':filterData?.dataUrmatoareiSchimbari||'','Urmatoarea interventie':visitNext,'SolicitareClient':billed,'De facturat':billed?'DA':'NU','motivFacturare':billed?'Solicitare client':'','Observatii':$('notes').value,'ID Interventie':crypto.randomUUID()};
   $('saveTech').disabled=true;message('techMsg','Salvez interventia...');
   const r=await api('add',{sheet:'Interventii',record});
   const visitId=r.record?.['ID Interventie']||r.record?.id;
