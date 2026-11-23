@@ -30,12 +30,12 @@
 </div>
 </section>
 <div class="footer">OFRESH Online · Conectat la Supabase Preview</div></main>
-<script type="module">
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+<script>
+
 const SUPABASE_URL='https://zlbgxeaasctnfmjsrvql.supabase.co';
 const SUPABASE_KEY='sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb';
 const API=SUPABASE_URL+'/functions/v1/ofresh-preview-api';
-const sb=createClient(SUPABASE_URL,SUPABASE_KEY);
+
 let profile=null, role='', selectedMachine=null, filerMachines=[], currentFilerMachine=null, techCapturedPhotos=[], filerCapturedPhotos=[];
 const $=id=>document.getElementById(id);
 const show=(id,on=true)=>$(id).classList.toggle('hidden',!on);
@@ -129,7 +129,7 @@ function renderFiler(q){const found=filerMachines.filter(m=>machineText(m).toLow
 $('filerSearch').oninput=e=>renderFiler(e.target.value);
 function openFilerMachine(id){currentFilerMachine=filerMachines.find(m=>m['ID Aparat']===id);if(!currentFilerMachine)return;$('filerMachineTitle').textContent=currentFilerMachine.Client||currentFilerMachine._location.Client;$('filerMachineInfo').textContent=machineText(currentFilerMachine);$('filerTasks').innerHTML=tasks.map(t=>'<label class="check"><input type="checkbox" value="'+t+'"> '+t+'</label>').join('');filerCapturedPhotos=[];renderCaptured('filerPhotoPreview',filerCapturedPhotos);$('filerNotes').value='';show('filerVisit')}
 $('saveFiler').onclick=async()=>{try{if(!currentFilerMachine)throw new Error('Selecteaza un aparat.');const selected=[...$('filerTasks').querySelectorAll('input:checked')].map(x=>x.value);if(!selected.length)throw new Error('Selecteaza cel putin o operatiune.');const files=[...filerCapturedPhotos];if(files.length>5)throw new Error('Sunt permise maximum 5 fotografii.');message('filerMsg','Salvez interventia...');const r=await api('filerSaveVisit',{machineId:currentFilerMachine['ID Aparat'],tasks:selected,observatii:$('filerNotes').value,photoCount:files.length});if(files.length){const uploads=[];for(let i=0;i<files.length;i++)uploads.push(await sendChunks('filerUploadPhotoChunk',r.visitId,r.photoToken,files[i],i+1,i===0?'Aviz':'Aparat dupa curatare'));await api('filerFinalizePhotoUploads',{visitId:r.visitId,photoToken:r.photoToken,photos:uploads})}message('filerMsg','Interventia si '+files.length+' fotografii salvate in Supabase. ID: '+r.visitId)}catch(e){message('filerMsg',e.message,true)}};
-const {data:{session}}=await sb.auth.getSession();if(session){try{await loadProfile()}catch{await sb.auth.signOut();show('login')}}
+
 let deferredInstallPrompt=null;
 const installButton=document.getElementById('installBtn');
 const installHelp=document.getElementById('installHelp');
