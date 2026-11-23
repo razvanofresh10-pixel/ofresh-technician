@@ -114,7 +114,7 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","mobileLogin","mobileLogout"]);
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","mobileLogin","mobileLogout"],"mobileInterventionHistory");
   if(!previewReadActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview numai-citire."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
@@ -265,6 +265,21 @@ async function main(req:Request) {
       const locs=await allRows(sb,"locatii"); const byId=new Map(locs.map((x:any)=>[x.id,x]));
       rows=rows.filter((m:any)=>filerAllows(profile,m,byId.get(m.locatie_id)));
     }
+    if(role==="tehnician" && (name==="Aparate" || name==="Filtre")){
+      const machines=await allRows(sb,"aparate"), locs=await allRows(sb,"locatii");
+      const byId=new Map(locs.map((x:any)=>[String(x.id),x]));
+      const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces), zones=arr(profile.zone_aparate_acces).map(norm);
+      const visibleIds=new Set(machines.filter((m:any)=>{
+        if(!machineIsActive(m)) return false;
+        const loc=byId.get(String(m.locatie_id||""));
+        const city=norm(loc?.oras||m.source_data?.Oras||m.source_data?.oras);
+        return (!cities.length||cities.includes(city)) &&
+          (!types.length||equipmentMatches(types,m.tip_echipament||m.tip_aparat)) &&
+          (!zones.length||zones.includes(norm(m.zona)));
+      }).map((m:any)=>String(m.id)));
+      if(name==="Aparate") rows=rows.filter((m:any)=>visibleIds.has(String(m.id)));
+      if(name==="Filtre") rows=rows.filter((f:any)=>f.aparat_id && visibleIds.has(String(f.aparat_id)));
+    }
     if(role==="filer" && name==="Locatii"){
       const machines=await allRows(sb,"aparate"), byLoc=new Map<string,any[]>();
       for(const m of machines){const a=byLoc.get(m.locatie_id)||[];a.push(m);byLoc.set(m.locatie_id,a);}
@@ -396,6 +411,39 @@ async function main(req:Request) {
     const byVisit=new Map<string,string[]>();
     for(const photo of photos){const id=String(photo["ID Interventie"]||"");if(!id)continue;const list=byVisit.get(id)||[];if(photo["URL poza"])list.push(photo["URL poza"]);byVisit.set(id,list);}
     return Response.json({success:true,data:{Interventii:interventions.map((r:any)=>({...r,Fotografii:(byVisit.get(String(r["ID Interventie"]||""))||[]).join("\n"),"Numar fotografii":(byVisit.get(String(r["ID Interventie"]||""))||[]).length}))}},{headers:CORS});
+  }
+  if(action==="mobileInterventionHistory"){
+    if(!isTech && !isFiler && !isAdmin) throw new Error("Acces interzis.");
+    const limit=Math.max(1,Math.min(100,Number(body.limit)||50));
+    let visits:any[]=[];
+    if(isTech || isAdmin){
+      let q=sb.from("interventii").select("*").order("data_interventie",{ascending:false}).limit(limit);
+      if(isTech) q=q.eq("tehnician_id",authUser.id);
+      const {data,error}=await q; if(error) throw error; visits.push(...(data||[]).map((r:any)=>({kind:"tehnician",...legacy("Interventii",r)})));
+    }
+    if(isFiler || isAdmin){
+      let q=sb.from("interventii_espressoare").select("*").order("data_interventie",{ascending:false}).limit(limit);
+      if(isFiler) q=q.eq("technician_profile_id",authUser.id);
+      const {data,error}=await q; if(error) throw error; visits.push(...(data||[]).map((r:any)=>({kind:"filer",...legacy("InterventiiEspressoare",r)})));
+    }
+    visits.sort((a:any,b:any)=>new Date(b.Data||b["Data interventie"]||0).getTime()-new Date(a.Data||a["Data interventie"]||0).getTime());
+    const ids=visits.map((v:any)=>String(v["ID Interventie"]||"")).filter(Boolean);
+    const photos:any[]=[];
+    if(ids.length){
+      const [standard,espresso]=await Promise.all([
+        (isTech||isAdmin)?sb.from("poze_interventii").select("*").in("interventie_id",ids):Promise.resolve({data:[],error:null}),
+        (isFiler||isAdmin)?sb.from("poze_interventii_espressoare").select("*").in("interventie_id",ids):Promise.resolve({data:[],error:null})
+      ]);
+      if(standard.error) throw standard.error; if(espresso.error) throw espresso.error;
+      for(const row of [...(standard.data||[]),...(espresso.data||[])]){
+        let url=row.file_url||null;
+        if(row.storage_path){const signed=await sb.storage.from(PHOTO_BUCKET).createSignedUrl(row.storage_path,3600);url=signed.error?null:signed.data?.signedUrl||null;}
+        photos.push({interventie_id:row.interventie_id,url,file_name:row.file_name,categorie:row.categorie||"",numar_poza:row.numar_poza||1});
+      }
+    }
+    const byVisit=new Map<string,any[]>();
+    for(const p of photos){const k=String(p.interventie_id);const list=byVisit.get(k)||[];list.push(p);byVisit.set(k,list);}
+    return Response.json({success:true,visits:visits.map((v:any)=>({...v,photos:byVisit.get(String(v["ID Interventie"]))||[]}))},{headers:CORS});
   }
   if(action==="filerData"){
     if(role!=="filer" && role!=="administrator" && role!=="admin") throw new Error("Acces interzis.");
@@ -564,6 +612,39 @@ async function main(req:Request) {
     if(metaErr) throw metaErr;
     return Response.json({success:true,photos:saved,uploaded:saved.length},{headers:CORS});
   }
+  if(action==="saveGpsLocation"){
+    if(!isAdmin) throw new Error("Doar administratorul poate actualiza GPS-ul si adresa locatiei.");
+    const locationId=String(body.locationId||"").trim();
+    const record=body.locationRecord&&typeof body.locationRecord==="object"?body.locationRecord:{};
+    if(!locationId||!/^[0-9a-f-]{36}$/i.test(locationId)||String(record["ID Locatie"]||"")!==locationId) throw new Error("ID locatie invalid sau neconcordant.");
+    const lat=Number(record.Latitudine),lng=Number(record.Longitudine),accuracy=Math.max(0,Number(record["GPS precizie"]||0));
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)||lat < -90||lat > 90||lng < -180||lng > 180) throw new Error("Coordonate GPS invalide.");
+    const {data:loc,error:locErr}=await sb.from("locatii").select("id,client_id").eq("id",locationId).maybeSingle();
+    if(locErr||!loc) throw new Error("Locatia nu a fost gasita.");
+    const stamp=String(record["GPS actualizat"]||new Date().toISOString());
+    const address=String(record.Adresa||"").trim();
+    const locationUpdate:any={latitudine:lat,longitudine:lng,gps_actualizat:stamp,gps_actualizat_la:stamp,gps_precizie:accuracy};
+    if(address) locationUpdate.adresa=address;
+    if(record.Oras) locationUpdate.oras=String(record.Oras);
+    if(record.Judet) locationUpdate.judet=String(record.Judet);
+    if(record.Zona) locationUpdate.zona=String(record.Zona);
+    const {error:updateLocErr}=await sb.from("locatii").update(locationUpdate).eq("id",locationId);
+    if(updateLocErr) throw updateLocErr;
+    const machineUpdate:any={gps_latitudine:lat,gps_longitudine:lng,gps_precizie_m:accuracy,gps_actualizat_la:stamp};
+    if(address) machineUpdate.adresa=address;
+    if(record.Zona) machineUpdate.zona=String(record.Zona);
+    const {error:updateMachinesErr}=await sb.from("aparate").update(machineUpdate).eq("locatie_id",locationId);
+    if(updateMachinesErr) throw updateMachinesErr;
+    if(loc.client_id){
+      const clientUpdate:any={latitudine:lat,longitudine:lng};
+      if(address) clientUpdate.adresa=address;
+      if(record.Oras) clientUpdate.oras=String(record.Oras);
+      if(record.Judet) clientUpdate.judet=String(record.Judet);
+      const {error:updateClientErr}=await sb.from("clienti").update(clientUpdate).eq("id",loc.client_id);
+      if(updateClientErr) throw updateClientErr;
+    }
+    return Response.json({success:true,message:"GPS si adresa locatiei au fost actualizate."},{headers:CORS});
+  }
   if(action==="filerUpdateLocation"){
     if(!isFiler && !isAdmin) throw new Error("Acces interzis.");
     const locationId=String(body.locationId||"").trim(), address=String(body.adresa||"").trim();
@@ -645,7 +726,7 @@ async function main(req:Request) {
       locatie_id:location.id,
       client_id:location.client_id||null,
       data_interventie:record.Data && /^\\d{4}-\\d{2}-\\d{2}$/.test(String(record.Data)) ? new Date(String(record.Data)+"T12:00:00").toISOString() : now,
-      tehnician_id:technicianRecord?.id||null,
+      tehnician_id:authUser.id,
       tehnician:technicianRecord?.nume||profile.nume||authUser.email||"",
       tip:record.Tip||record.tip||visitType,
       tip_interventie:visitType,
@@ -693,7 +774,7 @@ async function main(req:Request) {
       visit=data;
     }
     if(!visit) throw new Error("Interventia nu a fost gasita. Salveaza mai intai interventia.");
-    if(String(visit.tehnician_id||"")!==String(technicianRecord.id)) throw new Error("Nu poti actualiza filtrul pentru interventia altui tehnician.");
+    if(String(visit.tehnician_id||"")!==String(authUser.id)) throw new Error("Nu poti actualiza filtrul pentru interventia altui tehnician.");
     if(!visit.aparat_id) throw new Error("Interventia nu are aparat asociat.");
     const {data:machine,error:machineErr}=await sb.from("aparate").select("*").eq("id",visit.aparat_id).maybeSingle();
     if(machineErr||!machine) throw new Error("Aparatul interventiei nu a fost gasit.");
@@ -838,7 +919,7 @@ async function main(req:Request) {
       visit=data;
     }
     if(!visit) throw new Error("Interventia nu a fost gasita.");
-    if(!isAdmin && (!isTech || !technicianRecord || String(visit.tehnician_id||"")!==String(technicianRecord.id))) throw new Error("Nu ai dreptul sa incarci fotografii pentru aceasta interventie.");
+    if(!isAdmin && (!isTech || !technicianRecord || String(visit.tehnician_id||"")!==String(authUser.id))) throw new Error("Nu ai dreptul sa incarci fotografii pentru aceasta interventie.");
     return visit;
   };
   const saveStandardPhoto = async (visit:any, bytes:Uint8Array, mimeType:string, fileName:string, photoIndex:number) => {
