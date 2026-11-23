@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#20977f">
+<title>OFRESH | Acces mobil utilizatori</title>
+<style>
+:root{font-family:Inter,Arial,sans-serif;color:#172522;background:#f3f7f5}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px}.shell{width:min(760px,100%)}.brand{font-size:28px;font-weight:900;letter-spacing:.4px;color:#1b7d69}.sub{color:#71817b;margin:4px 0 22px}.card{background:#fff;border:1px solid #dce7e2;border-radius:18px;padding:26px;box-shadow:0 14px 42px #1d40301a;margin-bottom:16px}h1{font-size:22px;margin:0 0 8px}p{color:#6d7c76;line-height:1.5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:block;margin:14px 0}.field span{display:block;font-size:12px;font-weight:700;margin-bottom:7px}.field input,.field select{width:100%;padding:12px;border:1px solid #cbd9d3;border-radius:9px;font-size:15px;background:#fff}.btn{border:0;background:#20977f;color:#fff;padding:12px 17px;border-radius:9px;font-weight:800;cursor:pointer}.btn:disabled{opacity:.55;cursor:wait}.secondary{background:#edf5f1;color:#236b5b}.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.hint{font-size:12px;color:#7b8983}.status{margin-top:14px;padding:12px;border-radius:9px;font-size:13px;display:none;white-space:pre-wrap}.status.ok{display:block;background:#e8f7f0;color:#17634f}.status.err{display:block;background:#fff0ed;color:#a33427}.hidden{display:none!important}.tag{display:inline-block;border-radius:20px;background:#edf5f1;padding:5px 9px;font-size:11px;color:#236b5b;font-weight:700}.top{display:flex;justify-content:space-between;gap:12px;align-items:center}.small{font-size:12px}@media(max-width:600px){.grid{grid-template-columns:1fr}.card{padding:19px}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="brand">OFRESH</div><div class="sub">Management &amp; Service · Administrare acces mobil</div>
+  <section class="card" id="loginCard">
+    <h1>Autentificare administrator</h1>
+    <p>Accesul la alocarea PIN-urilor este permis numai unui cont OFRESH cu rol de administrator.</p>
+    <label class="field"><span>Email administrator</span><input id="adminEmail" type="email" autocomplete="username" placeholder="Emailul contului de administrator"></label>
+    <label class="field"><span>Parola</span><input id="adminPassword" type="password" autocomplete="current-password" placeholder="Parola contului"></label>
+    <button class="btn" id="loginBtn" type="button">Autentificare</button>
+    <div class="status" id="loginStatus" role="status"></div>
+  </section>
+  <section class="card hidden" id="adminCard">
+    <div class="top"><div><span class="tag">ADMINISTRATOR VERIFICAT</span><h1 style="margin-top:10px">Alocare telefon si PIN</h1></div><button class="btn secondary" id="logoutBtn" type="button">Iesire</button></div>
+    <p>Contul mobil se asociaza unei inregistrari OFRESH existente. Nu se creeaza adrese de email fictive si nu se modifica profilurile de baza.</p>
+    <div class="grid">
+      <label class="field"><span>Tip utilizator</span><select id="personType"><option value="filer">Filer</option><option value="tehnician">Tehnician</option></select></label>
+      <label class="field"><span>Numar de telefon</span><input id="phone" type="tel" inputmode="tel" autocomplete="off" placeholder="07xxxxxxxx"></label>
+      <label class="field"><span>PIN nou (6–12 cifre)</span><input id="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" placeholder="Introdu PIN-ul"></label>
+      <label class="field"><span>Confirma PIN-ul</span><input id="pinConfirm" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" placeholder="Repeta PIN-ul"></label>
+    </div>
+    <div class="row"><button class="btn" id="provisionBtn" type="button">Creeaza acces mobil</button><span class="hint">PIN-ul nu este afisat dupa salvare.</span></div>
+    <div class="status" id="provisionStatus" role="status"></div>
+    <div class="hint" style="margin-top:16px">Daca numarul nu corespunde exact unei inregistrari active din tabelul Tehnicieni sau Utilizatori aplicatie, operatiunea este oprita fara a crea contul.</div>
+  </section>
+  <section class="card small">
+    <strong>Nota de securitate</strong>
+    <p style="margin-bottom:0">Foloseste un PIN de minimum 6 cifre. Nu reutiliza PIN-uri personale. Autentificarea administratorului foloseste sesiunea Supabase; cheia service-role nu este expusa in aceasta pagina.</p>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL="https://zlbgxeaasctnfmjsrvql.supabase.co";
+const SUPABASE_KEY="sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb";
+const API_URL=SUPABASE_URL+"/functions/v1/ofresh-preview-api";
+const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+const $=id=>document.getElementById(id);
+function showStatus(id,message,ok=false){const el=$(id);el.textContent=message;el.className="status "+(ok?"ok":"err")}
+async function api(action,extra={}){
+ const {data:{session}}=await client.auth.getSession();
+ if(!session?.access_token)throw new Error("Sesiunea administratorului a expirat. Autentifica-te din nou.");
+ const res=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+session.access_token,"x-ofresh-role":"administrator"},body:JSON.stringify({action,...extra})});
+ const data=await res.json().catch(()=>({success:false,error:"Raspuns invalid de la API."}));
+ if(!res.ok||data.success===false)throw new Error(data.error||("Eroare API ("+res.status+")."));
+ return data;
+}
+async function verifyAdmin(){
+ const {data:{session}}=await client.auth.getSession();
+ if(!session)return false;
+ try{
+  const result=await api("whoami");
+  if(!["administrator","admin"].includes(String(result.profile?.rol||"").toLowerCase()))throw new Error("Contul autentificat nu are rol de administrator.");
+  $("loginCard").classList.add("hidden");$("adminCard").classList.remove("hidden");
+  return true;
+ }catch(e){await client.auth.signOut();showStatus("loginStatus",e.message);return false}
+}
+$("loginBtn").addEventListener("click",async()=>{
+ $("loginBtn").disabled=true;
+ try{
+  const {data,error}=await client.auth.signInWithPassword({email:$("adminEmail").value.trim(),password:$("adminPassword").value});
+  if(error)throw error;
+  const ok=await verifyAdmin();
+  if(ok)showStatus("provisionStatus","Autentificare administrator confirmata.",true);
+ }catch(e){showStatus("loginStatus",e.message||String(e))}
+ finally{$("loginBtn").disabled=false}
+});
+$("logoutBtn").addEventListener("click",async()=>{await client.auth.signOut();$("adminCard").classList.add("hidden");$("loginCard").classList.remove("hidden");$("adminPassword").value=""});
+$("provisionBtn").addEventListener("click",async()=>{
+ const phone=$("phone").value.trim(),pin=$("pin").value.trim(),confirm=$("pinConfirm").value.trim();
+ if(!phone||!pin||!confirm)return showStatus("provisionStatus","Completeaza telefonul si ambele campuri PIN.");
+ if(!/^\d{6,12}$/.test(pin))return showStatus("provisionStatus","PIN-ul trebuie sa contina intre 6 si 12 cifre.");
+ if(pin!==confirm)return showStatus("provisionStatus","PIN-urile nu coincid.");
+ if(!confirm("Confirmi crearea accesului mobil pentru "+phone+"?"))return;
+ $("provisionBtn").disabled=true;
+ try{
+  const result=await api("provisionMobileUser",{personType:$("personType").value,phone,pin});
+  showStatus("provisionStatus","Acces mobil creat cu succes.\nNume: "+result.user.nume+"\nRol: "+result.user.rol+"\nTelefon: "+result.user.telefon,true);
+  $("pin").value="";$("pinConfirm").value="";
+ }catch(e){showStatus("provisionStatus",e.message||String(e))}
+ finally{$("provisionBtn").disabled=false}
+});
+client.auth.onAuthStateChange((_event,session)=>{if(!session){$("adminCard").classList.add("hidden");$("loginCard").classList.remove("hidden")}});
+verifyAdmin();
+</script>
+</body>
+</html>
