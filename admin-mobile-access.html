@@ -76,11 +76,11 @@ $("loginBtn").addEventListener("click",async()=>{
 });
 $("logoutBtn").addEventListener("click",async()=>{await client.auth.signOut();$("adminCard").classList.add("hidden");$("loginCard").classList.remove("hidden");$("adminPassword").value=""});
 $("provisionBtn").addEventListener("click",async()=>{
- const phone=$("phone").value.trim(),pin=$("pin").value.trim(),confirm=$("pinConfirm").value.trim();
- if(!phone||!pin||!confirm)return showStatus("provisionStatus","Completeaza telefonul si ambele campuri PIN.");
+ const phone=$("phone").value.trim(),pin=$("pin").value.trim(),pinConfirmation=$("pinConfirm").value.trim();
+ if(!phone||!pin||!pinConfirmation)return showStatus("provisionStatus","Completeaza telefonul si ambele campuri PIN.");
  if(!/^\d{6,12}$/.test(pin))return showStatus("provisionStatus","PIN-ul trebuie sa contina intre 6 si 12 cifre.");
- if(pin!==confirm)return showStatus("provisionStatus","PIN-urile nu coincid.");
- if(!confirm("Confirmi crearea accesului mobil pentru "+phone+"?"))return;
+ if(pin!==pinConfirmation)return showStatus("provisionStatus","PIN-urile nu coincid.");
+ if(!window.confirm("Confirmi crearea accesului mobil pentru "+phone+"?"))return;
  $("provisionBtn").disabled=true;
  try{
   const result=await api("provisionMobileUser",{personType:$("personType").value,phone,pin});
