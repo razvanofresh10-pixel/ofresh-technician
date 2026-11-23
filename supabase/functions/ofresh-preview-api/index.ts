@@ -34,6 +34,13 @@ async function sha256(value:string) {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
+function normalizeMobilePhone(value:string){const digits=value.replace(/[^0-9+]/g,"");return digits.startsWith("+")?digits:digits.startsWith("0")?"+4"+digits:"+40"+digits;}
+function bytesToHex(bytes:Uint8Array){return Array.from(bytes).map(x=>x.toString(16).padStart(2,"0")).join("");}
+function hexToBytes(value:string){return new Uint8Array((value.match(/.{2}/g)||[]).map(x=>parseInt(x,16)));}
+async function derivePinHash(pin:string,saltHex:string){const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt:hexToBytes(saltHex),iterations:310000,hash:"SHA-256"},key,256);return bytesToHex(new Uint8Array(bits));}
+function constantTimeEqual(a:string,b:string){if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0;}
+async function newMobileCredential(userId:string,phone:string,pin:string,sb:any){const salt=crypto.getRandomValues(new Uint8Array(16)),saltHex=bytesToHex(salt),pinHash=await derivePinHash(pin,saltHex);const {error}=await sb.from("ofresh_mobile_credentials").upsert({user_id:userId,phone,pin_salt:saltHex,pin_hash:pinHash,failed_attempts:0,locked_until:null,enabled:true,updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;}
+async function issueMobileSession(sb:any,userId:string){const token=bytesToHex(crypto.getRandomValues(new Uint8Array(32))),tokenHash=await sha256(token),expiresAt=new Date(Date.now()+30*24*60*60*1000).toISOString();const {error}=await sb.from("ofresh_mobile_sessions").insert({token_hash:tokenHash,user_id:userId,expires_at:expiresAt});if(error)throw error;return {token,expiresAt};}
 function decodeBase64(value:string): Uint8Array {
   const clean=value.replace(/-/g,"+").replace(/_/g,"/").replace(/\s/g,"");
   const binary=atob(clean + "=".repeat((4-clean.length%4)%4));
@@ -107,7 +114,7 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","interventionExportData","list","add","technicianCompleteFilterChange","uploadPhotoChunk","finalizePhotoUpload"]);
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","mobileLogin","mobileLogout"]);
   if(!previewReadActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview numai-citire."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
@@ -126,27 +133,120 @@ async function main(req:Request) {
     return Response.json({success:true,machine:{"Cod OFRESH":machine.cod_ofresh,"Tip aparat":machine.tip_aparat,"Producator":machine.producator,"Serie Aparat":machine.serie,Client:machine.client_nume,Zona:machine.zona},filters:(filters||[]).map((f:any)=>({"Tip filtru":f.tip_filtru,"Data montare":f.data_montare||f.data_montarii,"Data urmatoarei schimbari":f.data_urmatoarei_schimbari||f.urmatoarea_schimbare,Status:f.status}))},{headers:CORS});
   }
   const token=(req.headers.get("Authorization")||"").replace(/^Bearer\s+/i,"");
-  if(!token) return new Response(JSON.stringify({success:false,error:"Autentificare necesara."}),{status:401,headers:CORS});
-  const {data:auth,error:authErr}=await sb.auth.getUser(token);
-  if(authErr||!auth.user) return new Response(JSON.stringify({success:false,error:"Sesiune invalida."}),{status:401,headers:CORS});
-  const {data:profile,error:profileErr}=await sb.from("profiluri").select("*").eq("id",auth.user.id).maybeSingle();
-  if(profileErr||!profile||profile.activ===false) return new Response(JSON.stringify({success:false,error:"Profil OFRESH inactiv sau lipsa."}),{status:403,headers:CORS});
-  const rights=profile.drepturi||{};
+  if(action==="mobileLogin"){
+    const phone=normalizeMobilePhone(String(body.phone||"")),pin=String(body.pin||"");
+    if(!/^\+40[0-9]{9}$/.test(phone)||!/^\d{6,12}$/.test(pin))return Response.json({success:false,error:"Telefon sau PIN invalid."},{status:400,headers:CORS});
+    const {data:cred,error:ce}=await sb.from("ofresh_mobile_credentials").select("*").eq("phone",phone).eq("enabled",true).maybeSingle();if(ce)throw ce;
+    if(!cred)return Response.json({success:false,error:"Telefon sau PIN invalid."},{status:401,headers:CORS});
+    if(cred.locked_until&&new Date(cred.locked_until).getTime()>Date.now())return Response.json({success:false,error:"Acces temporar blocat. Incearca mai tarziu."},{status:429,headers:CORS});
+    const hash=await derivePinHash(pin,cred.pin_salt);
+    if(!constantTimeEqual(hash,cred.pin_hash)){const n=Number(cred.failed_attempts||0)+1;await sb.from("ofresh_mobile_credentials").update({failed_attempts:n>=5?0:n,locked_until:n>=5?new Date(Date.now()+15*60*1000).toISOString():null}).eq("user_id",cred.user_id);return Response.json({success:false,error:"Telefon sau PIN invalid."},{status:401,headers:CORS});}
+    await sb.from("ofresh_mobile_credentials").update({failed_attempts:0,locked_until:null}).eq("user_id",cred.user_id);
+    const {data:prof,error:pe}=await sb.from("profiluri").select("*").eq("id",cred.user_id).maybeSingle();if(pe||!prof||prof.activ===false)return Response.json({success:false,error:"Profil OFRESH inactiv sau lipsa."},{status:403,headers:CORS});
+    const sess=await issueMobileSession(sb,cred.user_id);return Response.json({success:true,token:sess.token,expiresAt:sess.expiresAt,profile:prof},{headers:CORS});
+  }
+  if(!token)return new Response(JSON.stringify({success:false,error:"Autentificare necesara."}),{status:401,headers:CORS});
+  if(action==="mobileLogout"){const h=await sha256(token);await sb.from("ofresh_mobile_sessions").update({revoked_at:new Date().toISOString()}).eq("token_hash",h).is("revoked_at",null);return Response.json({success:true},{headers:CORS});}
+  const tokenHash=await sha256(token);
+  const {data:ms}=await sb.from("ofresh_mobile_sessions").select("user_id,expires_at,revoked_at").eq("token_hash",tokenHash).maybeSingle();
+  let authUser:any=null;
+  if(ms){if(ms.revoked_at||new Date(ms.expires_at).getTime()<=Date.now())return new Response(JSON.stringify({success:false,error:"Sesiune expirata."}),{status:401,headers:CORS});authUser={id:ms.user_id,email:null};}
+  else{const {data:auth,error:ae}=await sb.auth.getUser(token);if(ae||!auth.user)return new Response(JSON.stringify({success:false,error:"Sesiune invalida."}),{status:401,headers:CORS});authUser=auth.user;}
+  const {data:profile,error:profileErr}=await sb.from("profiluri").select("*").eq("id",authUser.id).maybeSingle();
+  if(profileErr||!profile||profile.activ===false)return new Response(JSON.stringify({success:false,error:"Profil OFRESH inactiv sau lipsa."}),{status:403,headers:CORS});  const rights=profile.drepturi||{};
   const primaryRole=norm(profile.rol);
   const assignedRoles=new Set<string>([primaryRole]);
   if(Array.isArray(rights.roles)) for(const item of rights.roles) assignedRoles.add(norm(item));
   if(rights["Mod Tehnician"]===true || rights["mod tehnician"]===true) assignedRoles.add("tehnician");
   const role=norm(req.headers.get("x-ofresh-role")||primaryRole);
   if(!assignedRoles.has(role) || !Object.prototype.hasOwnProperty.call(READ_ROLES,role)) return new Response(JSON.stringify({success:false,error:"Rol OFRESH necunoscut sau neautorizat pentru acest cont."}),{status:403,headers:CORS});
-  if(action==="whoami") return Response.json({success:true,user:{id:auth.user.id,email:auth.user.email},profile},{headers:CORS});
+  if(action==="whoami") return Response.json({success:true,user:{id:authUser.id,email:authUser.email},profile},{headers:CORS});
   const isAdmin = role === "administrator" || role === "admin";
+  if(action==="setMobilePin"){
+    if(!isAdmin)throw new Error("Doar administratorul poate seta PIN-ul mobil.");
+    const userId=String(body.userId||""),pin=String(body.pin||"");
+    if(!/^[0-9]{6,12}$/.test(pin))throw new Error("PIN-ul trebuie sa contina intre 6 si 12 cifre.");
+    const {data:target,error:targetErr}=await sb.from("profiluri").select("id,rol,telefon,activ").eq("id",userId).maybeSingle();
+    if(targetErr||!target||target.activ===false||!["tehnician","filer"].includes(norm(target.rol)))throw new Error("Utilizator mobil activ negasit.");
+    const phone=normalizeMobilePhone(String(target.telefon||""));
+    if(!/^\+40[0-9]{9}$/.test(phone))throw new Error("Profilul nu are un numar de telefon valid.");
+    await newMobileCredential(userId,phone,pin,sb);
+    return Response.json({success:true,message:"PIN mobil actualizat."},{headers:CORS});
+  }
   const isFiler = role === "filer";
   const isTech = role === "tehnician" || role === "technician";
+  if(action==="listMobileLinkedUsers"){
+    if(!isAdmin)throw new Error("Doar administratorul poate vedea utilizatorii mobili.");
+    const {data:rows,error}=await sb.from("profiluri").select("id,nume,rol,telefon").in("rol",["tehnician","filer"]).eq("activ",true).order("nume");
+    if(error)throw error;
+    return Response.json({success:true,users:rows||[]},{headers:CORS});
+  }
+  if(action==="listMobileProvisionCandidates"){
+    if(!isAdmin) throw new Error("Doar administratorul poate vedea lista de utilizatori.");
+    const [{data:techRows,error:techErr},{data:filerRows,error:filerErr}]=await Promise.all([
+      sb.from("tehnicieni").select("id,nume,telefon,status,user_id").eq("status","Activ").is("user_id",null).not("telefon","is",null).order("nume"),
+      sb.from("utilizatori_aplicatie").select("id,nume,telefon,status,auth_user_id").eq("rol","filer").eq("status","Activ").is("auth_user_id",null).not("telefon","is",null).order("nume")
+    ]);
+    if(techErr) throw techErr;
+    if(filerErr) throw filerErr;
+    const candidates=[
+      ...(techRows||[]).map((x:any)=>({id:x.id,nume:x.nume,telefon:x.telefon,tip:"tehnician"})),
+      ...(filerRows||[]).map((x:any)=>({id:x.id,nume:x.nume,telefon:x.telefon,tip:"filer"}))
+    ];
+    return Response.json({success:true,candidates},{headers:CORS});
+  }
+  if(action==="provisionMobileUser"){
+    if(!isAdmin) throw new Error("Doar administratorul poate seta accesul mobil.");
+    const personType=norm(body.personType);
+    const rawPhone=String(body.phone||"").replace(/[^0-9+]/g,"");
+    const phone=rawPhone.startsWith("+")?rawPhone:(rawPhone.startsWith("0")?"+4"+rawPhone:"+40"+rawPhone);
+    const pin=String(body.pin||"");
+    if(!/^\+40[0-9]{9}$/.test(phone)) throw new Error("Numarul de telefon trebuie sa fie din Romania si valid.");
+    if(!/^[0-9]{6,12}$/.test(pin)) throw new Error("PIN-ul trebuie sa contina intre 6 si 12 cifre.");
+    let displayName="", rights:any={}, cities:any=[], equipment:any=[], zones:any=[], appUser:any=null, tech:any=null;
+    if(personType==="tehnician"){
+      const {data,error}=await sb.from("tehnicieni").select("*").eq("telefon",rawPhone.replace(/^\+40/,"0")).eq("status","Activ").limit(2);
+      if(error) throw error;
+      if(!data||data.length!==1) throw new Error("Nu am gasit exact un tehnician activ cu acest numar de telefon.");
+      tech=data[0]; if(tech.user_id) throw new Error("Tehnicianul are deja un cont mobil asociat."); displayName=tech.nume;
+      const {data:appRows,error:appErr}=await sb.from("utilizatori_aplicatie").select("*").eq("rol","tehnician").eq("status","Activ").eq("nume",displayName).limit(2);
+      if(appErr) throw appErr;
+      appUser=(appRows||[]).length===1?appRows[0]:null;
+      if(appUser?.auth_user_id) throw new Error("Utilizatorul are deja un cont mobil asociat.");
+      rights=appUser?.drepturi||{};
+      cities=appUser?.orase_acces||[]; equipment=appUser?.tip_echipament_acces||[]; zones=appUser?.zone_aparate_acces||[];
+    }else if(personType==="filer"){
+      const {data,error}=await sb.from("utilizatori_aplicatie").select("*").eq("rol","filer").eq("status","Activ").eq("telefon",rawPhone.replace(/^\+40/,"0")).limit(2);
+      if(error) throw error;
+      if(!data||data.length!==1) throw new Error("Nu am gasit exact un cont Filer activ cu acest numar de telefon.");
+      appUser=data[0]; if(appUser.auth_user_id) throw new Error("Filerul are deja un cont mobil asociat."); displayName=appUser.nume; rights=appUser.drepturi||{};
+      cities=appUser.orase_acces||[]; equipment=appUser.tip_echipament_acces||[]; zones=appUser.zone_aparate_acces||[];
+    }else throw new Error("Tip de utilizator mobil invalid.");
+    const {data:created,error:createErr}=await sb.auth.admin.createUser({phone,password:pin,phone_confirm:true,user_metadata:{nume:displayName,rol:personType}});
+    if(createErr) throw new Error("Nu am putut crea accesul mobil: "+createErr.message);
+    const userId=created.user.id;
+    const {error:profileUpsertErr}=await sb.from("profiluri").upsert({
+      id:userId,nume:displayName,rol:personType,activ:true,email:null,telefon:phone,drepturi:rights,
+      orase_acces:cities,tip_echipament_acces:equipment,zone_aparate_acces:zones,
+      source_data:{provisioned_from:"ofresh_admin_mobile",provisioned_at:new Date().toISOString()}
+    },{onConflict:"id"});
+    if(profileUpsertErr){await sb.auth.admin.deleteUser(userId);throw profileUpsertErr;}
+    try{await newMobileCredential(userId,phone,pin,sb);}catch(credentialErr){await sb.auth.admin.deleteUser(userId);await sb.from("profiluri").delete().eq("id",userId);throw credentialErr;}
+    if(tech){
+      const {data:linkedTech,error:linkErr}=await sb.from("tehnicieni").update({user_id:userId}).eq("id",tech.id).is("user_id",null).select("id").maybeSingle();
+      if(linkErr||!linkedTech){await sb.auth.admin.deleteUser(userId);await sb.from("profiluri").delete().eq("id",userId);throw linkErr||new Error("Legatura tehnicianului s-a modificat intre timp. Nu s-a creat contul.");}
+    }
+    if(appUser){
+      const {data:linkedAppUser,error:linkErr}=await sb.from("utilizatori_aplicatie").update({auth_user_id:userId}).eq("id",appUser.id).is("auth_user_id",null).select("id").maybeSingle();
+      if(linkErr||!linkedAppUser){if(tech) await sb.from("tehnicieni").update({user_id:null}).eq("id",tech.id).eq("user_id",userId);await sb.auth.admin.deleteUser(userId);await sb.from("profiluri").delete().eq("id",userId);throw linkErr||new Error("Legatura utilizatorului s-a modificat intre timp. Nu s-a creat contul.");}
+    }
+    return Response.json({success:true,user:{id:userId,nume:displayName,rol:personType,telefon:phone}},{headers:CORS});
+  }
   // `interventii.tehnician_id` is the UUID of `tehnicieni.id`, not the Auth UUID.
   // Never infer or auto-link a technician by name/phone.
   let technicianRecord:any=null;
   if(isTech){
-    const {data:techRows,error:techErr}=await sb.from("tehnicieni").select("*").eq("user_id",auth.user.id).limit(2);
+    const {data:techRows,error:techErr}=await sb.from("tehnicieni").select("*").eq("user_id",authUser.id).limit(2);
     if(techErr) throw techErr;
     if((techRows||[]).length>1) throw new Error("Contul este asociat mai multor inregistrari de tehnician. Solicita verificarea administratorului.");
     technicianRecord=(techRows||[])[0]||null;
@@ -181,7 +281,7 @@ async function main(req:Request) {
     if(role==="comercial" && name==="Aparate") rows=rows.filter((m:any)=>m.status!=="Retras");
     if(role==="filer" && name==="PozeInterventiiEspressoare") {
       const visits=await allRows(sb,"interventii_espressoare");
-      const visible=new Set(visits.filter((v:any)=>String(v.technician_profile_id||"")===auth.user.id || ((!arr(profile.orase_acces).length || arr(profile.orase_acces).map(norm).includes(norm(v.oras))) && equipmentMatches(arr(profile.tip_echipament_acces),v.tip_echipament) && (!arr(profile.zone_aparate_acces).length || arr(profile.zone_aparate_acces).map(norm).includes(norm(v.zona_aparate))))).map((v:any)=>v.id));
+      const visible=new Set(visits.filter((v:any)=>String(v.technician_profile_id||"")===authUser.id || ((!arr(profile.orase_acces).length || arr(profile.orase_acces).map(norm).includes(norm(v.oras))) && equipmentMatches(arr(profile.tip_echipament_acces),v.tip_echipament) && (!arr(profile.zone_aparate_acces).length || arr(profile.zone_aparate_acces).map(norm).includes(norm(v.zona_aparate))))).map((v:any)=>v.id));
       rows=rows.filter((r:any)=>visible.has(r.interventie_id));
     }
     if(name==="PozeInterventii" || name==="PozeInterventiiEspressoare") {
@@ -259,20 +359,36 @@ async function main(req:Request) {
     const data:any={Locatii:await fetchSheet("Locatii"),Aparate:await fetchSheet("Aparate"),Filtre:await fetchSheet("Filtre")};
     return Response.json({success:true,...data,technician:technicianRecord?legacy("Tehnicieni",technicianRecord):null},{headers:CORS});
   }
-  if(action==="findAparat"){
-    const code=String(body.codOfresh||"").trim();
-    if(!code) throw new Error("Lipseste Cod OFRESH.");
+  if(action==="findAparat" || action==="searchAparate"){
+    const term=String(body.searchText||body.codOfresh||body.serie||"").trim();
+    if(!term) throw new Error("Introdu Cod OFRESH, seria, clientul sau modelul aparatului.");
     if(!allowed.includes("Aparate")) throw new Error("Acces interzis.");
-    const {data:machine,error}=await sb.from("aparate").select("*").eq("cod_ofresh",code).maybeSingle();
-    if(error) throw error;
-    if(!machine) return Response.json({success:true,found:false,aparat:null},{headers:CORS});
-    if(role==="comercial" && !machineIsActive(machine)) return Response.json({success:true,found:false,aparat:null},{headers:CORS});
-    if(isFiler){
-      const {data:loc,error:locErr}=machine.locatie_id?await sb.from("locatii").select("*").eq("id",machine.locatie_id).maybeSingle():{data:null,error:null};
-      if(locErr) throw locErr;
-      if(!filerAllows(profile,machine,loc)) return Response.json({success:true,found:false,aparat:null},{headers:CORS});
-    }
-    return Response.json({success:true,found:true,aparat:legacy("Aparate",machine)},{headers:CORS});
+    if(!isTech && !isFiler && !isAdmin) throw new Error("Cautarea aparatelor nu este permisa pentru acest rol.");
+    const needle=norm(term);
+    const machines=await allRows(sb,"aparate");
+    const locations=await allRows(sb,"locatii");
+    const locById=new Map(locations.map((x:any)=>[String(x.id),x]));
+    const matches=machines.filter((m:any)=>{
+      if(!machineIsActive(m)) return false;
+      const loc=locById.get(String(m.locatie_id||""));
+      if(isFiler && !filerAllows(profile,m,loc)) return false;
+      if(isTech){
+        const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces), zones=arr(profile.zone_aparate_acces).map(norm);
+        const city=norm(loc?.oras||m.source_data?.Oras||m.source_data?.oras);
+        if(cities.length&&!cities.includes(city)) return false;
+        if(types.length&&!equipmentMatches(types,m.tip_echipament||m.tip_aparat)) return false;
+        if(zones.length&&!zones.includes(norm(m.zona))) return false;
+      }
+      const sd=source(m);
+      const fields=[m.qr_token,m.cod_ofresh,m.cod_id,m.serie,m.client_nume,m.locatie,m.producator,m.model,m.zona,loc?.nume,loc?.adresa,loc?.oras,sd["Cod OFRESH"],sd["ID Aparat"],sd["Serie"],sd["Nume locatie"],sd["Client"],sd["Adresa"]];
+      return fields.some(v=>norm(v).includes(needle));
+    });
+    matches.sort((a:any,b:any)=>{
+      const exact=(m:any)=>[m.qr_token,m.cod_ofresh,m.cod_id,m.serie].some(v=>norm(v)===needle)?0:1;
+      return exact(a)-exact(b) || String(a.client_nume||a.locatie||"").localeCompare(String(b.client_nume||b.locatie||""),"ro");
+    });
+    const data=matches.slice(0,30).map((m:any)=>legacy("Aparate",m));
+    return Response.json({success:true,found:data.length>0,aparat:data.length===1?data[0]:null,results:data,total:matches.length},{headers:CORS});
   }
   if(action==="interventionExportData"){
     if(!isAdmin) throw new Error("Exportul complet al interventiilor este rezervat administratorului.");
@@ -294,7 +410,7 @@ async function main(req:Request) {
       grouped.get(key).machines.push(safe);
     }
     const locationsOut=[...grouped.values()].sort((a:any,b:any)=>String(a.Client).localeCompare(String(b.Client),"ro"));
-    return Response.json({success:true,user:{id:auth.user.id,nume:profile.nume,rol:profile.rol},allowedZones:profile.zone_aparate_acces||[],allowedEquipmentTypes:profile.tip_echipament_acces||[],locations:locationsOut,totalLocations:locationsOut.length,totalMachines:locationsOut.reduce((n:number,l:any)=>n+l.machines.length,0)},{headers:CORS});
+    return Response.json({success:true,user:{id:authUser.id,nume:profile.nume,rol:profile.rol},allowedZones:profile.zone_aparate_acces||[],allowedEquipmentTypes:profile.tip_echipament_acces||[],locations:locationsOut,totalLocations:locationsOut.length,totalMachines:locationsOut.reduce((n:number,l:any)=>n+l.machines.length,0)},{headers:CORS});
   }
   if(action==="filerAccessOptions"){
     if(role!=="filer" && role!=="administrator" && role!=="admin") return new Response(JSON.stringify({success:false,error:"Acces interzis."}),{status:403,headers:CORS});
@@ -314,6 +430,22 @@ async function main(req:Request) {
       zone:[...zones.values()].sort((a:string,b:string)=>a.localeCompare(b,"ro",{sensitivity:"base"}))
     },{headers:CORS});
   }
+  if(action==="checkFilterStock"){
+    if(!isTech || !technicianRecord) throw new Error("Actiunea este disponibila doar unui tehnician asociat explicit contului Auth.");
+    const filterType=String(body.filterType||body.tipFiltru||"").trim();
+    if(!filterType) throw new Error("Selecteaza tipul filtrului.");
+    const {data:rows,error}=await sb.from("stoc").select("*").order("source_id",{ascending:true});
+    if(error) throw error;
+    const matching=(rows||[]).filter((x:any)=>norm(x.denumire)===norm(filterType)||norm(x.cod_produs)===norm(filterType)||norm(x.source_data?.Produs)===norm(filterType));
+    const stock=matching[0];
+    if(!stock) throw new Error("Filtrul selectat nu exista in stoc.");
+    const entered=Number(stock.cantitate_intrata??stock.cantitate??0)||0;
+    const consumed=Number(stock.consum??stock.source_data?.Consum??0)||0;
+    const available=Math.max(0,entered-consumed);
+    if(available<=0) throw new Error("Filtrul selectat nu mai exista in stoc.");
+    return Response.json({success:true,stockId:stock.id,available,filterType},{headers:CORS});
+  }
+
   // Scoped write operations. Clients must send UUIDs from the Supabase-backed read response,
   // never legacy spreadsheet row numbers.
   const machineById = async (id:string) => {
@@ -352,7 +484,7 @@ async function main(req:Request) {
     const photoToken=crypto.randomUUID();
     const expectedPhotoCount=Number(body.photoCount??0);
     if(!Number.isInteger(expectedPhotoCount)||expectedPhotoCount<0||expectedPhotoCount>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
-    const payload:any={technician_profile_id:auth.user.id,source_data:{photo_upload_token_hash:await sha256(photoToken),photo_owner_auth_id:auth.user.id,photo_upload_expires_at:new Date(Date.now()+3600_000).toISOString(),expected_photo_count:expectedPhotoCount},data_interventie:body.data?new Date(String(body.data)+"T12:00:00").toISOString():new Date().toISOString(),client:machine.client_nume||location?.nume_client||location?.nume||"",adresa:machine.adresa||location?.adresa||"",oras:location?.oras||"",judet:location?.judet||"",cod_ofresh:machine.cod_ofresh,serie_aparat:machine.serie,producator:machine.producator,tip_aparat:machine.tip_aparat||machine.model,operatiuni:cleanTasks,observatii:String(body.observatii||""),...flags,numar_fotografii:0,zona_aparate:machine.zona,tip_echipament:machine.tip_echipament,aparat_id:machine.id,client_id:location?.client_id||null,locatie_id:machine.locatie_id};
+    const payload:any={technician_profile_id:authUser.id,source_data:{photo_upload_token_hash:await sha256(photoToken),photo_owner_auth_id:authUser.id,photo_upload_expires_at:new Date(Date.now()+3600_000).toISOString(),expected_photo_count:expectedPhotoCount},data_interventie:body.data?new Date(String(body.data)+"T12:00:00").toISOString():new Date().toISOString(),client:machine.client_nume||location?.nume_client||location?.nume||"",adresa:machine.adresa||location?.adresa||"",oras:location?.oras||"",judet:location?.judet||"",cod_ofresh:machine.cod_ofresh,serie_aparat:machine.serie,producator:machine.producator,tip_aparat:machine.tip_aparat||machine.model,operatiuni:cleanTasks,observatii:String(body.observatii||""),...flags,numar_fotografii:0,zona_aparate:machine.zona,tip_echipament:machine.tip_echipament,aparat_id:machine.id,client_id:location?.client_id||null,locatie_id:machine.locatie_id};
     const {data,error}=await sb.from("interventii_espressoare").insert(payload).select("id").single();
     if(error)throw error;
     return Response.json({success:true,visitId:data.id,photoToken,expectedPhotoCount},{headers:CORS});
@@ -368,13 +500,13 @@ async function main(req:Request) {
     const {data:visit,error:visitErr}=await sb.from("interventii_espressoare").select("id,technician_profile_id,source_data,numar_fotografii").eq("id",visitId).maybeSingle();
     if(visitErr||!visit) throw new Error("Interventia nu a fost gasita.");
     const meta=source(visit);
-    if(String(visit.technician_profile_id||"")!==auth.user.id || String(meta.photo_owner_auth_id||"")!==auth.user.id || meta.photo_upload_token_hash!==await sha256(tokenValue) || !meta.photo_upload_expires_at || Date.now()>Date.parse(meta.photo_upload_expires_at)) throw new Error("Autorizarea fotografiilor este invalida sau expirata.");
+    if(String(visit.technician_profile_id||"")!==authUser.id || String(meta.photo_owner_auth_id||"")!==authUser.id || meta.photo_upload_token_hash!==await sha256(tokenValue) || !meta.photo_upload_expires_at || Date.now()>Date.parse(meta.photo_upload_expires_at)) throw new Error("Autorizarea fotografiilor este invalida sau expirata.");
     await validateCurrentEspressoVisitMachine(sb,visit,profile,isFiler);
     if(photoIndex>Number(meta.expected_photo_count||0)) throw new Error("Numarul fotografiei depaseste selectia salvata.");
     const path=`tmp/${visitId}/${uploadId}/${chunkIndex}.b64`;
     const {error:uploadErr}=await sb.storage.from(PHOTO_BUCKET).upload(path,new TextEncoder().encode(chunk),{contentType:"image/jpeg",upsert:true});
     if(uploadErr) throw new Error("Nu am putut salva fragmentul foto: "+uploadErr.message);
-    const {error:updateErr}=await sb.from("interventii_espressoare").update({source_data:{...meta,photo_upload_token_hash:meta.photo_upload_token_hash,photo_owner_auth_id:auth.user.id,expected_photo_count:meta.expected_photo_count,photo_uploads:{...(meta.photo_uploads||{}),[uploadId]:{totalChunks,photoIndex}}}}).eq("id",visitId);
+    const {error:updateErr}=await sb.from("interventii_espressoare").update({source_data:{...meta,photo_upload_token_hash:meta.photo_upload_token_hash,photo_owner_auth_id:authUser.id,expected_photo_count:meta.expected_photo_count,photo_uploads:{...(meta.photo_uploads||{}),[uploadId]:{totalChunks,photoIndex}}}}).eq("id",visitId);
     if(updateErr) throw updateErr;
     return Response.json({success:true,chunkIndex,totalChunks},{headers:CORS});
   }
@@ -384,7 +516,7 @@ async function main(req:Request) {
     const {data:visit,error:visitErr}=await sb.from("interventii_espressoare").select("*").eq("id",visitId).maybeSingle();
     if(visitErr||!visit) throw new Error("Interventia nu a fost gasita.");
     const meta=source(visit);
-    if(String(visit.technician_profile_id||"")!==auth.user.id || String(meta.photo_owner_auth_id||"")!==auth.user.id || meta.photo_upload_token_hash!==await sha256(tokenValue) || !meta.photo_upload_expires_at || Date.now()>Date.parse(meta.photo_upload_expires_at)) throw new Error("Autorizarea fotografiilor este invalida sau expirata.");
+    if(String(visit.technician_profile_id||"")!==authUser.id || String(meta.photo_owner_auth_id||"")!==authUser.id || meta.photo_upload_token_hash!==await sha256(tokenValue) || !meta.photo_upload_expires_at || Date.now()>Date.parse(meta.photo_upload_expires_at)) throw new Error("Autorizarea fotografiilor este invalida sau expirata.");
     await validateCurrentEspressoVisitMachine(sb,visit,profile,isFiler);
     let uploads:any[]=[];
     if(action==="filerFinalizePhotoUploads") { try { uploads=typeof body.photos==="string"?JSON.parse(body.photos):body.photos; } catch { throw new Error("Lista fotografiilor este invalida."); } }
@@ -417,7 +549,7 @@ async function main(req:Request) {
       const fileName=safeFileName(item.fileName||"service_espressor.jpg"), objectPath=`espresso/${visitId}/${String(photoIndex).padStart(2,"0")}_${crypto.randomUUID()}_${fileName}`;
       const {error:finalUploadErr}=await sb.storage.from(PHOTO_BUCKET).upload(objectPath,bytes,{contentType:mimeType,upsert:false});
       if(finalUploadErr) throw new Error("Nu am putut salva fotografia finala: "+finalUploadErr.message);
-      const row={interventie_id:visitId,source_id:null,filer:profile.nume||auth.user.email||"",client:visit.client||"",aparat:[visit.tip_aparat,visit.serie_aparat].filter(Boolean).join(" - "),categorie:category,storage_path:objectPath,file_name:fileName,file_url:null,numar_poza:photoIndex,mime_type:mimeType,file_size_bytes:bytes.byteLength,taken_at:item.takenAt||null,data_incarcare:new Date().toISOString(),source_data:{storage_bucket:PHOTO_BUCKET,uploaded_by:auth.user.id}};
+      const row={interventie_id:visitId,source_id:null,filer:profile.nume||authUser.email||"",client:visit.client||"",aparat:[visit.tip_aparat,visit.serie_aparat].filter(Boolean).join(" - "),categorie:category,storage_path:objectPath,file_name:fileName,file_url:null,numar_poza:photoIndex,mime_type:mimeType,file_size_bytes:bytes.byteLength,taken_at:item.takenAt||null,data_incarcare:new Date().toISOString(),source_data:{storage_bucket:PHOTO_BUCKET,uploaded_by:authUser.id}};
       const {data:photo,error:photoErr}=await sb.from("poze_interventii_espressoare").insert(row).select("*").single();
       if(photoErr){await sb.storage.from(PHOTO_BUCKET).remove([objectPath]);throw photoErr;}
       saved.push(photo);
@@ -500,7 +632,7 @@ async function main(req:Request) {
     const visitType=String(record["Tip interventie"]||record.tip_interventie||record.Tip||record.tip||"").trim();
     if(!visitType) throw new Error("Lipseste tipul interventiei.");
     const legacyId=String(record["ID Interventie"]||"").trim();
-    const sourceData={...record,legacy_intervention_id:legacyId||null,created_via:"legacy_add_technician",created_by_auth_id:auth.user.id};
+    const sourceData={...record,legacy_intervention_id:legacyId||null,created_via:"legacy_add_technician",created_by_auth_id:authUser.id};
     // Idempotency: a retry of the same legacy form ID must not create a second intervention.
     if(legacyId){
       const {data:existing,error:existingErr}=await sb.from("interventii").select("*").contains("source_data",{legacy_intervention_id:legacyId}).limit(1).maybeSingle();
@@ -512,9 +644,9 @@ async function main(req:Request) {
       aparat_id:machine.id,
       locatie_id:location.id,
       client_id:location.client_id||null,
-      data_interventie:now,
+      data_interventie:record.Data && /^\\d{4}-\\d{2}-\\d{2}$/.test(String(record.Data)) ? new Date(String(record.Data)+"T12:00:00").toISOString() : now,
       tehnician_id:technicianRecord?.id||null,
-      tehnician:technicianRecord?.nume||profile.nume||auth.user.email||"",
+      tehnician:technicianRecord?.nume||profile.nume||authUser.email||"",
       tip:record.Tip||record.tip||visitType,
       tip_interventie:visitType,
       descriere:record.Descriere||record.descriere||record["Operatiuni efectuate"]||"",
@@ -598,17 +730,15 @@ async function main(req:Request) {
       if(filterWrite.error) throw filterWrite.error;
     }
 
-    const [{data:stockByName,error:nameErr},{data:stockByCode,error:codeErr}]=await Promise.all([
-      sb.from("stoc").select("*").ilike("denumire",filterType).limit(5),
-      sb.from("stoc").select("*").ilike("cod_produs",filterType).limit(5)
-    ]);
-    if(nameErr) throw nameErr;
-    if(codeErr) throw codeErr;
-    const matchingStock=Array.from(new Map([...(stockByName||[]),...(stockByCode||[])].filter((s:any)=>norm(s.denumire)===norm(filterType)||norm(s.cod_produs)===norm(filterType)).map((s:any)=>[s.id,s])).values());
-    if(matchingStock.length!==1) throw new Error(matchingStock.length===0
-      ? "Filtrul a fost actualizat, dar produsul nu a putut fi identificat unic in Stoc. Verifica denumirea produsului."
-      : "Filtrul a fost actualizat, dar exista mai multe produse potrivite in Stoc. Este necesara verificarea administratorului.");
-    const stock=matchingStock[0];
+    const {data:stockRows,error:stockReadErr}=await sb.from("stoc").select("*").order("source_id",{ascending:true});
+    if(stockReadErr) throw stockReadErr;
+    const stock=String(body.stockId||"")
+      ? (stockRows||[]).find((s:any)=>String(s.id)===String(body.stockId))
+      : (stockRows||[]).find((s:any)=>norm(s.denumire)===norm(filterType)||norm(s.cod_produs)===norm(filterType)||norm(s.source_data?.Produs)===norm(filterType));
+    if(!stock) throw new Error("Filtrul nu a fost identificat in stoc. Verifica denumirea produsului.");
+    const stockEntered=Number(stock.cantitate_intrata??stock.cantitate??0);
+    const stockConsumed=Number(stock.consum||0);
+    if(stockEntered-stockConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
     const stockSource=stock.source_data&&typeof stock.source_data==="object"?stock.source_data:{};
     const stockDone=Array.isArray(stockSource.processed_filter_intervention_ids)&&stockSource.processed_filter_intervention_ids.includes(marker);
     if(!stockDone){
@@ -656,7 +786,7 @@ async function main(req:Request) {
         rows=rows.filter((loc:any)=>machines.some((m:any)=>m.locatie_id===loc.id && filerAllows(profile,m,loc)));
       } else {
         const cities=arr(profile.orase_acces).map(norm), zones=arr(profile.zone_aparate_acces).map(norm);
-        rows=rows.filter((r:any)=>(!cities.length||cities.includes(norm(r.oras))) && equipmentMatches(arr(profile.tip_echipament_acces),r.tip_echipament) && (!zones.length||zones.includes(norm(r.zona_aparate))) && String(r.technician_profile_id||"")===auth.user.id);
+        rows=rows.filter((r:any)=>(!cities.length||cities.includes(norm(r.oras))) && equipmentMatches(arr(profile.tip_echipament_acces),r.tip_echipament) && (!zones.length||zones.includes(norm(r.zona_aparate))) && String(r.technician_profile_id||"")===authUser.id);
       }
       total=rows.length; rows=rows.slice(offset,offset+limit);
     } else {
@@ -722,7 +852,7 @@ async function main(req:Request) {
       visit.aparat_id ? sb.from("aparate").select("cod_ofresh,producator,model,serie,client_nume").eq("id",visit.aparat_id).maybeSingle() : Promise.resolve({data:null}),
       visit.client_id ? sb.from("clienti").select("nume").eq("id",visit.client_id).maybeSingle() : Promise.resolve({data:null})
     ]);
-    const row={interventie_id:visit.id,source_id:null,client:client?.nume||machine?.client_nume||"",aparat:[machine?.cod_ofresh,machine?.producator,machine?.model,machine?.serie].filter(Boolean).join(" - "),tehnician:profile.nume||auth.user.email||"",storage_path:objectPath,file_name:safe,file_url:null,taken_at:new Date().toISOString(),numar_poza:photoIndex,data_incarcare:new Date().toISOString(),file_id_sursa:null,source_data:{storage_bucket:PHOTO_BUCKET,uploaded_by:auth.user.id,mime_type:mimeType}};
+    const row={interventie_id:visit.id,source_id:null,client:client?.nume||machine?.client_nume||"",aparat:[machine?.cod_ofresh,machine?.producator,machine?.model,machine?.serie].filter(Boolean).join(" - "),tehnician:profile.nume||authUser.email||"",storage_path:objectPath,file_name:safe,file_url:null,taken_at:new Date().toISOString(),numar_poza:photoIndex,data_incarcare:new Date().toISOString(),file_id_sursa:null,source_data:{storage_bucket:PHOTO_BUCKET,uploaded_by:authUser.id,mime_type:mimeType}};
     const {data:photo,error:photoErr}=await sb.from("poze_interventii").insert(row).select("*").single();
     if(photoErr){await sb.storage.from(PHOTO_BUCKET).remove([objectPath]);throw photoErr;}
     const {count,error:countErr}=await sb.from("poze_interventii").select("id",{count:"exact",head:true}).eq("interventie_id",visit.id);
@@ -748,7 +878,7 @@ async function main(req:Request) {
     const uploadId=String(body.uploadId||"").trim(), chunk=String(body.chunk||"");
     const chunkIndex=Number(body.chunkIndex),totalChunks=Number(body.totalChunks);
     if(!/^[a-zA-Z0-9_-]{8,100}$/.test(uploadId)||!Number.isInteger(totalChunks)||totalChunks<1||totalChunks>100||!Number.isInteger(chunkIndex)||chunkIndex<0||chunkIndex>=totalChunks||!chunk||chunk.length>PHOTO_CHUNK_MAX) throw new Error("Date fragment foto invalide.");
-    const path=`tmp-standard/${auth.user.id}/${uploadId}/${chunkIndex}.b64`;
+    const path=`tmp-standard/${authUser.id}/${uploadId}/${chunkIndex}.b64`;
     const {error}=await sb.storage.from(PHOTO_BUCKET).upload(path,new TextEncoder().encode(chunk),{contentType:"image/jpeg",upsert:true});
     if(error) throw new Error("Nu am putut salva fragmentul foto: "+error.message);
     return Response.json({success:true,chunkIndex,totalChunks},{headers:CORS});
@@ -758,7 +888,7 @@ async function main(req:Request) {
     const visit=await canAccessStandardVisit(String(body.interventionId||""));
     const uploadId=String(body.uploadId||"").trim(),totalChunks=Number(body.totalChunks);
     if(!/^[a-zA-Z0-9_-]{8,100}$/.test(uploadId)||!Number.isInteger(totalChunks)||totalChunks<1||totalChunks>100) throw new Error("Date incarcare foto invalide.");
-    const tempPaths=Array.from({length:totalChunks},(_,i)=>`tmp-standard/${auth.user.id}/${uploadId}/${i}.b64`);
+    const tempPaths=Array.from({length:totalChunks},(_,i)=>`tmp-standard/${authUser.id}/${uploadId}/${i}.b64`);
     // Descarca fragmentele in paralel; concatenarea ramane in ordinea indexului.
     const chunkResults=await Promise.all(tempPaths.map(path=>sb.storage.from(PHOTO_BUCKET).download(path)));
     const chunks:string[]=[];
