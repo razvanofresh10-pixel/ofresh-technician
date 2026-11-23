@@ -13,11 +13,13 @@
 <main class="shell">
   <div class="brand">OFRESH</div><div class="sub">Management &amp; Service · Administrare acces mobil</div>
   <section class="card" id="loginCard">
-    <h1>Autentificare administrator</h1>
-    <p>Accesul la alocarea PIN-urilor este permis numai unui cont OFRESH cu rol de administrator.</p>
-    <label class="field"><span>Email administrator</span><input id="adminEmail" type="email" autocomplete="username" placeholder="Emailul contului de administrator"></label>
-    <label class="field"><span>Parola</span><input id="adminPassword" type="password" autocomplete="current-password" placeholder="Parola contului"></label>
-    <button class="btn" id="loginBtn" type="button">Autentificare</button>
+    <form id="adminLoginForm">
+      <h1>Autentificare administrator</h1>
+      <p>Accesul la alocarea PIN-urilor este permis numai unui cont OFRESH cu rol de administrator.</p>
+      <label class="field"><span>Email administrator</span><input id="adminEmail" type="email" autocomplete="username" placeholder="Emailul contului de administrator" required></label>
+      <label class="field"><span>Parola</span><input id="adminPassword" type="password" autocomplete="current-password" placeholder="Parola contului" required></label>
+      <button class="btn" id="loginBtn" type="submit">Autentificare</button>
+    </form>
     <div class="status" id="loginStatus" role="status"></div>
   </section>
   <section class="card hidden" id="adminCard">
@@ -81,15 +83,18 @@ async function verifyAdmin(){
   return true;
  }catch(e){await client.auth.signOut();showStatus("loginStatus",e.message);return false}
 }
-$("loginBtn").addEventListener("click",async()=>{
- $("loginBtn").disabled=true;
+$("adminLoginForm").addEventListener("submit",async(event)=>{
+ event.preventDefault();
+ const button=$("loginBtn");
+ if(button.disabled)return;
+ button.disabled=true;
  try{
   const {data,error}=await client.auth.signInWithPassword({email:$("adminEmail").value.trim(),password:$("adminPassword").value});
   if(error)throw error;
   const ok=await verifyAdmin();
   if(ok)showStatus("provisionStatus","Autentificare administrator confirmata.",true);
  }catch(e){showStatus("loginStatus",e.message||String(e))}
- finally{$("loginBtn").disabled=false}
+ finally{button.disabled=false}
 });
 $("logoutBtn").addEventListener("click",async()=>{await client.auth.signOut();$("adminCard").classList.add("hidden");$("loginCard").classList.remove("hidden");$("adminPassword").value=""});
 $("provisionBtn").addEventListener("click",async()=>{
