@@ -24,6 +24,7 @@
     <div class="top"><div><span class="tag">ADMINISTRATOR VERIFICAT</span><h1 style="margin-top:10px">Alocare telefon si PIN</h1></div><button class="btn secondary" id="logoutBtn" type="button">Iesire</button></div>
     <p>Contul mobil se asociaza unei inregistrari OFRESH existente. Nu se creeaza adrese de email fictive si nu se modifica profilurile de baza.</p>
     <div class="grid">
+      <label class="field"><span>Utilizator existent</span><select id="candidate"><option value="">Selecteaza un utilizator...</option></select></label>
       <label class="field"><span>Tip utilizator</span><select id="personType"><option value="filer">Filer</option><option value="tehnician">Tehnician</option></select></label>
       <label class="field"><span>Numar de telefon</span><input id="phone" type="tel" inputmode="tel" autocomplete="off" placeholder="07xxxxxxxx"></label>
       <label class="field"><span>PIN nou (6–12 cifre)</span><input id="pin" type="password" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="12" placeholder="Introdu PIN-ul"></label>
@@ -54,6 +55,21 @@ async function api(action,extra={}){
  if(!res.ok||data.success===false)throw new Error(data.error||("Eroare API ("+res.status+")."));
  return data;
 }
+async function loadCandidates(){
+ const select=$("candidate");select.innerHTML='<option value="">Selecteaza un utilizator...</option>';
+ const result=await api("listMobileProvisionCandidates");
+ for(const item of result.candidates||[]){
+  const option=document.createElement("option");
+  option.value=item.tip+"|"+item.id;
+  option.textContent=item.nume+" — "+(item.tip==="tehnician"?"Tehnician":"Filer")+" — "+item.telefon;
+  option.dataset.phone=item.telefon;option.dataset.type=item.tip;
+  select.appendChild(option);
+ }
+}
+$("candidate").addEventListener("change",()=>{
+ const option=$("candidate").selectedOptions[0];if(!option||!option.value)return;
+ $("personType").value=option.dataset.type;$("phone").value=option.dataset.phone;
+});
 async function verifyAdmin(){
  const {data:{session}}=await client.auth.getSession();
  if(!session)return false;
@@ -61,6 +77,7 @@ async function verifyAdmin(){
   const result=await api("whoami");
   if(!["administrator","admin"].includes(String(result.profile?.rol||"").toLowerCase()))throw new Error("Contul autentificat nu are rol de administrator.");
   $("loginCard").classList.add("hidden");$("adminCard").classList.remove("hidden");
+  await loadCandidates();
   return true;
  }catch(e){await client.auth.signOut();showStatus("loginStatus",e.message);return false}
 }
