@@ -684,7 +684,7 @@ if ("serviceWorker" in navigator) {
 <script defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
- // Recuperarea PIN-ului se face exclusiv prin Google Apps Script.
+ // Recuperarea accesului Admin/Comercial foloseste fluxul securizat Supabase Auth. Tehnicienii si filerii folosesc telefon + PIN in aplicatia mobila.
 
  const SUPABASE_URL="https://zlbgxeaasctnfmjsrvql.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb";
@@ -4726,10 +4726,9 @@ function openPinRecovery(returnRole){
     <div class="techLoginField"><label for="pinRecoveryEmail">Adresa de e-mail</label><input id="pinRecoveryEmail" type="email" autocomplete="email" placeholder="nume@companie.ro"></div>
     <button type="button" class="techLoginButton" id="pinRecoverySend" onclick="requestPinRecoveryUi()">Trimite codul</button>
     <div id="pinRecoveryVerify" style="display:none;margin-top:16px">
-      <div class="techLoginField"><label for="pinRecoveryCode">Cod de verificare (6 cifre)</label><input id="pinRecoveryCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></div>
-      <div class="techLoginField"><label for="pinRecoveryNew">PIN nou (4-20 caractere)</label><input id="pinRecoveryNew" type="password" autocomplete="new-password" maxlength="20"></div>
-      <div class="techLoginField"><label for="pinRecoveryConfirm">Confirma PIN-ul nou</label><input id="pinRecoveryConfirm" type="password" autocomplete="new-password" maxlength="20"></div>
-      <button type="button" class="techLoginButton" id="pinRecoveryComplete" onclick="completePinRecoveryUi()">Salveaza PIN-ul nou</button>
+      <div class="techLoginField"><label for="pinRecoveryNew">Parola / PIN nou (minim 8 caractere)</label><input id="pinRecoveryNew" type="password" autocomplete="new-password" maxlength="72"></div>
+      <div class="techLoginField"><label for="pinRecoveryConfirm">Confirma parola / PIN-ul nou</label><input id="pinRecoveryConfirm" type="password" autocomplete="new-password" maxlength="72"></div>
+      <button type="button" class="techLoginButton" id="pinRecoveryComplete" onclick="completePinRecoveryUi()">Salveaza parola noua</button>
     </div>
   </section>`;
   document.body.appendChild(overlay);
@@ -4745,39 +4744,48 @@ function closePinRecovery(){
 }
 async function requestPinRecoveryUi(){
   const email=String(document.getElementById('pinRecoveryEmail')?.value||'').trim().toLowerCase();
-  const error=document.getElementById('pinRecoveryError'), button=document.getElementById('pinRecoverySend');
+  const error=document.getElementById('pinRecoveryError'),button=document.getElementById('pinRecoverySend');
   if(error)error.textContent='';
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(error)error.textContent='Introdu o adresa de e-mail valida.';return;}
-  // Afisam imediat campurile de verificare; trimiterea e-mailului continua in fundal.
-  // Nu asteptam raspunsul MailApp pentru a permite utilizatorului sa introduca codul.
-  const verify=document.getElementById('pinRecoveryVerify');
-  if(verify)verify.style.display='block';
-  if(button){button.disabled=true;button.textContent='Se trimite e-mailul...';}
-  if(error)error.textContent='Solicitarea este in curs. Campurile de verificare sunt deja disponibile; introdu codul dupa ce primesti e-mailul.';
+  if(!supabaseClient){if(error)error.textContent='Serviciul de autentificare nu este disponibil.';return;}
+  if(button){button.disabled=true;button.textContent='Se trimite linkul...';}
   try{
-    const r=await apiPost({action:'requestPinRecovery',email:email});
-    if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut procesa solicitarea.');
-    if(error)error.textContent=r.message||'Codul a fost trimis. Verifica e-mailul si introdu codul de verificare.';
-  }catch(e){if(error)error.textContent=e.message||'Nu am putut trimite solicitarea.';}
-  finally{if(button){button.disabled=false;button.textContent='Trimite din nou codul';}}
+    const redirectTo=window.location.origin+window.location.pathname;
+    const {error:resetError}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo});
+    if(resetError)throw resetError;
+    if(error)error.textContent='Daca adresa este asociata unui cont, vei primi un link securizat. Deschide linkul din e-mail pe acest dispozitiv pentru a seta parola noua.';
+  }catch(e){if(error)error.textContent=e.message||'Nu am putut trimite linkul de recuperare.';}
+  finally{if(button){button.disabled=false;button.textContent='Trimite linkul din nou';}}
 }
 async function completePinRecoveryUi(){
-  const email=String(document.getElementById('pinRecoveryEmail')?.value||'').trim().toLowerCase();
-  const code=String(document.getElementById('pinRecoveryCode')?.value||'').trim();
   const pin=String(document.getElementById('pinRecoveryNew')?.value||'');
   const confirm=String(document.getElementById('pinRecoveryConfirm')?.value||'');
   const error=document.getElementById('pinRecoveryError'),button=document.getElementById('pinRecoveryComplete');
   if(error)error.textContent='';
-  if(pin.length<4||pin.length>20||/\s/.test(pin)){if(error)error.textContent='PIN-ul trebuie sa aiba intre 4 si 20 de caractere, fara spatii.';return;}
-  if(pin!==confirm){if(error)error.textContent='PIN-urile nu coincid.';return;}
+  if(pin.length<8||pin.length>72){if(error)error.textContent='Parola trebuie sa contina intre 8 si 72 de caractere.';return;}
+  if(pin!==confirm){if(error)error.textContent='Parolele nu coincid.';return;}
   if(button){button.disabled=true;button.textContent='Se salveaza...';}
   try{
-    const r=await apiPost({action:'completePinRecovery',email:email,code:code,newPin:pin});
-    if(!r||r.success!==true)throw new Error(r?.error||'Nu am putut actualiza PIN-ul.');
-    if(error)error.textContent=r.message||'PIN-ul a fost actualizat. Te poti autentifica folosind noul PIN.';
+    const {data,error:updateError}=await supabaseClient.auth.updateUser({password:pin});
+    if(updateError)throw updateError;
+    if(error)error.textContent='Parola a fost actualizata. Te poti autentifica folosind noua parola.';
     const verify=document.getElementById('pinRecoveryVerify');if(verify)verify.style.display='none';
-    if(button)button.textContent='PIN actualizat';
-  }catch(e){if(error)error.textContent=e.message||'Nu am putut actualiza PIN-ul.';if(button){button.disabled=false;button.textContent='Salveaza PIN-ul nou';}}
+    if(button)button.textContent='Parola actualizata';
+    await supabaseClient.auth.signOut();
+  }catch(e){if(error)error.textContent=e.message||'Nu am putut actualiza parola.';if(button){button.disabled=false;button.textContent='Salveaza parola noua';}}
+}
+if(supabaseClient){
+  supabaseClient.auth.onAuthStateChange((event)=>{
+    if(event==='PASSWORD_RECOVERY'){
+      setTimeout(()=>{
+        if(!document.getElementById('ofreshPinRecovery'))openPinRecovery('admin');
+        const verify=document.getElementById('pinRecoveryVerify');if(verify)verify.style.display='block';
+        const error=document.getElementById('pinRecoveryError');if(error)error.textContent='Link verificat. Introdu parola noua.';
+        const send=document.getElementById('pinRecoverySend');if(send)send.style.display='none';
+        const email=document.getElementById('pinRecoveryEmail');if(email&&email.parentElement)email.parentElement.style.display='none';
+      },0);
+    }
+  });
 }
 
 function openAdminLogin(){
