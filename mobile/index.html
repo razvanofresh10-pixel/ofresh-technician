@@ -25,7 +25,7 @@
 </div>
 <div id="filerPanel" class="hidden">
 <div class="card"><h2>Service espressoare</h2><label>Cauta client, cod OFRESH sau serie</label><input id="filerSearch" placeholder="Cauta in aparatele alocate"><div id="filerResults"></div></div>
-<div id="filerVisit" class="card hidden"><h3 id="filerMachineTitle">Interventie filer</h3><div id="filerMachineInfo" class="muted"></div><label>Operatiuni</label>
+<div id="filerVisit" class="card hidden"><h3 id="filerMachineTitle">Interventie filer</h3><div id="filerMachineInfo" class="muted"></div><button type="button" class="secondary" id="filerGpsBtn">Salveaza pozitia GPS a locatiei</button><div id="filerGpsMsg" class="status hidden"></div><div id="filerMapLinks" class="muted"></div><label>Operatiuni</label>
 <div id="filerTasks"></div><label>Observatii</label><textarea id="filerNotes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="filerCameraBtn">📷 Deschide camera si fotografiaza</button><div id="filerCameraBox" class="hidden"><video id="filerCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="filerCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="filerCameraClose">Inchide camera</button></div><div id="filerPhotoPreview" class="muted"></div><button id="saveFiler">Salveaza interventia si fotografiile</button><div id="filerMsg" class="status hidden"></div></div>
 </div>
 </section>
@@ -127,7 +127,34 @@ const tasks=['Igienizare','Decalcifiere','Curatare capucinator','Spalat grup caf
 async function loadFilerData(){const r=await api('filerData');filerMachines=r.locations.flatMap(l=>l.machines.map(m=>({...m,_location:l})));renderFiler('')}
 function renderFiler(q){const found=filerMachines.filter(m=>machineText(m).toLowerCase().includes(q.toLowerCase()));$('filerResults').innerHTML=found.slice(0,80).map((m,i)=>'<div class="item"><b>'+escapeHtml(m.Client||m._location.Client)+'</b><span class="muted">'+escapeHtml(machineText(m))+'</span><button class="secondary" data-machine="'+escapeHtml(m['ID Aparat'])+'">Selecteaza</button></div>').join('')||'<p class="muted">Nu exista rezultate in aria alocata.</p>';$('filerResults').querySelectorAll('button[data-machine]').forEach(b=>b.onclick=()=>openFilerMachine(b.dataset.machine))}
 $('filerSearch').oninput=e=>renderFiler(e.target.value);
-function openFilerMachine(id){currentFilerMachine=filerMachines.find(m=>m['ID Aparat']===id);if(!currentFilerMachine)return;$('filerMachineTitle').textContent=currentFilerMachine.Client||currentFilerMachine._location.Client;$('filerMachineInfo').textContent=machineText(currentFilerMachine);$('filerTasks').innerHTML=tasks.map(t=>'<label class="check"><input type="checkbox" value="'+t+'"> '+t+'</label>').join('');filerCapturedPhotos=[];renderCaptured('filerPhotoPreview',filerCapturedPhotos);$('filerNotes').value='';show('filerVisit')}
+function renderFilerMapLinks(){
+ const l=currentFilerMachine?._location||{};
+ const lat=l['GPS Latitudine']||currentFilerMachine?.['GPS Latitudine'];
+ const lng=l['GPS Longitudine']||currentFilerMachine?.['GPS Longitudine'];
+ const address=[l.Adresa,l.Zona,l.Oras,l.Judet].filter(Boolean).join(', ');
+ const dest=lat!=null&&lng!=null?lat+','+lng:address;
+ $('filerMapLinks').innerHTML=dest?'<a target="_blank" rel="noopener" href="https://www.waze.com/ul?q='+encodeURIComponent(dest)+'&navigate=yes">Deschide in Waze</a> · <a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(dest)+'">Google Maps</a>':'';
+}
+$('filerGpsBtn').onclick=async()=>{
+ try{
+  const loc=currentFilerMachine?._location||{};
+  const locationId=String(loc['ID Locatie']||'').trim();
+  if(!locationId)throw new Error('Locatia nu are un ID Supabase valid. Nu pot salva GPS-ul.');
+  if(!navigator.geolocation)throw new Error('Telefonul sau browserul nu permite citirea pozitiei GPS.');
+  $('filerGpsBtn').disabled=true;
+  message('filerGpsMsg','Se citeste pozitia GPS. Permite accesul la locatie si ramai la adresa clientului.');
+  const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:0}));
+  const r=await api('filerUpdateGps',{locationId,latitudine:pos.coords.latitude,longitudine:pos.coords.longitude,precizie:pos.coords.accuracy||0});
+  await loadFilerData();
+  currentFilerMachine=filerMachines.find(m=>m['ID Aparat']===currentFilerMachine?.['ID Aparat'])||currentFilerMachine;
+  message('filerGpsMsg','GPS salvat. Precizie: '+Math.round(pos.coords.accuracy||0)+' m. Aparate actualizate: '+r.aparateActualizate+'.');
+  renderFilerMapLinks();
+ }catch(e){
+  const msg=e?.code===1?'Accesul la locatie a fost refuzat. Activeaza permisiunea GPS pentru site.':e?.code===2?'Telefonul nu a putut determina pozitia. Incearca din nou intr-un loc cu semnal GPS.':e?.code===3?'Citirea GPS a expirat. Incearca din nou.':e.message;
+  message('filerGpsMsg',msg,true);
+ }finally{$('filerGpsBtn').disabled=false}
+};
+function openFilerMachine(id){currentFilerMachine=filerMachines.find(m=>m['ID Aparat']===id);if(!currentFilerMachine)return;$('filerMachineTitle').textContent=currentFilerMachine.Client||currentFilerMachine._location.Client;$('filerMachineInfo').textContent=machineText(currentFilerMachine);$('filerGpsMsg').classList.add('hidden');renderFilerMapLinks();$('filerTasks').innerHTML=tasks.map(t=>'<label class="check"><input type="checkbox" value="'+t+'"> '+t+'</label>').join('');filerCapturedPhotos=[];renderCaptured('filerPhotoPreview',filerCapturedPhotos);$('filerNotes').value='';show('filerVisit')}
 $('saveFiler').onclick=async()=>{try{if(!currentFilerMachine)throw new Error('Selecteaza un aparat.');const selected=[...$('filerTasks').querySelectorAll('input:checked')].map(x=>x.value);if(!selected.length)throw new Error('Selecteaza cel putin o operatiune.');const files=[...filerCapturedPhotos];if(files.length>5)throw new Error('Sunt permise maximum 5 fotografii.');message('filerMsg','Salvez interventia...');const r=await api('filerSaveVisit',{machineId:currentFilerMachine['ID Aparat'],tasks:selected,observatii:$('filerNotes').value,photoCount:files.length});if(files.length){const uploads=[];for(let i=0;i<files.length;i++)uploads.push(await sendChunks('filerUploadPhotoChunk',r.visitId,r.photoToken,files[i],i+1,i===0?'Aviz':'Aparat dupa curatare'));await api('filerFinalizePhotoUploads',{visitId:r.visitId,photoToken:r.photoToken,photos:uploads})}message('filerMsg','Interventia si '+files.length+' fotografii salvate in Supabase. ID: '+r.visitId)}catch(e){message('filerMsg',e.message,true)}};
 
 let deferredInstallPrompt=null;
