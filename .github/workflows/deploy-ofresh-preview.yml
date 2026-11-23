@@ -6,7 +6,10 @@ on:
       - supabase-preview
     paths:
       - "index.html"
+      - "admin-mobile-access.html"
+      - "mobile/**"
       - "ofresh-manifest.json"
+      - "ofresh-sw.js"
       - "icons/**"
       - ".github/workflows/deploy-ofresh-preview.yml"
   workflow_dispatch:
