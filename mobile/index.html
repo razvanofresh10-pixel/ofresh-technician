@@ -174,8 +174,10 @@ async function loadMobileHistory(target){
    const machine=v.Aparat||v.aparat||v["ID Aparat"]||v["Serie aparat"]||'';
    const tasks=v.Operatiuni||v.operatiuni||v["Tip interventie"]||v.tip||'';
    const taskText=Array.isArray(tasks)?tasks.join(', '):String(tasks||'');
+   const filterType=v["Tip filtru"]||v.tip_filtru||'';
+   const nextFilter=v["Urmator schimb"]||v["Urmatoarea schimbare"]||v.data_urmatoarei_schimbari||'';
    const photos=(v.photos||[]).map(p=>p.url?'<a target="_blank" rel="noopener" href="'+escapeHtml(p.url)+'">Fotografie '+p.numar_poza+'</a>':'<span class="muted">Fotografie indisponibila</span>').join(' · ');
-   return '<div class="item"><b>'+escapeHtml(client)+'</b><span class="muted">'+escapeHtml(date)+' · '+escapeHtml(machine)+'</span><div>'+escapeHtml(taskText)+'</div>'+(v.Observatii||v.observatii?'<div class="muted">'+escapeHtml(v.Observatii||v.observatii)+'</div>':'')+(photos?'<div>'+photos+'</div>':'')+'</div>';
+   return '<div class="item"><b>'+escapeHtml(client)+'</b><span class="muted">'+escapeHtml(date)+' · '+escapeHtml(machine)+'</span><div>'+escapeHtml(taskText)+'</div>'+(filterType?'<div class="muted">Filtru: '+escapeHtml(filterType)+(nextFilter?' · Urmatoarea schimbare: '+escapeHtml(nextFilter):'')+'</div>':'')+(v.Observatii||v.observatii?'<div class="muted">'+escapeHtml(v.Observatii||v.observatii)+'</div>':'')+(photos?'<div>'+photos+'</div>':'')+'</div>';
   }).join(''):'<p class="muted">Nu exista interventii in istoricul acestui cont.</p>';
  }catch(e){box.innerHTML='<p class="status">'+escapeHtml(e.message)+'</p>'}
  finally{button.disabled=false}
