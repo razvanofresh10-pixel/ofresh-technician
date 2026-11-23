@@ -115,11 +115,16 @@ $('saveTech').onclick=async()=>{try{
   const r=await api('add',{sheet:'Interventii',record});
   const visitId=r.record?.['ID Interventie']||r.record?.id;
   if(!visitId)throw new Error('Interventia a fost salvata, dar serverul nu a returnat ID-ul. Verifica istoricul inainte de a reincerca.');
-  if(filterData)await api('technicianCompleteFilterChange',{interventionId:visitId,...filterData});
+  const saveStarted=performance.now();
+  console.info('[OFRESH SAVE PERF]',{phase:'intervention-saved',durationMs:Math.round(performance.now()-saveStarted),visitId});
+  if(filterData){const filterStarted=performance.now();message('techMsg','Interventia salvata. Actualizez istoricul filtrului...');await api('technicianCompleteFilterChange',{interventionId:visitId,...filterData});console.info('[OFRESH SAVE PERF]',{phase:'filter-update',durationMs:Math.round(performance.now()-filterStarted)});}
   for(let i=0;i<techCapturedPhotos.length;i++){
-    const file=techCapturedPhotos[i],blob=await shrink(file),base=await b64(blob),chunkSize=28000,total=Math.ceil(base.length/chunkSize),uploadId=crypto.randomUUID().replace(/-/g,'');
-    for(let j=0;j<total;j++)await api('uploadPhotoChunk',{uploadId,chunk:base.slice(j*chunkSize,(j+1)*chunkSize),chunkIndex:j,totalChunks:total});
+    const photoStarted=performance.now(),file=techCapturedPhotos[i],blob=await shrink(file),base=await b64(blob),chunkSize=28000,total=Math.ceil(base.length/chunkSize),uploadId=crypto.randomUUID().replace(/-/g,'');
+    message('techMsg','Interventia salvata. Incarc fotografia '+(i+1)+' din '+techCapturedPhotos.length+'...');
+    const chunks=Array.from({length:total},(_,j)=>({uploadId,chunk:base.slice(j*chunkSize,(j+1)*chunkSize),chunkIndex:j,totalChunks:total}));
+    for(let j=0;j<chunks.length;j+=3)await Promise.all(chunks.slice(j,j+3).map(payload=>api('uploadPhotoChunk',payload)));
     await api('finalizePhotoUpload',{interventionId:visitId,uploadId,totalChunks:total,mimeType:'image/jpeg',fileName:file.name,photoIndex:i+1});
+    console.info('[OFRESH SAVE PERF]',{phase:'photo-upload',photo:i+1,chunks:total,durationMs:Math.round(performance.now()-photoStarted)});
   }
   message('techMsg','Interventia si '+techCapturedPhotos.length+' fotografii salvate in Supabase. ID: '+visitId);
 }catch(e){message('techMsg',e.message,true)}finally{$('saveTech').disabled=false}};
