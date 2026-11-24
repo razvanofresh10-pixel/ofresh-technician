@@ -1,4 +1,4 @@
-// OFRESH V38 — Supabase migration adapter (preview; scoped intervention/photo writes)
+// OFRESH V39 — Supabase migration adapter (preview; scoped intervention/photo writes)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -84,12 +84,15 @@ function machineIsActive(machine:any) {
   const status=norm(machine?.status), withdrawal=norm(machine?.data_retragere);
   return (status==="activ" || status==="active") && (!withdrawal || ["-","—","n/a","na","nu","0"].includes(withdrawal));
 }
-function filerAllows(profile:any, machine:any, loc:any) {
-  const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces), zones=arr(profile.zone_aparate_acces).map(norm);
-  const city=norm(loc?.oras || machine?.source_data?.Oras || machine?.source_data?.oras);
-  const type=machine.tip_echipament || machine.tip_aparat;
-  const zone=norm(machine.zona);
-  return machineIsActive(machine) && startsEsp(type) && !!zone && (!cities.length || cities.includes(city)) && equipmentMatches(types,type) && (!zones.length || zones.includes(zone));
+function filerAllows(profile:any, machine:any, _loc:any) {
+  const explicitIds=arr(profile.aparate_asignate).map((x:any)=>String(x));
+  // Filer access is strictly limited to machines explicitly assigned by an administrator.
+  // Empty assignments fail closed; city/zone permissions are not a substitute for assignment.
+  if(!explicitIds.length) return false;
+  const machineId=String(machine?.id||"");
+  return machineIsActive(machine) &&
+    startsEsp(machine.tip_echipament || machine.tip_aparat) &&
+    explicitIds.includes(machineId);
 }
 async function validateCurrentEspressoVisitMachine(sb:any, visit:any, profile:any, isFiler:boolean) {
   if(!visit?.aparat_id) throw new Error("Interventia nu este asociata unui aparat valid.");
@@ -114,7 +117,7 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","mobileLogin","mobileLogout"],"mobileInterventionHistory");
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","filerUpdateMachine","technicianUpdateMachine","filerFinalizePhotoUpload","filerUpdateLocation","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","filerAssignmentData","setFilerMachines","mobileLogin","mobileLogout","mobileInterventionHistory","insert","upsert","update","delete"]);
   if(!previewReadActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview numai-citire."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
@@ -175,6 +178,32 @@ async function main(req:Request) {
   }
   const isFiler = role === "filer";
   const isTech = role === "tehnician" || role === "technician";
+  if(action==="filerAssignmentData"){
+    if(!isAdmin) throw new Error("Doar administratorul poate gestiona alocarile Filer.");
+    const [{data:filers,error:filerErr},{data:machines,error:machineErr}]=await Promise.all([
+      sb.from("profiluri").select("id,nume,telefon,aparate_asignate").eq("rol","filer").eq("activ",true).order("nume"),
+      sb.from("aparate").select("id,cod_ofresh,client_nume,locatie,model,serie,zona,tip_aparat,tip_echipament,status").eq("status","Activ").eq("tip_echipament","esp").order("client_nume")
+    ]);
+    if(filerErr) throw filerErr;
+    if(machineErr) throw machineErr;
+    return Response.json({success:true,filers:filers||[],machines:machines||[]},{headers:CORS});
+  }
+  if(action==="setFilerMachines"){
+    if(!isAdmin) throw new Error("Doar administratorul poate modifica alocarile Filer.");
+    const userId=String(body.userId||"");
+    const ids=Array.isArray(body.aparatIds)?Array.from(new Set(body.aparatIds.map((x:any)=>String(x)))):[];
+    if(!userId) throw new Error("Lipseste utilizatorul Filer.");
+    const {data:target,error:targetErr}=await sb.from("profiluri").select("id,rol,activ").eq("id",userId).maybeSingle();
+    if(targetErr||!target||norm(target.rol)!=="filer"||target.activ===false) throw new Error("Profil Filer activ negasit.");
+    if(ids.length){
+      const {data:valid,error:validErr}=await sb.from("aparate").select("id").in("id",ids).eq("status","Activ").eq("tip_echipament","esp");
+      if(validErr) throw validErr;
+      if((valid||[]).length!==ids.length) throw new Error("Lista contine aparate inactive sau care nu sunt espressoare.");
+    }
+    const {data:updated,error:updateErr}=await sb.from("profiluri").update({aparate_asignate:ids}).eq("id",userId).select("id,aparate_asignate").single();
+    if(updateErr) throw updateErr;
+    return Response.json({success:true,assignment:updated},{headers:CORS});
+  }
   if(action==="listMobileLinkedUsers"){
     if(!isAdmin)throw new Error("Doar administratorul poate vedea utilizatorii mobili.");
     const {data:rows,error}=await sb.from("profiluri").select("id,nume,rol,telefon").in("rol",["tehnician","filer"]).eq("activ",true).order("nume");
@@ -242,7 +271,8 @@ async function main(req:Request) {
     }
     return Response.json({success:true,user:{id:userId,nume:displayName,rol:personType,telefon:phone}},{headers:CORS});
   }
-  // `interventii.tehnician_id` is the UUID of `tehnicieni.id`, not the Auth UUID.
+  // `interventii.tehnician_id` references `auth.users.id` (enforced by its FK).
+  // `tehnicieni.user_id` is the explicit link used to resolve the technician display record.
   // Never infer or auto-link a technician by name/phone.
   let technicianRecord:any=null;
   if(isTech){
@@ -286,17 +316,14 @@ async function main(req:Request) {
       rows=rows.filter((l:any)=>(byLoc.get(l.id)||[]).some((m:any)=>filerAllows(profile,m,l)));
     }
     if(role==="filer" && name==="InterventiiEspressoare"){
-      const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces).map(norm), zones=arr(profile.zone_aparate_acces).map(norm);
-      rows=rows.filter((r:any)=>
-        (!cities.length || cities.includes(norm(r.oras))) &&
-        equipmentMatches(arr(profile.tip_echipament_acces),r.tip_echipament) &&
-        (!zones.length || zones.includes(norm(r.zona_aparate)))
-      );
+      const assignedIds=new Set(arr(profile.aparate_asignate).map((x:any)=>String(x)));
+      rows=rows.filter((r:any)=>r.aparat_id && assignedIds.has(String(r.aparat_id)));
     }
     if(role==="comercial" && name==="Aparate") rows=rows.filter((m:any)=>m.status!=="Retras");
     if(role==="filer" && name==="PozeInterventiiEspressoare") {
       const visits=await allRows(sb,"interventii_espressoare");
-      const visible=new Set(visits.filter((v:any)=>String(v.technician_profile_id||"")===authUser.id || ((!arr(profile.orase_acces).length || arr(profile.orase_acces).map(norm).includes(norm(v.oras))) && equipmentMatches(arr(profile.tip_echipament_acces),v.tip_echipament) && (!arr(profile.zone_aparate_acces).length || arr(profile.zone_aparate_acces).map(norm).includes(norm(v.zona_aparate))))).map((v:any)=>v.id));
+      const assignedIds=new Set(arr(profile.aparate_asignate).map((x:any)=>String(x)));
+      const visible=new Set(visits.filter((v:any)=>v.aparat_id && assignedIds.has(String(v.aparat_id))).map((v:any)=>v.id));
       rows=rows.filter((r:any)=>visible.has(r.interventie_id));
     }
     if(name==="PozeInterventii" || name==="PozeInterventiiEspressoare") {
@@ -866,8 +893,8 @@ async function main(req:Request) {
         const machines=await allRows(sb,"aparate");
         rows=rows.filter((loc:any)=>machines.some((m:any)=>m.locatie_id===loc.id && filerAllows(profile,m,loc)));
       } else {
-        const cities=arr(profile.orase_acces).map(norm), zones=arr(profile.zone_aparate_acces).map(norm);
-        rows=rows.filter((r:any)=>(!cities.length||cities.includes(norm(r.oras))) && equipmentMatches(arr(profile.tip_echipament_acces),r.tip_echipament) && (!zones.length||zones.includes(norm(r.zona_aparate))) && String(r.technician_profile_id||"")===authUser.id);
+        const assignedIds=new Set(arr(profile.aparate_asignate).map((x:any)=>String(x)));
+        rows=rows.filter((r:any)=>r.aparat_id && assignedIds.has(String(r.aparat_id)));
       }
       total=rows.length; rows=rows.slice(offset,offset+limit);
     } else {
