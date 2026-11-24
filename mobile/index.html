@@ -22,7 +22,7 @@
 <div id="filterFields" class="hidden"><label>Tip filtru</label><select id="filterType"><option value="">Selecteaza tipul filtrului</option><option>Brita</option><option>Oasis</option><option>BWT</option><option>FLUUX VH IEN 6000</option><option>Alt tip de filtru</option></select><div id="customFilterWrap" class="hidden"><label>Introdu tipul filtrului</label><input id="customFilterType" placeholder="Denumirea filtrului"></div><div class="grid"><div><label>Data montare</label><input id="filterMountDate" type="date"></div><div><label>Interval luni</label><select id="filterMonths"><option value="6">6</option><option value="12">12</option></select></div></div><label>Urmatoarea schimbare filtru</label><input id="filterNextDate" type="date" readonly></div>
 <label>Operatiuni efectuate</label><div id="operationTasks" class="card" style="margin:8px 0;padding:10px"></div>
 <div class="grid"><div id="nextVisitWrap"><label>Urmatoarea interventie</label><input id="nextVisitDate" type="date"></div><div><label>Facturare</label><label class="check"><input id="solicitareClient" type="checkbox"> Solicitare client</label></div></div>
-<label>Observatii</label><textarea id="notes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="techCameraBtn">📷 Deschide camera si fotografiaza</button><div id="techCameraBox" class="hidden"><video id="techCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="techCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="techCameraClose">Inchide camera</button></div><div id="techPhotoPreview" class="muted"></div><button id="saveTech">Salveaza interventia</button><div id="techMsg" class="status hidden"></div><button type="button" class="secondary" id="techHistoryBtn">Vezi istoricul interventiilor mele</button><div id="techHistory" class="hidden"></div></div>
+<label>Observatii</label><textarea id="notes"></textarea><label>Fotografii (maxim 5)</label><button type="button" class="secondary" id="techCameraBtn">📷 Deschide camera si fotografiaza</button><div id="techCameraBox" class="hidden"><video id="techCameraVideo" playsinline style="width:100%;border-radius:12px;background:#111"></video><button type="button" class="secondary" id="techCaptureBtn">Captureaza fotografia</button><button type="button" class="secondary" id="techCameraClose">Inchide camera</button></div><div id="techPhotoPreview" class="muted"></div><button id="saveTech">Salveaza interventia</button><div id="techMsg" class="status hidden"></div></div>
 </div>
 <div id="filerPanel" class="hidden">
 <div class="card"><h2>Service espressoare</h2><label>Cauta client, cod OFRESH sau serie</label><input id="filerSearch" placeholder="Cauta in aparatele alocate"><div id="filerResults"></div></div>
@@ -203,8 +203,7 @@ async function loadMobileHistory(target){
  finally{button.disabled=false}
 }
 
- $('techHistoryBtn').onclick=()=>loadMobileHistory('techHistory');
-$('filerHistoryBtn').onclick=()=>loadMobileHistory('filerHistory');
+ $('filerHistoryBtn').onclick=()=>loadMobileHistory('filerHistory');
 let deferredInstallPrompt=null;
 const installButton=document.getElementById('installBtn');
 const installHelp=document.getElementById('installHelp');
