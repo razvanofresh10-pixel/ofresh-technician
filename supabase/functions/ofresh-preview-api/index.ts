@@ -1,4 +1,4 @@
-// OFRESH V39 — Supabase migration adapter (preview; scoped intervention/photo writes)
+// OFRESH V41 — Supabase migration adapter (preview; scoped intervention/photo writes)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -12,7 +12,7 @@ const CORS: Record<string,string> = {
 };
 const TABLES: Record<string,string> = {
   Clienti:"clienti", Locatii:"locatii", Aparate:"aparate", Interventii:"interventii",
-  Filtre:"filtre", Stoc:"stoc", Tehnicieni:"tehnicieni", Utilizatori:"utilizatori_aplicatie",
+  Filtre:"filtre", Stoc:"stoc", Produse:"produse", Tehnicieni:"tehnicieni", Utilizatori:"utilizatori_aplicatie",
   InterventiiEspressoare:"interventii_espressoare", PozeInterventii:"poze_interventii",
   PozeInterventiiEspressoare:"poze_interventii_espressoare",
 };
@@ -56,6 +56,7 @@ function legacy(sheet:string,r:any): any {
     case "Aparate": return {...base,"ID Aparat":r.id,"Cod ID":r.cod_id,"ID Locatie":r.locatie_id,Locatie:r.locatie,Client:r.client_nume ?? r.locatie,Producator:r.producator,Model:r.model,Serie:r.serie,"Cod OFRESH":r.cod_ofresh,Status:r.status,Zona:r.zona,"Data instalare":r.data_instalarii,"Tip echipament":r.tip_echipament,"Tip aparat":r.tip_aparat,"Data retragere":r.data_retragere,Adresa:r.adresa,"Ultima interventie":r.ultima_interventie,"Urmatoarea interventie":r.urmatoarea_interventie,"QR Token":r.qr_token,"GPS Latitudine":r.gps_latitudine,"GPS Longitudine":r.gps_longitudine,"GPS Precizie m":r.gps_precizie_m,"GPS Actualizat la":r.gps_actualizat_la,gps_latitudine:r.gps_latitudine,gps_longitudine:r.gps_longitudine,gps_precizie_m:r.gps_precizie_m,gps_actualizat_la:r.gps_actualizat_la};
     case "Interventii": return {...base,"ID Interventie":r.id,"ID Aparat":r.aparat_id,Data:r.data_interventie,Tehnician:r.tehnician,Tip:r.tip,"Tip interventie":r.tip_interventie,Descriere:r.descriere,Operatiuni:r.operatiuni,Observatii:r.observatii,"ID Tehnician":r.tehnician_id,"Urmatoarea interventie":r.urmatoarea_interventie,"Filtru schimbat":r.filtru_schimbat,Igienizare:r.igienizare,Status:r.status,"ID Locatie":r.locatie_id,"ID Client":r.client_id,"Tip filtru":r.tip_filtru,"Fotografii":r.fotografii_count};
     case "Filtre": return {...base,"ID Filtru":r.id,"ID Aparat":r.aparat_id,"ID Locatie":r.locatie_id,"Tip filtru":r.tip_filtru,"Data montarii":r.data_montarii ?? r.data_montare,"Data schimbarii":r.data_schimbarii,"Urmatoarea schimbare":r.urmatoarea_schimbare ?? r.data_urmatoarei_schimbari,Status:r.status,Observatii:r.observatii};
+    case "Produse": return {...base,"ID Produs":r.id,"Cod produs":r.cod_produs,Denumire:r.denumire,Categorie:r.categorie,Brand:r.brand,Pret:r.pret,TVA:r.tva,Status:r.status,Activ:r.activ,Observatii:r.observatii};
     case "Stoc": return {...base,"ID Stoc":r.id,"Cod produs":r.cod_produs,Denumire:r.denumire,Categorie:r.categorie,Locatie:r.locatie,"Cantitate intrata":r.cantitate_intrata ?? r.cantitate,Consum:r.consum,"Stoc actual":r.stoc_actual, "Prag minim":r.prag_minim,Unitate:r.unitate,"Pret unitar":r.pret_unitar,"Data intrare":r.data_intrare,Observatii:r.observatii};
     case "Tehnicieni": return {...base,"ID Tehnician":r.id,"ID Utilizator":r.user_id||"",Nume:r.nume,Telefon:r.telefon,Email:r.email,Status:r.status,"Tip personal":r.tip_personal,Rol:r.tip_personal,Observatii:r.observatii};
     case "Utilizatori": return {...base,"ID Utilizator":r.id,Nume:r.nume,Telefon:r.telefon,Email:r.email,Rol:r.rol,Status:r.status,Drepturi:r.drepturi,"Orase acces":r.orase_acces,"Tip echipament acces":r.tip_echipament_acces,"Zone aparate acces":r.zone_aparate_acces};
@@ -64,6 +65,48 @@ function legacy(sheet:string,r:any): any {
     case "PozeInterventii": return {...base,"ID Poza":r.id,"ID Interventie":r.interventie_id,Tehnician:r.tehnician,Client:r.client,Aparat:r.aparat,"Nume fisier":r.file_name,"URL poza":r.signed_url||r.file_url,"Data incarcare":r.data_incarcare};
     default: return base;
   }
+}
+function legacyArray(value:any): string[] {
+  if(Array.isArray(value)) return value.map(String).map(x=>x.trim()).filter(Boolean);
+  if(typeof value==="string") return value.split(/[,;|]/).map(x=>x.trim()).filter(Boolean);
+  return [];
+}
+function legacyRights(value:any): any {
+  if(value && typeof value==="object" && !Array.isArray(value)) return value;
+  const values=legacyArray(value);
+  return Object.fromEntries(values.map(x=>[x,true]));
+}
+function legacyPayload(sheet:string, record:any, legacyId:string): {table:string,row:any} {
+  const r=record && typeof record==="object" ? record : {};
+  const sourceData={...r,legacy_record_id:legacyId||r.legacy_record_id||null,updated_via:"ofresh_legacy_desktop"};
+  delete sourceData.PIN; delete sourceData.pin; delete sourceData.Password; delete sourceData.password;
+  const get=(...keys:string[])=>{for(const k of keys){if(Object.prototype.hasOwnProperty.call(r,k) && r[k]!==undefined) return r[k]===""?null:r[k];}return undefined;};
+  const uuid=(v:any)=>typeof v==="string" && /^[0-9a-f-]{36}$/i.test(v);
+  const idValue=(...keys:string[])=>{const v=get(...keys);if(v===undefined)return undefined;if(v===null)return null;return uuid(v)?v:undefined;};
+  switch(sheet){
+    case "Clienti": return {table:"clienti",row:{source_id:legacyId||get("ID Sursa","source_id"),nume:String(get("Client","Nume client","Nume","nume")||"").trim(),adresa:get("Adresa","adresa"),zona:get("Zona","zona"),oras:get("Oras","oras"),judet:get("Judet","judet"),persoana_contact:get("Persoana contact","persoana_contact"),telefon:get("Telefon","telefon"),email:get("Email","email"),status:get("Status","status")||"Activ",observatii:get("Observatii","observatii"),source_data:sourceData}};
+    case "Locatii": return {table:"locatii",row:{source_id:legacyId||get("ID Sursa","source_id"),nume:String(get("Nume locatie","Locatie","nume")||"").trim(),adresa:get("Adresa","adresa"),judet:get("Judet","judet"),oras:get("Oras","oras"),status:get("Status","status")||"Activ",client_id:idValue("ID Client","client_id"),nume_client:get("Client","Nume client","nume_client"),persoana_contact:get("Persoana contact","persoana_contact"),telefon:get("Telefon","telefon"),telefone:get("Telefon","telefone"),email:get("Email","email"),observatii:get("Observatii","observatii"),zona:get("Zona","zona"),latitudine:get("Latitudine","GPS Latitudine","latitudine"),longitudine:get("Longitudine","GPS Longitudine","longitudine"),source_data:sourceData}};
+    case "Aparate": return {table:"aparate",row:{cod_id:legacyId||get("Cod ID","ID Aparat","cod_id"),locatie_id:idValue("ID Locatie","locatie_id"),locatie:get("Locatie","locatie"),producator:get("Producator","producator"),model:get("Model","model"),serie:get("Serie","serie"),cod_ofresh:get("Cod OFRESH","cod_ofresh"),status:get("Status","status")||"Activ",zona:get("Zona","zona"),data_instalarii:get("Data instalare","Data instalarii","data_instalarii"),tip_echipament:get("Tip echipament","tip_echipament")||"apa",tip_aparat:get("Tip aparat","tip_aparat"),data_retragere:get("Data retragere","data_retragere"),client_nume:get("Client","Nume client","client_nume"),adresa:get("Adresa","adresa"),ultima_interventie:get("Ultima interventie","ultima_interventie"),urmatoarea_interventie:get("Urmatoarea interventie","urmatoarea_interventie"),source_data:sourceData}};
+    case "Filtre": return {table:"filtre",row:{aparat_id:idValue("ID Aparat","aparat_id"),locatie_id:idValue("ID Locatie","locatie_id"),tip_filtru:get("Tip filtru","Tip Filtru","tip_filtru"),data_montarii:get("Data montarii","Data montare","data_montarii","data_montare"),data_schimbarii:get("Data schimbarii","data_schimbarii"),urmatoarea_schimbare:get("Urmatoarea schimbare","Data urmatoarei schimbari","data_urmatoarei_schimbari","urmatoarea_schimbare"),interval_luni:Number(get("Interval luni","interval_luni")||6),status:get("Status","status")||"Activ",observatii:get("Observatii","observatii"),id_sursa:legacyId||get("ID Filtru","id_sursa"),source_data:sourceData}};
+    case "Stoc": return {table:"stoc",row:{source_id:legacyId||get("ID Stoc","source_id"),cod_produs:get("Cod produs","cod_produs"),denumire:get("Denumire","denumire"),categorie:get("Categorie","categorie"),locatie:get("Locatie","locatie"),cantitate_intrata:get("Cantitate intrata","Cantitate","cantitate_intrata","cantitate"),cantitate:get("Cantitate","cantitate","Cantitate intrata"),consum:get("Consum","Consumat","consum"),stoc_actual:get("Stoc actual","stoc_actual"),prag_minim:get("Prag minim","prag_minim"),unitate:get("Unitate","unitate"),pret_unitar:get("Pret unitar","pret_unitar"),data_intrare:get("Data intrare","data_intrare"),observatii:get("Observatii","observatii"),source_data:sourceData}};
+    case "Tehnicieni": return {table:"tehnicieni",row:{source_id:legacyId||get("ID Tehnician","source_id"),nume:String(get("Nume","nume")||"").trim(),telefon:get("Telefon","telefon"),email:get("Email","email"),status:get("Status","status")||"Activ",observatii:get("Observatii","observatii"),tip_personal:get("Tip personal","Rol","tip_personal")||"tehnician",source_data:sourceData}};
+    case "Utilizatori": return {table:"utilizatori_aplicatie",row:{source_id:legacyId||get("ID Utilizator","source_id"),nume:String(get("Nume","nume")||"").trim(),telefon:get("Telefon","telefon"),email:get("Email","email"),rol:String(get("Rol","rol")||"").toLowerCase(),status:get("Status","status")||"Activ",drepturi:legacyRights(get("Drepturi","drepturi")),orase_acces:legacyArray(get("Orase acces","orase_acces")),tip_echipament_acces:legacyArray(get("Tip echipament acces","tip_echipament_acces")),zone_aparate_acces:legacyArray(get("Zone aparate acces","zone_aparate_acces")),source_data:sourceData}};
+    case "Produse": return {table:"produse",row:{source_id:legacyId||get("ID Produs","source_id"),cod_produs:get("Cod produs","cod_produs"),denumire:String(get("Denumire","denumire")||"").trim(),categorie:get("Categorie","categorie"),brand:get("Brand","brand"),pret:get("Pret","pret"),tva:get("TVA","tva"),status:get("Status","status")||"Activ",activ:get("Activ","activ")!==false,observatii:get("Observatii","observatii"),source_data:sourceData}};
+    default: throw new Error("Modulul nu permite salvare legacy: "+sheet);
+  }
+}
+async function resolveLegacyRow(sb:any, sheet:string, value:string) {
+  if(!value) throw new Error("Lipseste identificatorul inregistrarii.");
+  const table=TABLES[sheet]; if(!table) throw new Error("Modul necunoscut: "+sheet);
+  let q=sb.from(table).select("*");
+  if(/^[0-9a-f-]{36}$/i.test(value)) q=q.eq("id",value);
+  else if(sheet==="Aparate") q=q.eq("cod_id",value);
+  else if(sheet==="Filtre") q=q.eq("id_sursa",value);
+  else q=q.eq("source_id",value);
+  const {data,error}=await q.limit(2);
+  if(error) throw error;
+  if(!data||data.length!==1) throw new Error(data?.length>1?"Identificator duplicat; modificarea a fost oprita.":"Inregistrarea nu a fost gasita.");
+  return data[0];
 }
 async function allRows(sb:any, table:string, order="id") {
   const out:any[]=[];
@@ -117,7 +160,7 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","filerUpdateMachine","technicianUpdateMachine","filerFinalizePhotoUpload","filerUpdateLocation","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","filerAssignmentData","setFilerMachines","mobileLogin","mobileLogout","mobileInterventionHistory","insert","upsert","update","delete"]);
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","filerUpdateMachine","technicianUpdateMachine","filerFinalizePhotoUpload","filerUpdateLocation","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","filerAssignmentData","setFilerMachines","mobileLogin","mobileLogout","mobileInterventionHistory","insert","upsert","update","delete","filerEnsureAccessColumns"]);
   if(!previewReadActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview numai-citire."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
@@ -861,6 +904,40 @@ async function main(req:Request) {
     return Response.json({success:true,filterUpdated:true,stockUpdated:true,duplicate:filterDone&&stockDone},{headers:CORS});
   }
 
+  if(action==="filerEnsureAccessColumns"){
+    if(!isAdmin) throw new Error("Doar administratorul poate verifica structura accesului Filer.");
+    return Response.json({success:true,alreadyConfigured:true,columns:["orase_acces","tip_echipament_acces","zone_aparate_acces","aparate_asignate"]},{headers:CORS});
+  }
+  if(["add","update","delete"].includes(action) && body.sheet && String(body.sheet)!=="Interventii"){
+    if(!isAdmin) throw new Error("Operatiunea este permisa doar administratorului.");
+    const sheet=String(body.sheet).trim();
+    if(!TABLES[sheet] || ["InterventiiEspressoare","PozeInterventii","PozeInterventiiEspressoare"].includes(sheet)) throw new Error("Modulul nu permite aceasta operatie.");
+    if(action==="delete"){
+      const key=String(body.idValue||body.id||"").trim();
+      const row=await resolveLegacyRow(sb,sheet,key);
+      const {error}=await sb.from(TABLES[sheet]).delete().eq("id",row.id);
+      if(error) throw error;
+      return Response.json({success:true,deletedId:row.id},{headers:CORS});
+    }
+    let record:any={};
+    try{record=typeof body.record==="string"?JSON.parse(body.record):body.record||{};}catch{throw new Error("Datele inregistrarii nu sunt valide.");}
+    const legacyId=String(body.idValue||record[body.idField||""]||record["ID Sursa"]||record["ID Client"]||record["ID Locatie"]||record["ID Aparat"]||record["ID Filtru"]||record["ID Stoc"]||record["ID Tehnician"]||record["ID Utilizator"]||"").trim();
+    const mapped=legacyPayload(sheet,record,legacyId);
+    if(action==="add"){
+      if(sheet==="Clienti"&&!mapped.row.nume) throw new Error("Completeaza numele clientului.");
+      if(sheet==="Locatii"&&!mapped.row.nume) throw new Error("Completeaza numele locatiei.");
+      if(sheet==="Utilizatori"&&(!mapped.row.nume||!mapped.row.rol)) throw new Error("Completeaza numele si rolul utilizatorului.");
+      if(sheet==="Tehnicieni"&&!mapped.row.nume) throw new Error("Completeaza numele tehnicianului.");
+      const {data,error}=await sb.from(mapped.table).insert(mapped.row).select("*").single();
+      if(error) throw error;
+      return Response.json({success:true,record:legacy(sheet,data)},{headers:CORS});
+    }
+    const oldKey=String(body.idValue||record[body.idField||""]||record.id||"").trim();
+    const existing=await resolveLegacyRow(sb,sheet,oldKey);
+    const {data,error}=await sb.from(mapped.table).update({...mapped.row,source_data:{...(existing.source_data||{}),...(mapped.row.source_data||{})}}).eq("id",existing.id).select("*").single();
+    if(error) throw error;
+    return Response.json({success:true,record:legacy(sheet,data)},{headers:CORS});
+  }
   // Canonical Supabase API contract retained for the newer client.
   const canonicalTables:Record<string,string>={clienti:"clienti",locatii:"locatii",aparate:"aparate",interventii:"interventii",interventii_espressoare:"interventii_espressoare",filtre:"filtre",stoc:"stoc",produse:"produse",utilizatori:"utilizatori_aplicatie",tehnicieni:"tehnicieni",rapoarte_aparate:"v_raport_aparate",rapoarte_interventii:"v_raport_interventii",rapoarte_espressoare:"v_raport_interventii_espressoare",rapoarte_stoc:"v_raport_stoc"};
   const canonicalRead:Record<string,string[]>={
