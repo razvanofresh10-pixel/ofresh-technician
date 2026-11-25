@@ -985,62 +985,20 @@ async function main(req:Request) {
     if(zones.length&&!zones.includes(norm(machine.zona))) throw new Error("Zona aparatului nu este autorizata.");
 
     const marker=legacyVisitId;
-    // Validate the exact stock row before changing filter history, so a stale
-    // or mismatched stock selection cannot leave a filter update behind.
-    const preflightStockId=String(body.stockId||"").trim();
-    if(!preflightStockId) throw new Error("Lipseste pozitia exacta de stoc verificata inainte de interventie.");
-    const {data:preflightStockRows,error:preflightStockErr}=await sb.from("stoc").select("*").eq("id",preflightStockId).limit(1);
-    if(preflightStockErr) throw preflightStockErr;
-    const preflightStock=(preflightStockRows||[])[0];
-    if(!preflightStock) throw new Error("Pozitia de stoc selectata nu mai exista. Reincarca stocul si reia verificarea.");
-    if(!(norm(preflightStock.denumire)===norm(filterType)||norm(preflightStock.cod_produs)===norm(filterType)||norm(preflightStock.source_data?.Produs)===norm(filterType))) throw new Error("Pozitia de stoc selectata nu corespunde tipului de filtru montat.");
-    const preflightEntered=Number(preflightStock.cantitate_intrata??preflightStock.cantitate??0);
-    const preflightConsumed=Number(preflightStock.consum||0);
-    const preflightSource=preflightStock.source_data&&typeof preflightStock.source_data==="object"?preflightStock.source_data:{};
-    const preflightDone=Array.isArray(preflightSource.processed_filter_intervention_ids)&&preflightSource.processed_filter_intervention_ids.includes(marker);
-    if(!preflightDone && preflightEntered-preflightConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
-    const {data:filterRows,error:filterReadErr}=await sb.from("filtre").select("*").eq("aparat_id",machine.id).limit(3);
-    if(filterReadErr) throw filterReadErr;
-    if((filterRows||[]).length>1) throw new Error("Exista mai multe inregistrari de filtru pentru acest aparat. Este necesara reconcilierea de catre administrator.");
-    const currentFilter=(filterRows||[])[0]||null;
-    const filterSource=currentFilter?.source_data&&typeof currentFilter.source_data==="object"?currentFilter.source_data:{};
-    const filterDone=Array.isArray(filterSource.processed_intervention_ids)&&filterSource.processed_intervention_ids.includes(marker);
-    if(!filterDone){
-      const filterPayload={
-        aparat_id:machine.id, locatie_id:location.id, tip_filtru:filterType,
-        data_montare:mountedDate, data_montarii:mountedDate,
-        urmatoarea_schimbare:nextDate, data_urmatoarei_schimbari:nextDate,
-        interval_luni:interval, status:"Activ", observatii:"Schimbat prin interventie",
-        source_data:{...filterSource,processed_intervention_ids:[...(Array.isArray(filterSource.processed_intervention_ids)?filterSource.processed_intervention_ids:[]),marker],updated_via:"technicianCompleteFilterChange"}
-      };
-      const filterWrite=currentFilter
-        ? await sb.from("filtre").update(filterPayload).eq("id",currentFilter.id).select("id").single()
-        : await sb.from("filtre").insert(filterPayload).select("id").single();
-      if(filterWrite.error) throw filterWrite.error;
-    }
-
-    const {data:stockRows,error:stockReadErr}=await sb.from("stoc").select("*").order("source_id",{ascending:true});
-    if(stockReadErr) throw stockReadErr;
-    const stockId=String(body.stockId||"").trim();
-    if(!stockId) throw new Error("Lipseste pozitia exacta de stoc verificata inainte de interventie.");
-    const stock=(stockRows||[]).find((s:any)=>String(s.id)===stockId);
-    if(!stock) throw new Error("Pozitia de stoc selectata nu mai exista. Reincarca stocul si reia verificarea.");
-    if(!(norm(stock.denumire)===norm(filterType)||norm(stock.cod_produs)===norm(filterType)||norm(stock.source_data?.Produs)===norm(filterType))) throw new Error("Pozitia de stoc selectata nu corespunde tipului de filtru montat.");
-    const stockEntered=Number(stock.cantitate_intrata??stock.cantitate??0);
-    const stockConsumed=Number(stock.consum||0);
-    const stockSource=stock.source_data&&typeof stock.source_data==="object"?stock.source_data:{};
-    const stockDone=Array.isArray(stockSource.processed_filter_intervention_ids)&&stockSource.processed_filter_intervention_ids.includes(marker);
-    if(!stockDone && stockEntered-stockConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
-    if(!stockDone){
-      const consumed=Number(stock.consum||0)+1;
-      const entered=Number(stock.cantitate_intrata??stock.cantitate??0);
-      const {error:stockWriteErr}=await sb.from("stoc").update({
-        consum:consumed,stoc_actual:entered-consumed,
-        source_data:{...stockSource,processed_filter_intervention_ids:[...(Array.isArray(stockSource.processed_filter_intervention_ids)?stockSource.processed_filter_intervention_ids:[]),marker],updated_via:"technicianCompleteFilterChange"}
-      }).eq("id",stock.id);
-      if(stockWriteErr) throw stockWriteErr;
-    }
-    return Response.json({success:true,filterUpdated:true,stockUpdated:true,duplicate:filterDone&&stockDone},{headers:CORS});
+    // Atomic database transaction: filter history and stock consumption commit together.
+    // Ownership, technician scope, machine status, location and filter type were
+    // validated above; the RPC re-locks and revalidates the related rows.
+    const {data:atomicResult,error:atomicError}=await sb.rpc("ofresh_complete_filter_change",{
+      p_intervention_id:visit.id,
+      p_stock_id:preflightStockId,
+      p_marker:marker,
+      p_filter_type:filterType,
+      p_mounted_date:mountedDate,
+      p_next_date:nextDate,
+      p_interval_months:interval
+    });
+    if(atomicError) throw atomicError;
+    return Response.json({success:true,filterUpdated:true,stockUpdated:true,duplicate:Boolean(atomicResult?.duplicate)},{headers:CORS});
   }
 
   if(action==="filerEnsureAccessColumns"){
