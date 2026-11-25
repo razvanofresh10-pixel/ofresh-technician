@@ -2054,20 +2054,13 @@ function normalizeCounty(v){return String(v||"").trim().toLowerCase().normalize(
 function displayCounty(v){const n=normalizeCounty(v);return OFRESH_COUNTIES.find(x=>normalizeCounty(x)===n)||String(v||"").trim();}
 function commercialCountyFromCity(v){const n=normalizeCounty(v);if(!n)return "";if(OFRESH_CITY_COUNTY[n])return OFRESH_CITY_COUNTY[n];if(n.startsWith("bucuresti"))return "Bucuresti";for(const [city,county] of Object.entries(OFRESH_CITY_COUNTY))if(n.includes(city))return county;return "";}
 function commercialCountyFromText(v){const n=normalizeCounty(v);if(!n)return "";for(const c of OFRESH_COUNTIES){const cn=normalizeCounty(c);if(cn&&n.includes(cn))return c;}return commercialCountyFromCity(n);}
-function commercialCounties(){return [...OFRESH_COUNTIES];}
+function commercialCounties(){return [...new Set((commercialDb.Aparate||[]).map(m=>commercialCountyForMachine(m)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ro"));}
 function commercialCountyForMachine(m){
   const direct=m&&(m.Judet||m.judet||m.County||m.county);
   if(String(direct||"").trim())return displayCounty(direct);
   const loc=commercialFindLocationForMachine(m);
   const fromLoc=loc&&(loc.Judet||loc.judet||loc.County||loc.county);
-  if(String(fromLoc||"").trim())return displayCounty(fromLoc);
-  const city=m&&(m.Oras||m.oras||m.City||m.city)||loc&&(loc.Oras||loc.oras)||"";
-  const byCity=commercialCountyFromCity(city);
-  if(byCity)return byCity;
-  const zone=m&&(m.Zona||m.zona)||loc&&(loc.Zona||loc.zona)||"";
-  const byZone=commercialCountyFromCity(zone)||commercialCountyFromText(zone);
-  if(byZone)return byZone;
-  return commercialCountyFromText(m&&(m.Adresa||m.adresa)||loc&&(loc.Adresa||loc.adresa)||"");
+  return String(fromLoc||"").trim()?displayCounty(fromLoc):"";
 }
 function commercialMachineForIntervention(i){
   const machines=commercialDb.Aparate||[];
