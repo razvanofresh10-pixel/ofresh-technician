@@ -1,4 +1,4 @@
-// OFRESH V62 — canonical API role-scoped pagination for technician and Filer (preview)
+// OFRESH V64 — scoped technician intervention creation and canonical role-scoped API (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
