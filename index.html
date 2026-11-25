@@ -737,6 +737,9 @@ async function api(params){
 }
 async function apiPost(params){return api(params);}
 async function ofreshSupabaseSignIn(email,password,allowedRoles){
+  window.__ofreshMobileToken="";
+  window.__ofreshMobileRole="";
+  try{localStorage.removeItem("ofresh_mobile_token");localStorage.removeItem("ofresh_mobile_role");}catch(_){}
   if(!supabaseClient)throw new Error("Biblioteca Supabase nu este disponibilă.");
   const normalizedEmail=String(email||"").trim().toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))throw new Error("Introdu adresa de e-mail a contului OFRESH.");
