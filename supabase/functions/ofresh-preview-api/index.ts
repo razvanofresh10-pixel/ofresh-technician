@@ -918,6 +918,20 @@ async function main(req:Request) {
     if(zones.length&&!zones.includes(norm(machine.zona))) throw new Error("Zona aparatului nu este autorizata.");
 
     const marker=legacyVisitId;
+    // Validate the exact stock row before changing filter history, so a stale
+    // or mismatched stock selection cannot leave a filter update behind.
+    const preflightStockId=String(body.stockId||"").trim();
+    if(!preflightStockId) throw new Error("Lipseste pozitia exacta de stoc verificata inainte de interventie.");
+    const {data:preflightStockRows,error:preflightStockErr}=await sb.from("stoc").select("*").eq("id",preflightStockId).limit(1);
+    if(preflightStockErr) throw preflightStockErr;
+    const preflightStock=(preflightStockRows||[])[0];
+    if(!preflightStock) throw new Error("Pozitia de stoc selectata nu mai exista. Reincarca stocul si reia verificarea.");
+    if(!(norm(preflightStock.denumire)===norm(filterType)||norm(preflightStock.cod_produs)===norm(filterType)||norm(preflightStock.source_data?.Produs)===norm(filterType))) throw new Error("Pozitia de stoc selectata nu corespunde tipului de filtru montat.");
+    const preflightEntered=Number(preflightStock.cantitate_intrata??preflightStock.cantitate??0);
+    const preflightConsumed=Number(preflightStock.consum||0);
+    const preflightSource=preflightStock.source_data&&typeof preflightStock.source_data==="object"?preflightStock.source_data:{};
+    const preflightDone=Array.isArray(preflightSource.processed_filter_intervention_ids)&&preflightSource.processed_filter_intervention_ids.includes(marker);
+    if(!preflightDone && preflightEntered-preflightConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
     const {data:filterRows,error:filterReadErr}=await sb.from("filtre").select("*").eq("aparat_id",machine.id).limit(3);
     if(filterReadErr) throw filterReadErr;
     if((filterRows||[]).length>1) throw new Error("Exista mai multe inregistrari de filtru pentru acest aparat. Este necesara reconcilierea de catre administrator.");
