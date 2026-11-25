@@ -4444,7 +4444,7 @@ async function filerSaveVisit(row){
   let visitSaved=false,saved=null;
   try{
     const visitStarted=performance.now();
-    saved=await api({action:'filerSaveVisit',telefon:filerSession.phone,pin:filerSession.pin,machineRow:row,data:v('filerDate'),tasks:JSON.stringify(tasks),observatii:v('filerObs'),photoCount:photos.length});
+    saved=await api({action:'filerSaveVisit',telefon:filerSession.phone,pin:filerSession.pin,machineId:machineId(row),machineRow:row,data:v('filerDate'),tasks:JSON.stringify(tasks),observatii:v('filerObs'),photoCount:photos.length});
     if(!saved||saved.success!==true)throw new Error(saved?.error||'Interventia nu a putut fi salvata.');
     visitSaved=true;
     console.info('[OFRESH FILER PERF]',{phase:'visit-record-saved',durationMs:Math.round(performance.now()-visitStarted),photosSelected:photos.length});
