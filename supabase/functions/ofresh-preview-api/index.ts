@@ -378,11 +378,12 @@ async function main(req:Request) {
     ]);
     // Match private.can_access_aparat(): commercial access is granted by assigned JUDET.
     const locationIds=new Set(locations.filter((loc:any)=>counties.includes(norm(loc.judet))).map((loc:any)=>String(loc.id)));
-    const machineIds=new Set(machines.filter((machine:any)=>locationIds.has(String(machine.locatie_id||"")) && norm(machine.status)!=="retras").map((machine:any)=>String(machine.id)));
+    const machineIds=new Set(machines.filter((machine:any)=>locationIds.has(String(machine.locatie_id||""))).map((machine:any)=>String(machine.id)));
+    const activeMachineIds=new Set(machines.filter((machine:any)=>machineIds.has(String(machine.id)) && norm(machine.status)!=="retras").map((machine:any)=>String(machine.id)));
     const filterVisitIds=new Set(visits.filter((visit:any)=>visit.filtru_schimbat===true && visit.aparat_id && machineIds.has(String(visit.aparat_id))).map((visit:any)=>String(visit.id)));
     const espressoVisitIds=new Set(espressoVisits.filter((visit:any)=>visit.aparat_id && machineIds.has(String(visit.aparat_id))).map((visit:any)=>String(visit.id)));
     const clientIds=new Set(locations.filter((loc:any)=>locationIds.has(String(loc.id))&&loc.client_id).map((loc:any)=>String(loc.client_id)));
-    commercialScopeCache={locationIds,machineIds,filterVisitIds,espressoVisitIds,clientIds};
+    commercialScopeCache={locationIds,machineIds,activeMachineIds,filterVisitIds,espressoVisitIds,clientIds};
     return commercialScopeCache;
   };
   const fetchSheet=async(name:string)=>{
@@ -394,7 +395,7 @@ async function main(req:Request) {
     else rows=rows.slice();
     if(role==="comercial"){
       const scope=await getCommercialScope();
-      if(name==="Aparate") rows=rows.filter((row:any)=>scope.machineIds.has(String(row.id)));
+      if(name==="Aparate") rows=rows.filter((row:any)=>scope.activeMachineIds.has(String(row.id)));
       if(name==="Locatii") rows=rows.filter((row:any)=>scope.locationIds.has(String(row.id)));
       if(name==="Clienti") rows=rows.filter((row:any)=>scope.clientIds.has(String(row.id)));
       if(name==="Filtre") rows=rows.filter((row:any)=>row.aparat_id && scope.machineIds.has(String(row.aparat_id)));
