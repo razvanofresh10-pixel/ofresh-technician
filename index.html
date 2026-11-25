@@ -715,7 +715,10 @@ async function api(params){
   if(!supabaseClient)throw new Error("Biblioteca Supabase nu s-a încărcat. Reîncarcă pagina.");
   const publicAction=action==="publicMachine";
   let token="";
-  if(!publicAction){
+  const mobileToken=String(window.__ofreshMobileToken||localStorage.getItem("ofresh_mobile_token")||"");
+  if(!publicAction&&mobileToken){
+    token=mobileToken;
+  }else if(!publicAction){
     const sessionResult=await supabaseClient.auth.getSession();
     if(sessionResult.error)throw new Error(sessionResult.error.message||"Nu pot verifica sesiunea Supabase.");
     token=sessionResult.data?.session?.access_token||"";
@@ -723,7 +726,7 @@ async function api(params){
   }
   const headers={"Content-Type":"application/json","apikey":SUPABASE_PUBLISHABLE_KEY};
   if(token)headers.Authorization="Bearer "+token;
-  const activeRole=String(window.__ofreshSupabaseRole||"").trim().toLowerCase();
+  const activeRole=String(window.__ofreshMobileRole||localStorage.getItem("ofresh_mobile_role")||window.__ofreshSupabaseRole||"").trim().toLowerCase();
   if(token&&activeRole)headers["x-ofresh-role"]=activeRole;
   const response=await fetch(SUPABASE_FUNCTION_URL,{method:"POST",headers,body:JSON.stringify(params||{}),credentials:"omit"});
   let result;
@@ -751,11 +754,23 @@ async function ofreshSupabaseSignIn(email,password,allowedRoles){
   window.__ofreshSupabaseRole=selectedRole;
   return {auth:auth.data,identity,profile,role:selectedRole};
 }
-async function ofreshLoginFiler(email,password){
-  const signed=await ofreshSupabaseSignIn(email,password,["filer"]);
+async function ofreshMobileSignIn(phone,pin,expectedRole){
+  const response=await fetch(SUPABASE_FUNCTION_URL,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify({action:"mobileLogin",phone,pin}),credentials:"omit"});
+  const result=await response.json().catch(()=>null);
+  if(!response.ok||!result?.success||!result.token)throw new Error(result?.error||"Telefon sau PIN invalid.");
+  const actualRole=String(result.profile?.rol||"").trim().toLowerCase();
+  if(actualRole!==expectedRole){await fetch(SUPABASE_FUNCTION_URL,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_PUBLISHABLE_KEY,"Authorization":"Bearer "+result.token},body:JSON.stringify({action:"mobileLogout"}),credentials:"omit"});throw new Error("Acest cont nu are rolul necesar pentru acest modul.");}
+  window.__ofreshMobileToken=result.token;window.__ofreshMobileRole=actualRole;window.__ofreshSupabaseRole="";
+  localStorage.setItem("ofresh_mobile_token",result.token);localStorage.setItem("ofresh_mobile_role",actualRole);
+  const identity=await api({action:"whoami"});
+  if(!identity?.success||!identity.profile)throw new Error("Profil OFRESH invalid sau inactiv.");
+  return identity.profile;
+}
+async function ofreshLoginFiler(phone,pin){
+  const profile=await ofreshMobileSignIn(phone,pin,"filer");
   const data=await api({action:"filerData"});
   if(!data?.success||!Array.isArray(data.locations))throw new Error(data?.error||"Nu am putut încărca portofoliul Filer.");
-  return {...data,user:{...signed.profile,"ID Utilizator":signed.profile.id,Nume:signed.profile.nume,Email:signed.auth.user.email}};
+  return {...data,user:{...profile,"ID Utilizator":profile.id,Nume:profile.nume,Email:""}};
 }
 
 function buildClientsFromMachines(machines){
@@ -1349,11 +1364,11 @@ async function loginTechnician(){
   if(!email||!password){showTechError("Completează e-mailul și parola.");return false;}
   if(err)err.style.display="none";
   try{
-    const signed=await ofreshSupabaseSignIn(email,password,["tehnician","technician"]);
+    const profile=await ofreshMobileSignIn(email,password,"tehnician");
     const data=await api({action:"technicianData"});
     if(!data||data.success!==true||!data.technician)throw new Error(data?.error||"Contul Tehnician nu este asociat explicit unei înregistrări active în Supabase.");
     const t=data.technician;
-    techSession={id:t.id||t["ID Tehnician"]||"",name:String(t.Nume||t.nume||signed.profile.nume||signed.auth.user.email).trim(),phone:t.Telefon||signed.profile.telefon||email};
+    techSession={id:t.id||t["ID Tehnician"]||"",name:String(t.Nume||t.nume||profile.nume||"Tehnician").trim(),phone:t.Telefon||profile.telefon||email};
     try{localStorage.setItem("ofresh_tech_session",JSON.stringify(techSession));}catch(_){}
     techView="home";technicianDataLoading=true;
     document.getElementById("techLoginScreen")?.remove();document.body.classList.remove("techLoginActive");
