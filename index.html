@@ -3541,10 +3541,15 @@ async function saveIntervention(){
       const interventionId=uid("INT");
       const photos=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos.slice(0,5):[];
       const rec={"ID Interventie":interventionId,"ID Aparat":String(m["ID Aparat"]||m.idAparat||m.id||m.ID||m["ID Purificator"]||machineId(m)||"").trim(),"Aparat":machineLabel(m),"ID Client":clientId(selectedClient),"Client":selectedClientName,"Locatie":selectedClientName,"Data":v("data"),"Tehnician":technician,"Categorie aparat":apparatusCategory,"Tip interventie":interventionType,"Operatiuni efectuate":ops.join(", "),"Tip filtru":tip,"Urmator schimb":interventionType==="Schimbare filtru"?next:"","Urmatoarea interventie":nextIntervention,"De facturat":bill?"DA":"NU",SolicitareClient:bill,deFacturat:bill,motivFacturare:bill?"Solicitare client":"",Observatii:v("obs")};
-      pending={formKey:[selectedMachineId,clientId(selectedClient),v("data"),apparatusCategory,interventionType].join("|"),interventionId,rec,photos,photoIndex:0,interventionSaved:false,stockUpdated:false,filterUpdated:false};
+      pending={formKey:[selectedMachineId,clientId(selectedClient),v("data"),apparatusCategory,interventionType].join("|"),interventionId,rec,photos,photoIndex:0,interventionSaved:false,stockUpdated:false,filterUpdated:false,stockId:null};
       window.__ofreshPendingIntervention=pending;
     }
 
+    if(interventionType==="Schimbare filtru"&&techSession&&!pending.stockId){
+      const stockCheck=await api({action:"checkFilterStock",filterType:tip});
+      if(!stockCheck||stockCheck.success!==true||!stockCheck.stockId)throw new Error(stockCheck?.error||"Nu am putut confirma pozitia de stoc pentru filtrul selectat.");
+      pending.stockId=stockCheck.stockId;
+    }
     if(!pending.interventionSaved){
       await rawSave("Interventii",pending.rec,"ID Interventie","");
       pending.interventionSaved=true;
@@ -3557,7 +3562,8 @@ async function saveIntervention(){
           tipFiltru:tip,
           dataMontare:v("data"),
           dataUrmatoareiSchimbari:next,
-          intervalLuni:Number(v("intervalFiltru"))||6
+          intervalLuni:Number(v("intervalFiltru"))||6,
+          stockId:pending.stockId
         });
         if(!filterResult||filterResult.success!==true)throw new Error(filterResult?.error||"Nu s-a confirmat actualizarea filtrului si stocului.");
         pending.stockUpdated=true;
