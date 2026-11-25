@@ -1073,7 +1073,7 @@ async function main(req:Request) {
     const interventionType=String(record["Tip interventie"]||record.Tip||record.tip_interventie||"").trim();
     const legacyVisitId=String(record["ID Interventie"]||record.legacy_intervention_id||"").trim();
     if(!/^[0-9a-f-]{36}$/i.test(machineId)) throw new Error("Aparatul selectat nu are un identificator valid.");
-    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(visitDate) || Number.isNaN(Date.parse(visitDate+"T12:00:00Z"))) throw new Error("Data interventiei nu este valida.");
+    if(!/^\d{4}-\\d{2}-\\d{2}$/.test(visitDate) || Number.isNaN(Date.parse(visitDate+"T12:00:00Z"))) throw new Error("Data interventiei nu este valida.");
     if(!interventionType) throw new Error("Selecteaza tipul interventiei.");
     if(!legacyVisitId) throw new Error("Lipseste identificatorul interventiei.");
     const {data:machine,error:machineErr}=await sb.from("aparate").select("*").eq("id",machineId).maybeSingle();
