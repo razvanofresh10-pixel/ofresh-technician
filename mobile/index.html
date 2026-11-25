@@ -54,7 +54,7 @@ async function loadTechData(){
   const today=new Date();today.setHours(0,0,0,0);
   const upcoming=(r.Filtre||[]).filter(f=>String(f.Status||'Activ').toLowerCase()==='activ').map(f=>{
    const due=String(f['Urmatoarea schimbare']||'').slice(0,10);
-   if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(due))return null;
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(due))return null;
    const dt=new Date(due+'T00:00:00'),days=Math.round((dt-today)/86400000),m=byId.get(String(f['ID Aparat']||''));
    return {f,days,m,due};
   }).filter(x=>x&&x.days<=15).sort((a,b)=>a.days-b.days);
