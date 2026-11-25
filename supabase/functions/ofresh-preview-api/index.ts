@@ -729,14 +729,15 @@ async function main(req:Request) {
     const expectedPhotoCount=Number(body.photoCount??0);
     if(!Number.isInteger(expectedPhotoCount)||expectedPhotoCount<0||expectedPhotoCount>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
     const tokenHash=await sha256(photoToken);
-    const {data:prior,error:priorErr}=await sb.from("interventii_espressoare").select("id,technician_profile_id,source_data,numar_fotografii").contains("source_data",{client_request_id:requestId}).limit(1).maybeSingle();
+    const requestPayloadHash=await sha256(JSON.stringify({machineId:machine.id,tasks:cleanTasks,observatii:String(body.observatii||""),photoCount:expectedPhotoCount}));
+    const {data:prior,error:priorErr}=await sb.from("interventii_espressoare").select("id,aparat_id,technician_profile_id,source_data,numar_fotografii").contains("source_data",{client_request_id:requestId}).limit(1).maybeSingle();
     if(priorErr) throw priorErr;
     if(prior){
       const priorMeta=source(prior);
-      if(String(prior.technician_profile_id)!==authUser.id||priorMeta.photo_upload_token_hash!==tokenHash) throw new Error("Identificatorul salvarii este deja folosit.");
+      if(String(prior.technician_profile_id)!==authUser.id||priorMeta.photo_upload_token_hash!==tokenHash||priorMeta.request_payload_hash!==requestPayloadHash) throw new Error("Identificatorul salvarii este deja folosit pentru alte date.");
       return Response.json({success:true,visitId:prior.id,photoToken,expectedPhotoCount:Number(priorMeta.expected_photo_count??expectedPhotoCount),duplicate:true},{headers:CORS});
     }
-    const payload:any={technician_profile_id:authUser.id,source_data:{client_request_id:requestId,photo_upload_token_hash:tokenHash,photo_owner_auth_id:authUser.id,photo_upload_expires_at:new Date(Date.now()+3600_000).toISOString(),expected_photo_count:expectedPhotoCount},data_interventie:body.data?new Date(String(body.data)+"T12:00:00").toISOString():new Date().toISOString(),client:machine.client_nume||location?.nume_client||location?.nume||"",adresa:machine.adresa||location?.adresa||"",oras:location?.oras||"",judet:location?.judet||"",cod_ofresh:machine.cod_ofresh,serie_aparat:machine.serie,producator:machine.producator,tip_aparat:machine.tip_aparat||machine.model,operatiuni:cleanTasks,observatii:String(body.observatii||""),...flags,numar_fotografii:0,zona_aparate:machine.zona,tip_echipament:machine.tip_echipament,aparat_id:machine.id,client_id:location?.client_id||null,locatie_id:machine.locatie_id};
+    const payload:any={technician_profile_id:authUser.id,source_data:{client_request_id:requestId,request_payload_hash:requestPayloadHash,photo_upload_token_hash:tokenHash,photo_owner_auth_id:authUser.id,photo_upload_expires_at:new Date(Date.now()+3600_000).toISOString(),expected_photo_count:expectedPhotoCount},data_interventie:body.data?new Date(String(body.data)+"T12:00:00").toISOString():new Date().toISOString(),client:machine.client_nume||location?.nume_client||location?.nume||"",adresa:machine.adresa||location?.adresa||"",oras:location?.oras||"",judet:location?.judet||"",cod_ofresh:machine.cod_ofresh,serie_aparat:machine.serie,producator:machine.producator,tip_aparat:machine.tip_aparat||machine.model,operatiuni:cleanTasks,observatii:String(body.observatii||""),...flags,numar_fotografii:0,zona_aparate:machine.zona,tip_echipament:machine.tip_echipament,aparat_id:machine.id,client_id:location?.client_id||null,locatie_id:machine.locatie_id};
     const {data,error}=await sb.from("interventii_espressoare").insert(payload).select("id").single();
     if(error) throw error;
     return Response.json({success:true,visitId:data.id,photoToken,expectedPhotoCount},{headers:CORS});
