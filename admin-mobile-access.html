@@ -26,6 +26,19 @@
     <div class="top"><div><span class="tag">ADMINISTRATOR VERIFICAT</span><h1 style="margin-top:10px">Alocare telefon si PIN</h1></div><button class="btn secondary" id="logoutBtn" type="button">Iesire</button></div>
     <p>Contul mobil se asociaza unei inregistrari OFRESH existente. Nu se creeaza adrese de email fictive si nu se modifica profilurile de baza.</p>
     <div class="card" style="padding:18px;margin:18px 0;background:#f8fbf9;box-shadow:none">
+      <h1 style="font-size:18px">Activare acces Comercial</h1>
+      <p>Foloseste adresa de email deja existenta in Utilizatori aplicatie. Se creeaza autentificarea cu parola si se leaga de profilul Comercial existent.</p>
+      <label class="field"><span>Utilizator Comercial activ</span><select id="commercialCandidate"><option value="">Se incarca...</option></select></label>
+      <div class="grid">
+        <label class="field"><span>Email existent</span><input id="commercialEmail" type="email" readonly autocomplete="off"></label>
+        <label class="field"><span>Parola noua (minimum 10 caractere)</span><input id="commercialPassword" type="password" minlength="10" autocomplete="new-password"></label>
+        <label class="field"><span>Confirma parola</span><input id="commercialPasswordConfirm" type="password" minlength="10" autocomplete="new-password"></label>
+      </div>
+      <button class="btn" id="provisionCommercialBtn" type="button">Activeaza acces Comercial</button>
+      <div class="status" id="commercialStatus" role="status"></div>
+      <div class="hint">Conturile deja asociate sunt marcate si nu pot fi create din nou. Parola nu este afisata si nu este stocata in tabelele OFRESH.</div>
+    </div>
+    <div class="card" style="padding:18px;margin:18px 0;background:#f8fbf9;box-shadow:none">
       <h1 style="font-size:18px">Resetare PIN pentru cont existent</h1>
       <p>Selecteaza un tehnician sau filer care are deja cont asociat. Nu se creeaza un cont nou.</p>
       <label class="field"><span>Cont mobil existent</span><select id="linkedUser"><option value="">Se incarca...</option></select></label>
@@ -73,6 +86,21 @@ async function loadLinkedUsers(){
  const result=await api("listMobileLinkedUsers");
  for(const user of result.users||[]){const option=document.createElement("option");option.value=user.id;option.textContent=user.nume+" — "+(user.rol==="tehnician"?"Tehnician":"Filer")+" — "+(user.telefon||"fara telefon");select.appendChild(option);}
 }
+async function loadCommercialCandidates(){
+ const select=$("commercialCandidate");select.innerHTML='<option value="">Selecteaza contul Comercial...</option>';
+ const result=await api("listCommercialProvisionCandidates");
+ for(const item of result.candidates||[]){
+  const option=document.createElement("option");option.value=item.id;option.textContent=item.nume+" — "+item.email+(item.authLinked?" — DEJA ASOCIAT":" — NEACTIVAT");
+  option.dataset.email=item.email;option.dataset.linked=String(item.authLinked);select.appendChild(option);
+ }
+}
+$("commercialCandidate").addEventListener("change",()=>{
+ const option=$("commercialCandidate").selectedOptions[0];
+ $("commercialEmail").value=option?.dataset.email||"";
+ $("provisionCommercialBtn").disabled=option?.dataset.linked==="true";
+ $("commercialStatus").className="status";
+ $("commercialStatus").textContent=option?.dataset.linked==="true"?"Acest cont are deja autentificare asociata.":"";
+});
 async function loadCandidates(){
  const select=$("candidate");select.innerHTML='<option value="">Selecteaza un utilizator...</option>';
  const result=await api("listMobileProvisionCandidates");
@@ -95,7 +123,7 @@ async function verifyAdmin(){
   const result=await api("whoami");
   if(!["administrator","admin"].includes(String(result.profile?.rol||"").toLowerCase()))throw new Error("Contul autentificat nu are rol de administrator.");
   $("loginCard").classList.add("hidden");$("adminCard").classList.remove("hidden");
-  await Promise.all([loadCandidates(),loadLinkedUsers()]);
+  await Promise.all([loadCandidates(),loadLinkedUsers(),loadCommercialCandidates()]);
   return true;
  }catch(e){await client.auth.signOut();showStatus("loginStatus",e.message);return false}
 }
@@ -111,6 +139,24 @@ $("adminLoginForm").addEventListener("submit",async(event)=>{
   if(ok)showStatus("provisionStatus","Autentificare administrator confirmata.",true);
  }catch(e){showStatus("loginStatus",e.message||String(e))}
  finally{button.disabled=false}
+});
+$("provisionCommercialBtn").addEventListener("click",async()=>{
+ const option=$("commercialCandidate").selectedOptions[0],email=$("commercialEmail").value.trim().toLowerCase();
+ const password=$("commercialPassword").value,passwordConfirm=$("commercialPasswordConfirm").value;
+ if(!option?.value)return showStatus("commercialStatus","Selecteaza utilizatorul Comercial.");
+ if(option.dataset.linked==="true")return showStatus("commercialStatus","Acest cont este deja asociat.");
+ if(!email)return showStatus("commercialStatus","Lipseste emailul existent.");
+ if(password.length<10)return showStatus("commercialStatus","Parola trebuie sa aiba minimum 10 caractere.");
+ if(password!==passwordConfirm)return showStatus("commercialStatus","Parolele nu coincid.");
+ if(!window.confirm("Confirmi activarea accesului Comercial pentru "+email+"?"))return;
+ $("provisionCommercialBtn").disabled=true;
+ try{
+  const result=await api("provisionCommercialUser",{email,password});
+  showStatus("commercialStatus","Acces Comercial activat.\nNume: "+result.user.nume+"\nEmail: "+result.user.email+"\nRol: Comercial. Utilizatorul se poate autentifica cu aceasta adresa si parola.",true);
+  $("commercialPassword").value="";$("commercialPasswordConfirm").value="";
+  await loadCommercialCandidates();
+  const linked=[...$("commercialCandidate").options].find(x=>x.value===option.value);if(linked){$("commercialCandidate").value=linked.value;$("commercialEmail").value=linked.dataset.email;$("provisionCommercialBtn").disabled=true;}
+ }catch(e){showStatus("commercialStatus",e.message||String(e));$("provisionCommercialBtn").disabled=false}
 });
 $("resetPinBtn").addEventListener("click",async()=>{
  const userId=$("linkedUser").value,pin=$("resetPin").value.trim(),confirmPin=$("resetPinConfirm").value.trim();
