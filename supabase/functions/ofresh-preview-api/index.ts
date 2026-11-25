@@ -1,4 +1,4 @@
-// OFRESH V52 — canonical API role-scoped pagination for technician and Filer (preview)
+// OFRESH V61 — canonical API role-scoped pagination for technician and Filer (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -857,7 +857,7 @@ async function main(req:Request) {
       aparat_id:machine.id,
       locatie_id:location.id,
       client_id:location.client_id||null,
-      data_interventie:record.Data && /^\\d{4}-\\d{2}-\\d{2}$/.test(String(record.Data)) ? new Date(String(record.Data)+"T12:00:00").toISOString() : now,
+      data_interventie:record.Data && /^\d{4}-\d{2}-\d{2}$/.test(String(record.Data)) ? new Date(String(record.Data)+"T12:00:00").toISOString() : now,
       tehnician_id:authUser.id,
       tehnician:technicianRecord?.nume||profile.nume||authUser.email||"",
       tip:record.Tip||record.tip||visitType,
