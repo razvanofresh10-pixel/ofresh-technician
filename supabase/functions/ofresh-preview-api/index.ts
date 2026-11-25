@@ -1,4 +1,4 @@
-// OFRESH V50 — role-scoped dashboard queries + commercial filter history (preview)
+// OFRESH V51 — technician/filer row scoping across locations, clients, visits and photos (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -357,6 +357,33 @@ async function main(req:Request) {
       const machines=await allRows(sb,"aparate"), byLoc=new Map<string,any[]>();
       for(const m of machines){const a=byLoc.get(m.locatie_id)||[];a.push(m);byLoc.set(m.locatie_id,a);}
       rows=rows.filter((l:any)=>(byLoc.get(l.id)||[]).some((m:any)=>filerAllows(profile,m,l)));
+    }
+    if(role==="filer" && name==="Clienti"){
+      const [machines,locations]=await Promise.all([allRows(sb,"aparate"),allRows(sb,"locatii")]);
+      const allowedLocationIds=new Set(machines.filter((m:any)=>filerAllows(profile,m,locations.find((l:any)=>String(l.id)===String(m.locatie_id)))).map((m:any)=>String(m.locatie_id)));
+      const allowedClientIds=new Set(locations.filter((l:any)=>allowedLocationIds.has(String(l.id))&&l.client_id).map((l:any)=>String(l.client_id)));
+      rows=rows.filter((c:any)=>allowedClientIds.has(String(c.id)));
+    }
+    if(role==="tehnician" && (name==="Locatii" || name==="Clienti")){
+      const [machines,locations]=await Promise.all([allRows(sb,"aparate"),allRows(sb,"locatii")]);
+      const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces), zones=arr(profile.zone_aparate_acces).map(norm);
+      const visibleLocationIds=new Set(machines.filter((m:any)=>{
+        if(!machineIsActive(m)) return false;
+        const loc=locations.find((l:any)=>String(l.id)===String(m.locatie_id||""));
+        const city=norm(loc?.oras||m.source_data?.Oras||m.source_data?.oras);
+        return (!cities.length||cities.includes(city)) && (!types.length||equipmentMatches(types,m.tip_echipament||m.tip_aparat)) && (!zones.length||zones.includes(norm(m.zona)));
+      }).map((m:any)=>String(m.locatie_id)));
+      if(name==="Locatii") rows=rows.filter((l:any)=>visibleLocationIds.has(String(l.id)));
+      if(name==="Clienti"){
+        const visibleClientIds=new Set(locations.filter((l:any)=>visibleLocationIds.has(String(l.id))&&l.client_id).map((l:any)=>String(l.client_id)));
+        rows=rows.filter((c:any)=>visibleClientIds.has(String(c.id)));
+      }
+    }
+    if(role==="tehnician" && name==="Interventii") rows=rows.filter((v:any)=>String(v.tehnician_id||"")===String(authUser.id));
+    if(role==="tehnician" && name==="PozeInterventii"){
+      const visits=await allRows(sb,"interventii");
+      const ownVisitIds=new Set(visits.filter((v:any)=>String(v.tehnician_id||"")===String(authUser.id)).map((v:any)=>String(v.id)));
+      rows=rows.filter((p:any)=>p.interventie_id && ownVisitIds.has(String(p.interventie_id)));
     }
     if(role==="filer" && name==="InterventiiEspressoare"){
       const assignedIds=new Set(arr(profile.aparate_asignate).map((x:any)=>String(x)));
