@@ -128,14 +128,18 @@ function machineIsActive(machine:any) {
   return (status==="activ" || status==="active") && (!withdrawal || ["-","—","n/a","na","nu","0"].includes(withdrawal));
 }
 function filerAllows(profile:any, machine:any, _loc:any) {
+  if(!machineIsActive(machine) || !startsEsp(machine.tip_echipament || machine.tip_aparat)) return false;
   const explicitIds=arr(profile.aparate_asignate).map((x:any)=>String(x));
-  // Filer access is strictly limited to machines explicitly assigned by an administrator.
-  // Empty assignments fail closed; city/zone permissions are not a substitute for assignment.
-  if(!explicitIds.length) return false;
-  const machineId=String(machine?.id||"");
-  return machineIsActive(machine) &&
-    startsEsp(machine.tip_echipament || machine.tip_aparat) &&
-    explicitIds.includes(machineId);
+  // Explicit machine assignments take precedence when present.
+  if(explicitIds.length) return explicitIds.includes(String(machine?.id||""));
+  // Otherwise use the two access selectors configured by the administrator.
+  // Both equipment type and machine zone are mandatory; empty access fails closed.
+  const equipment=arr(profile.tip_echipament_acces).map(norm).filter(Boolean);
+  const zones=arr(profile.zone_aparate_acces).map((x:any)=>norm(x).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")).filter(Boolean);
+  const machineType=norm(machine.tip_echipament || machine.tip_aparat);
+  const machineZone=norm(machine.zona).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"");
+  const equipmentAllowed=equipment.some((value:string)=>value===machineType || (startsEsp(value)&&startsEsp(machineType)));
+  return equipment.length>0 && zones.length>0 && equipmentAllowed && zones.includes(machineZone);
 }
 async function validateCurrentEspressoVisitMachine(sb:any, visit:any, profile:any, isFiler:boolean) {
   if(!visit?.aparat_id) throw new Error("Interventia nu este asociata unui aparat valid.");
