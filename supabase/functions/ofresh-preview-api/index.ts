@@ -283,7 +283,7 @@ async function main(req:Request) {
     if(!isAdmin) throw new Error("Doar administratorul poate configura accesul Comercial.");
     const email=String(body.email||"").trim().toLowerCase();
     const password=String(body.password||"");
-    if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error("Adresa de email nu este valida.");
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Adresa de email nu este valida.");
     if(password.length<10) throw new Error("Parola trebuie sa aiba minimum 10 caractere.");
     const {data:rows,error:lookupErr}=await sb.from("utilizatori_aplicatie").select("*").eq("rol","comercial").eq("status","Activ").ilike("email",email).limit(2);
     if(lookupErr) throw lookupErr;
