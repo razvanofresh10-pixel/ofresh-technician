@@ -1,4 +1,4 @@
-// OFRESH V61 — canonical API role-scoped pagination for technician and Filer (preview)
+// OFRESH V62 — canonical API role-scoped pagination for technician and Filer (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -340,6 +340,17 @@ async function main(req:Request) {
     let rows=physicalRowsCache.get(table);
     if(!rows){ rows=await allRows(sb,table); physicalRowsCache.set(table,rows); }
     else rows=rows.slice();
+    // Commercial users may see only completed filter-change interventions.
+    // Apply the restriction here so read/bootstrap/readSheets and commercialHistory
+    // all receive the same scoped rows, rather than relying on one UI endpoint.
+    if(role==="comercial" && name==="Interventii"){
+      rows=rows.filter((visit:any)=>visit.filtru_schimbat===true);
+    }
+    if(role==="comercial" && name==="PozeInterventii"){
+      const visits=await allRows(sb,"interventii");
+      const visibleVisitIds=new Set(visits.filter((visit:any)=>visit.filtru_schimbat===true).map((visit:any)=>String(visit.id)));
+      rows=rows.filter((photo:any)=>photo.interventie_id && visibleVisitIds.has(String(photo.interventie_id)));
+    }
     if(role==="filer" && name==="Aparate"){
       const locs=await allRows(sb,"locatii"); const byId=new Map(locs.map((x:any)=>[x.id,x]));
       rows=rows.filter((m:any)=>filerAllows(profile,m,byId.get(m.locatie_id)));
