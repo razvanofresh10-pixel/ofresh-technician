@@ -776,7 +776,7 @@ async function main(req:Request) {
     if(!Array.isArray(uploads)||!uploads.length||uploads.length>5) throw new Error("Alege intre 1 si 5 fotografii.");
     const {data:existing,error:existingErr}=await sb.from("poze_interventii_espressoare").select("id,numar_poza,categorie,source_data,storage_path,file_name,mime_type,file_size_bytes,taken_at").eq("interventie_id",visitId);
     if(existingErr) throw existingErr;
-    if((existing||[]).length+uploads.length>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
+
     const existingByIndex=new Map<number,any>((existing||[]).map((x:any)=>[Number(x.numar_poza),x]));
     const seen=new Set<number>(); let aviz=(existing||[]).filter((x:any)=>norm(x.categorie).includes("aviz")).length,after=(existing||[]).filter((x:any)=>norm(x.categorie).includes("aparat dupa curatare")).length; const saved:any[]=[];
     for(const item of uploads){
@@ -817,6 +817,7 @@ async function main(req:Request) {
     }
     const {count:total,error:countErr}=await sb.from("poze_interventii_espressoare").select("id",{count:"exact",head:true}).eq("interventie_id",visitId);
     if(countErr) throw countErr;
+    if((total||0)>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
     const {error:updateCountErr}=await sb.from("interventii_espressoare").update({numar_fotografii:total||0}).eq("id",visitId);
     if(updateCountErr) throw updateCountErr;
     // Keep the short-lived token hash so a retry after a lost response can recognize completed uploads.
