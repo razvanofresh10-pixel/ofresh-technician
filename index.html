@@ -2930,7 +2930,8 @@ async function saveMachine(old){
 
   // Confirmam salvarea in Supabase inainte de a modifica interfata locala.
   try{
-    await rawSave("Aparate",rec,idField,idValue);
+    const saveResult=await rawSave("Aparate",rec,idField,idValue);
+    if(saveResult?.record)Object.assign(rec,saveResult.record);
     const idx=(db.Aparate||[]).findIndex(x=>String(machineId(x)).trim()===String(old||"").trim());
     if(idx>=0) db.Aparate[idx]={...db.Aparate[idx],...rec};
     else db.Aparate.push(rec);
