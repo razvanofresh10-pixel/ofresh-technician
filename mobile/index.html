@@ -137,7 +137,7 @@ $('saveTech').onclick=async()=>{try{
   const visitId=r.record?.['ID Interventie']||r.record?.id;
   if(!visitId)throw new Error('Interventia a fost salvata, dar serverul nu a returnat ID-ul. Verifica istoricul inainte de a reincerca.');
   console.info('[OFRESH SAVE PERF]',{phase:'intervention-saved',durationMs:Math.round(performance.now()-interventionStarted),visitId});
-  if(filterData){const filterStarted=performance.now();message('techMsg','Interventia salvata. Actualizez istoricul filtrului...');await api('technicianCompleteFilterChange',{interventionId:visitId,...filterData});console.info('[OFRESH SAVE PERF]',{phase:'filter-update',durationMs:Math.round(performance.now()-filterStarted)});}
+  if(filterData){const filterStarted=performance.now();message('techMsg','Interventia salvata. Actualizez istoricul filtrului...');await api('technicianCompleteFilterChange',{interventionId:visitId,...filterData,stockId:filterData.stockId});console.info('[OFRESH SAVE PERF]',{phase:'filter-update',durationMs:Math.round(performance.now()-filterStarted)});}
   for(let i=0;i<techCapturedPhotos.length;i++){
     const photoStarted=performance.now(),file=techCapturedPhotos[i],blob=await shrink(file),base=await b64(blob),chunkSize=28000,total=Math.ceil(base.length/chunkSize),uploadId=crypto.randomUUID().replace(/-/g,'');
     message('techMsg','Interventia salvata. Incarc fotografia '+(i+1)+' din '+techCapturedPhotos.length+'...');
