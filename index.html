@@ -2851,11 +2851,17 @@ function machineProducerOptions(selected="",equipment="Apa",model=""){
   return all;
 }
 function clientIdForMachine(r={}){
-  const direct=r["ID Client"]||r.idClient||r["ID Locatie"]||r.idLocatie||"";
-  if(direct && (db.Clienti||[]).some(c=>String(clientId(c))===String(direct))) return String(direct);
+  // Aparatul trebuie reatasat la locatia exacta, nu doar la clientul master.
+  const direct=r["ID Locatie"]||r.idLocatie||r.locatie_id||"";
+  if(direct && (db.Locatii||[]).some(l=>String(l["ID Locatie"]||l.id||"")===String(direct))) return String(direct);
+  const clientMasterId=r["ID Client"]||r.idClient||"";
+  if(clientMasterId){
+    const location=(db.Locatii||[]).find(l=>String(l["ID Client"]||l.client_id||"")===String(clientMasterId));
+    if(location)return String(location["ID Locatie"]||location.id||"");
+  }
   const name=machineClient(r).trim().toLowerCase();
-  const found=(db.Clienti||[]).find(c=>clientName(c).trim().toLowerCase()===name);
-  return found?String(clientId(found)):"";
+  const found=(db.Locatii||[]).find(l=>clientName(l).trim().toLowerCase()===name);
+  return found?String(found["ID Locatie"]||found.id||""):"";
 }
 function machineClientOptions(selectedId=""){
   return `<option value="">Selecteaza clientul</option>`+clientOptions(selectedId);
