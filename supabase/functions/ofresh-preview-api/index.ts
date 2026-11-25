@@ -369,6 +369,22 @@ async function main(req:Request) {
   const hasEspressoRight=rights["Service Espressoare"]===true || rights["service espressoare"]===true || (Array.isArray(rights)&&rights.some((x:any)=>norm(x)==="service espressoare"));
   const allowed=(READ_ROLES[role]||[]).filter(name=>!(role==="comercial" && ["InterventiiEspressoare","PozeInterventiiEspressoare"].includes(name) && !hasEspressoRight));
   const physicalRowsCache = new Map<string, any[]>();
+  let commercialScopeCache:any=null;
+  const getCommercialScope=async()=>{
+    if(commercialScopeCache) return commercialScopeCache;
+    const counties=arr(profile.orase_acces).map(norm).filter(Boolean);
+    const [locations,machines,visits,espressoVisits]=await Promise.all([
+      allRows(sb,"locatii"),allRows(sb,"aparate"),allRows(sb,"interventii"),allRows(sb,"interventii_espressoare")
+    ]);
+    // Match private.can_access_aparat(): commercial access is granted by assigned JUDET.
+    const locationIds=new Set(locations.filter((loc:any)=>counties.includes(norm(loc.judet))).map((loc:any)=>String(loc.id)));
+    const machineIds=new Set(machines.filter((machine:any)=>locationIds.has(String(machine.locatie_id||"")) && norm(machine.status)!=="retras").map((machine:any)=>String(machine.id)));
+    const filterVisitIds=new Set(visits.filter((visit:any)=>visit.filtru_schimbat===true && visit.aparat_id && machineIds.has(String(visit.aparat_id))).map((visit:any)=>String(visit.id)));
+    const espressoVisitIds=new Set(espressoVisits.filter((visit:any)=>visit.aparat_id && machineIds.has(String(visit.aparat_id))).map((visit:any)=>String(visit.id)));
+    const clientIds=new Set(locations.filter((loc:any)=>locationIds.has(String(loc.id))&&loc.client_id).map((loc:any)=>String(loc.client_id)));
+    commercialScopeCache={locationIds,machineIds,filterVisitIds,espressoVisitIds,clientIds};
+    return commercialScopeCache;
+  };
   const fetchSheet=async(name:string)=>{
     if(!allowed.includes(name)) throw new Error(`Acces interzis la ${name}.`);
     if(role==="comercial" && ["InterventiiEspressoare","PozeInterventiiEspressoare"].includes(name) && !hasEspressoRight) throw new Error("Utilizatorul nu are dreptul Service Espressoare.");
@@ -376,6 +392,17 @@ async function main(req:Request) {
     let rows=physicalRowsCache.get(table);
     if(!rows){ rows=await allRows(sb,table); physicalRowsCache.set(table,rows); }
     else rows=rows.slice();
+    if(role==="comercial"){
+      const scope=await getCommercialScope();
+      if(name==="Aparate") rows=rows.filter((row:any)=>scope.machineIds.has(String(row.id)));
+      if(name==="Locatii") rows=rows.filter((row:any)=>scope.locationIds.has(String(row.id)));
+      if(name==="Clienti") rows=rows.filter((row:any)=>scope.clientIds.has(String(row.id)));
+      if(name==="Filtre") rows=rows.filter((row:any)=>row.aparat_id && scope.machineIds.has(String(row.aparat_id)));
+      if(name==="Interventii") rows=rows.filter((row:any)=>scope.filterVisitIds.has(String(row.id)));
+      if(name==="PozeInterventii") rows=rows.filter((row:any)=>row.interventie_id && scope.filterVisitIds.has(String(row.interventie_id)));
+      if(name==="InterventiiEspressoare") rows=rows.filter((row:any)=>scope.machineIds.has(String(row.aparat_id||"")));
+      if(name==="PozeInterventiiEspressoare") rows=rows.filter((row:any)=>scope.espressoVisitIds.has(String(row.interventie_id||"")));
+    }
     // Commercial users may see only completed filter-change interventions.
     // Apply the restriction here so read/bootstrap/readSheets and commercialHistory
     // all receive the same scoped rows, rather than relying on one UI endpoint.
@@ -489,34 +516,20 @@ async function main(req:Request) {
     const result:any={success:true}; for(const n of names) result[n]=await fetchSheet(n); return Response.json(result,{headers:CORS});
   }
   if(action==="dashboardData"){
-    // Dashboard queries use the service-role client, so explicitly mirror each role's row scope.
-    const scopedInterventions=()=>{
-      let q=sb.from("interventii");
-      if(role==="comercial") q=q.eq("filtru_schimbat",true);
-      else if(isTech) q=q.eq("tehnician_id",authUser.id);
-      return q;
-    };
-    const [machines,locations,filters,recentResult,countResult]=await Promise.all([
+    const [machines,locations,filters,interventions]=await Promise.all([
       fetchSheet("Aparate"),
       fetchSheet("Locatii"),
       allowed.includes("Filtre")?fetchSheet("Filtre"):Promise.resolve([]),
-      allowed.includes("Interventii")
-        ? scopedInterventions().select("*").order("data_interventie",{ascending:false}).limit(6)
-        : Promise.resolve({data:[],error:null}),
-      allowed.includes("Interventii")
-        ? scopedInterventions().select("id",{count:"exact",head:true})
-        : Promise.resolve({count:0,error:null})
+      allowed.includes("Interventii")?fetchSheet("Interventii"):Promise.resolve([])
     ]);
-    if(recentResult.error) throw new Error("Interventii recente: "+recentResult.error.message);
-    if(countResult.error) throw new Error("Total interventii: "+countResult.error.message);
-    const recent=(recentResult.data||[]).map((r:any)=>legacy("Interventii",r));
+    const recent=interventions.slice().sort((a:any,b:any)=>String(b.Data||"").localeCompare(String(a.Data||""))).slice(0,6);
     return Response.json({
       success:true,
       Aparate:machines,
       Locatii:locations,
       Filtre:filters,
       Interventii:recent,
-      totals:{aparate:machines.length,locatii:locations.length,filtre:filters.length,interventii:countResult.count||0}
+      totals:{aparate:machines.length,locatii:locations.length,filtre:filters.length,interventii:interventions.length}
     },{headers:CORS});
   }
   if(action==="commercialData" || action==="commercialHistory" || action==="commercialEspressoHistory"){
