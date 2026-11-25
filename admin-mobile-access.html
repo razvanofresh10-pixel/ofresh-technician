@@ -90,16 +90,21 @@ async function loadCommercialCandidates(){
  const select=$("commercialCandidate");select.innerHTML='<option value="">Selecteaza contul Comercial...</option>';
  const result=await api("listCommercialProvisionCandidates");
  for(const item of result.candidates||[]){
-  const option=document.createElement("option");option.value=item.id;option.textContent=item.nume+" — "+item.email+(item.authLinked?" — DEJA ASOCIAT":" — NEACTIVAT");
-  option.dataset.email=item.email;option.dataset.linked=String(item.authLinked);select.appendChild(option);
+  const option=document.createElement("option"),counties=Array.isArray(item.orase_acces)?item.orase_acces:[];
+  option.value=item.id;
+  option.textContent=item.nume+" — "+item.email+(item.authLinked?" — DEJA ASOCIAT":counties.length?" — Judete: "+counties.join(", "):" — FARA JUDETE ALOCATE");
+  option.dataset.email=item.email;option.dataset.linked=String(item.authLinked);option.dataset.hasCounties=String(counties.length>0);
+  option.disabled=!!item.authLinked||counties.length===0;
+  select.appendChild(option);
  }
 }
 $("commercialCandidate").addEventListener("change",()=>{
  const option=$("commercialCandidate").selectedOptions[0];
- $("commercialEmail").value=option?.dataset.email||"";
- $("provisionCommercialBtn").disabled=option?.dataset.linked==="true";
+  $("commercialEmail").value=option?.dataset.email||"";
+ const linked=option?.dataset.linked==="true",noCounties=option?.dataset.hasCounties!=="true";
+ $("provisionCommercialBtn").disabled=linked||noCounties;
  $("commercialStatus").className="status";
- $("commercialStatus").textContent=option?.dataset.linked==="true"?"Acest cont are deja autentificare asociata.":"";
+ $("commercialStatus").textContent=linked?"Acest cont are deja autentificare asociata.":noCounties?"Contul nu are judete alocate. Configureaza judetele in Utilizatori aplicatie inainte de activare.":"";
 });
 async function loadCandidates(){
  const select=$("candidate");select.innerHTML='<option value="">Selecteaza un utilizator...</option>';
