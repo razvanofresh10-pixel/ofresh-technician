@@ -2757,6 +2757,14 @@ async function saveClient(old){
  // Scrierea in Google Sheets continua in fundal; interfata nu asteapta reincarcarea foilor.
  try{
    const saveResult=await rawSave("Locatii",rec,"ID Locatie",old? id:"");
+   const savedRecord=saveResult?.record||{};
+   if(savedRecord["ID Locatie"])rec["ID Locatie"]=savedRecord["ID Locatie"];
+   if(savedRecord["ID Client"])rec["ID Client"]=savedRecord["ID Client"];
+   const savedIndex=(db.Locatii||[]).findIndex(x=>String(x["ID Locatie"]||x.id||"").trim()===String(old||id).trim());
+   if(savedIndex>=0)db.Locatii[savedIndex]={...db.Locatii[savedIndex],...rec};
+   ofreshMergedLocatiiRef=null;ofreshMergedAparateRef=null;ofreshMergedClientiRef=null;
+   mergeClientDataFromLoadedSheets();saveCachedData();
+   if(current==="clienti")clientsPage();
    if(saveResult && saveResult.clientMasterSync && saveResult.clientMasterSync.success===false){
      msg("Locatia a fost salvata, dar sincronizarea in foaia Clienti a esuat: "+(saveResult.clientMasterSync.error||"eroare necunoscuta"),false);
    }
