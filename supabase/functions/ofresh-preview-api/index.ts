@@ -555,8 +555,9 @@ async function main(req:Request) {
     const {data:rows,error}=await sb.from("stoc").select("*").order("source_id",{ascending:true});
     if(error) throw error;
     const matching=(rows||[]).filter((x:any)=>norm(x.denumire)===norm(filterType)||norm(x.cod_produs)===norm(filterType)||norm(x.source_data?.Produs)===norm(filterType));
+    if(!matching.length) throw new Error("Filtrul selectat nu exista in stoc.");
+    if(matching.length>1) throw new Error("Exista mai multe pozitii de stoc pentru acest filtru. Administratorul trebuie sa clarifice depozitul/pozitia inainte de consum.");
     const stock=matching[0];
-    if(!stock) throw new Error("Filtrul selectat nu exista in stoc.");
     const entered=Number(stock.cantitate_intrata??stock.cantitate??0)||0;
     const consumed=Number(stock.consum??stock.source_data?.Consum??0)||0;
     const available=Math.max(0,entered-consumed);
@@ -883,10 +884,11 @@ async function main(req:Request) {
 
     const {data:stockRows,error:stockReadErr}=await sb.from("stoc").select("*").order("source_id",{ascending:true});
     if(stockReadErr) throw stockReadErr;
-    const stock=String(body.stockId||"")
-      ? (stockRows||[]).find((s:any)=>String(s.id)===String(body.stockId))
-      : (stockRows||[]).find((s:any)=>norm(s.denumire)===norm(filterType)||norm(s.cod_produs)===norm(filterType)||norm(s.source_data?.Produs)===norm(filterType));
-    if(!stock) throw new Error("Filtrul nu a fost identificat in stoc. Verifica denumirea produsului.");
+    const stockId=String(body.stockId||"").trim();
+    if(!stockId) throw new Error("Lipseste pozitia exacta de stoc verificata inainte de interventie.");
+    const stock=(stockRows||[]).find((s:any)=>String(s.id)===stockId);
+    if(!stock) throw new Error("Pozitia de stoc selectata nu mai exista. Reincarca stocul si reia verificarea.");
+    if(!(norm(stock.denumire)===norm(filterType)||norm(stock.cod_produs)===norm(filterType)||norm(stock.source_data?.Produs)===norm(filterType))) throw new Error("Pozitia de stoc selectata nu corespunde tipului de filtru montat.");
     const stockEntered=Number(stock.cantitate_intrata??stock.cantitate??0);
     const stockConsumed=Number(stock.consum||0);
     if(stockEntered-stockConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
