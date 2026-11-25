@@ -1197,7 +1197,7 @@ async function main(req:Request) {
       if(fallbackId) return fallbackId;
       const clientName=String(row.nume_client||row.nume||"").trim();
       if(!clientName) throw new Error("Locatia trebuie asociata unui client.");
-      const clientKey=(value:any)=>String(value??"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().toLocaleLowerCase("ro").replace(/\\s+/g," ");
+      const clientKey=(value:any)=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLocaleLowerCase("ro").replace(/\s+/g," ");
       const clients=await allRows(sb,"clienti");
       const matches=clients.filter((item:any)=>clientKey(item.nume)===clientKey(clientName));
       if(matches.length>1) throw new Error("Exista mai multe inregistrari Client cu aceeasi denumire. Clarifica duplicatul inainte de salvarea locatiei.");
