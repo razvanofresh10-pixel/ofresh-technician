@@ -135,9 +135,10 @@ function filerAllows(profile:any, machine:any, _loc:any) {
   // Otherwise use the two access selectors configured by the administrator.
   // Both equipment type and machine zone are mandatory; empty access fails closed.
   const equipment=arr(profile.tip_echipament_acces).map(norm).filter(Boolean);
-  const zones=arr(profile.zone_aparate_acces).map((x:any)=>norm(x).normalize("NFD").replace(/[\u0300-\u036f]/g,"")).filter(Boolean);
+  const cleanZone=(value:any)=>norm(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/^(?:esp|espresso)\s*[-:|]\s*/,"").trim();
+  const zones=arr(profile.zone_aparate_acces).map(cleanZone).filter(Boolean);
   const machineType=norm(machine.tip_echipament || machine.tip_aparat);
-  const machineZone=norm(machine.zona).normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const machineZone=cleanZone(machine.zona);
   const equipmentAllowed=equipment.some((value:string)=>value===machineType || (startsEsp(value)&&startsEsp(machineType)));
   return equipment.length>0 && zones.length>0 && equipmentAllowed && zones.includes(machineZone);
 }
