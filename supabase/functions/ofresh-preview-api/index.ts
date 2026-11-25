@@ -1,4 +1,4 @@
-// OFRESH V51 — technician/filer row scoping across locations, clients, visits and photos (preview)
+// OFRESH V52 — canonical API role-scoped pagination for technician and Filer (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -1084,24 +1084,43 @@ async function main(req:Request) {
     const limit=Math.min(Math.max(Number(body.limit)||200,1),800);
     const offset=Math.max(0,Math.min(Number(body.offset)||0,200000));
     let rows:any[]=[]; let total=0;
-    if(role==="filer" && ["aparate","locatii","interventii_espressoare"].includes(name)){
-      // Filter BEFORE pagination; otherwise a page full of out-of-scope rows
-      // can hide valid rows on later pages and report a misleading total.
+    if(role==="filer" || role==="tehnician"){
+      // Service-role reads must reproduce the same per-user scope as the RLS policies.
+      // Filter before pagination so totals and later pages cannot expose other users' records.
       rows=await allRows(sb,physical);
-      if(name==="aparate"){
-        const locations=await allRows(sb,"locatii"), byId=new Map(locations.map((x:any)=>[x.id,x]));
-        rows=rows.filter((m:any)=>filerAllows(profile,m,byId.get(m.locatie_id)));
-      } else if(name==="locatii"){
-        const machines=await allRows(sb,"aparate");
-        rows=rows.filter((loc:any)=>machines.some((m:any)=>m.locatie_id===loc.id && filerAllows(profile,m,loc)));
-      } else {
+      const [machines,locations]=await Promise.all([allRows(sb,"aparate"),allRows(sb,"locatii")]);
+      if(role==="filer"){
         const assignedIds=new Set(arr(profile.aparate_asignate).map((x:any)=>String(x)));
-        rows=rows.filter((r:any)=>r.aparat_id && assignedIds.has(String(r.aparat_id)));
+        const assignedMachines=machines.filter((m:any)=>filerAllows(profile,m,locations.find((l:any)=>String(l.id)===String(m.locatie_id))));
+        const visibleMachineIds=new Set(assignedMachines.map((m:any)=>String(m.id)));
+        const visibleLocations=locations.filter((l:any)=>assignedMachines.some((m:any)=>String(m.locatie_id)===String(l.id)));
+        const visibleClientIds=new Set(visibleLocations.filter((l:any)=>l.client_id).map((l:any)=>String(l.client_id)));
+        if(name==="aparate") rows=assignedMachines;
+        else if(name==="locatii") rows=visibleLocations;
+        else if(name==="clienti") rows=rows.filter((c:any)=>visibleClientIds.has(String(c.id)));
+        else if(name==="interventii_espressoare" || name==="rapoarte_espressoare") rows=rows.filter((v:any)=>v.aparat_id && visibleMachineIds.has(String(v.aparat_id)) && assignedIds.has(String(v.aparat_id)));
+      } else {
+        const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces), zones=arr(profile.zone_aparate_acces).map(norm);
+        const visibleMachines=machines.filter((m:any)=>{
+          if(!machineIsActive(m)) return false;
+          const loc=locations.find((l:any)=>String(l.id)===String(m.locatie_id||""));
+          const city=norm(loc?.oras||m.source_data?.Oras||m.source_data?.oras);
+          return (!cities.length||cities.includes(city)) && (!types.length||equipmentMatches(types,m.tip_echipament||m.tip_aparat)) && (!zones.length||zones.includes(norm(m.zona)));
+        });
+        const visibleMachineIds=new Set(visibleMachines.map((m:any)=>String(m.id)));
+        const visibleLocationIds=new Set(visibleMachines.map((m:any)=>String(m.locatie_id)).filter(Boolean));
+        const visibleClientIds=new Set(locations.filter((l:any)=>visibleLocationIds.has(String(l.id))&&l.client_id).map((l:any)=>String(l.client_id)));
+        if(name==="aparate") rows=visibleMachines;
+        else if(name==="locatii") rows=locations.filter((l:any)=>visibleLocationIds.has(String(l.id)));
+        else if(name==="clienti") rows=rows.filter((c:any)=>visibleClientIds.has(String(c.id)));
+        else if(name==="filtre") rows=rows.filter((f:any)=>f.aparat_id&&visibleMachineIds.has(String(f.aparat_id)));
+        else if(name==="interventii") rows=rows.filter((v:any)=>String(v.tehnician_id||"")===String(authUser.id)&&v.aparat_id&&visibleMachineIds.has(String(v.aparat_id)));
       }
       total=rows.length; rows=rows.slice(offset,offset+limit);
     } else {
       let q=sb.from(physical).select("*",{count:"exact"}).order("id",{ascending:true});
       if(role==="comercial" && name==="aparate") q=q.neq("status","Retras");
+      if(role==="comercial" && name==="rapoarte_aparate") q=q.neq("status","Retras");
       const {data,error,count}=await q.range(offset,offset+limit-1);
       if(error) throw error;
       rows=data||[]; total=count||0;
