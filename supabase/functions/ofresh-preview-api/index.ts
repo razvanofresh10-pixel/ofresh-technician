@@ -165,8 +165,8 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","listMobileProvisionCandidates","listMobileLinkedUsers","filerAssignmentData","mobileLogin","mobileLogout","mobileInterventionHistory","filerEnsureAccessColumns","checkFilterStock"]);
-  const previewWriteActions=new Set(["add","update","delete","importAparateBatch","setMobilePin","provisionMobileUser","setFilerMachines","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUpload","filerFinalizePhotoUploads","filerUpdateGps","filerUpdateLocation","filerUpdateMachine","technicianUpdateMachine","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","saveGpsLocation"]);
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","listMobileProvisionCandidates","listMobileLinkedUsers","listCommercialProvisionCandidates","filerAssignmentData","mobileLogin","mobileLogout","mobileInterventionHistory","filerEnsureAccessColumns","checkFilterStock"]);
+  const previewWriteActions=new Set(["add","update","delete","importAparateBatch","setMobilePin","provisionMobileUser","provisionCommercialUser","setFilerMachines","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUpload","filerFinalizePhotoUploads","filerUpdateGps","filerUpdateLocation","filerUpdateMachine","technicianUpdateMachine","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","saveGpsLocation"]);
   if(!previewReadActions.has(action) && !previewWriteActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
@@ -272,6 +272,42 @@ async function main(req:Request) {
       ...(filerRows||[]).map((x:any)=>({id:x.id,nume:x.nume,telefon:x.telefon,tip:"filer"}))
     ];
     return Response.json({success:true,candidates},{headers:CORS});
+  }
+  if(action==="listCommercialProvisionCandidates"){
+    if(!isAdmin) throw new Error("Doar administratorul poate vedea conturile Comerciale.");
+    const {data,error}=await sb.from("utilizatori_aplicatie").select("id,nume,email,status,auth_user_id,drepturi,orase_acces").eq("rol","comercial").eq("status","Activ").not("email","is",null).order("nume");
+    if(error) throw error;
+    return Response.json({success:true,candidates:(data||[]).map((x:any)=>({id:x.id,nume:x.nume,email:x.email,authLinked:!!x.auth_user_id,orase_acces:x.orase_acces||[],drepturi:x.drepturi||{}}))},{headers:CORS});
+  }
+  if(action==="provisionCommercialUser"){
+    if(!isAdmin) throw new Error("Doar administratorul poate configura accesul Comercial.");
+    const email=String(body.email||"").trim().toLowerCase();
+    const password=String(body.password||"");
+    if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error("Adresa de email nu este valida.");
+    if(password.length<10) throw new Error("Parola trebuie sa aiba minimum 10 caractere.");
+    const {data:rows,error:lookupErr}=await sb.from("utilizatori_aplicatie").select("*").eq("rol","comercial").eq("status","Activ").ilike("email",email).limit(2);
+    if(lookupErr) throw lookupErr;
+    if(!rows||rows.length!==1) throw new Error("Nu am gasit exact o singura inregistrare Comerciala activa pentru acest email.");
+    const appUser=rows[0];
+    if(appUser.auth_user_id) throw new Error("Aceasta inregistrare Comerciala este deja asociata unui cont Auth.");
+    const rights=appUser.drepturi||{};
+    const cities=Array.isArray(appUser.orase_acces)?appUser.orase_acces:[];
+    const {data:created,error:createErr}=await sb.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{nume:appUser.nume,rol:"comercial"}});
+    if(createErr) throw new Error("Nu am putut crea autentificarea Comerciala: "+createErr.message);
+    const userId=created.user.id;
+    const {error:profileErr}=await sb.from("profiluri").upsert({
+      id:userId,nume:appUser.nume,rol:"comercial",activ:true,email,telefon:appUser.telefon||null,drepturi:rights,
+      orase_acces:cities,tip_echipament_acces:appUser.tip_echipament_acces||[],zone_aparate_acces:appUser.zone_aparate_acces||[],
+      source_data:{provisioned_from:"ofresh_admin_commercial",provisioned_at:new Date().toISOString()}
+    },{onConflict:"id"});
+    if(profileErr){await sb.auth.admin.deleteUser(userId);throw profileErr;}
+    const {data:linked,error:linkErr}=await sb.from("utilizatori_aplicatie").update({auth_user_id:userId}).eq("id",appUser.id).is("auth_user_id",null).select("id").maybeSingle();
+    if(linkErr||!linked){
+      await sb.from("profiluri").delete().eq("id",userId);
+      await sb.auth.admin.deleteUser(userId);
+      throw linkErr||new Error("Inregistrarea Comerciala a fost asociata intre timp. Nu s-a creat contul.");
+    }
+    return Response.json({success:true,user:{id:userId,nume:appUser.nume,rol:"comercial",email}},{headers:CORS});
   }
   if(action==="provisionMobileUser"){
     if(!isAdmin) throw new Error("Doar administratorul poate seta accesul mobil.");
