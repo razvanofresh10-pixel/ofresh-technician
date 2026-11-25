@@ -1,4 +1,4 @@
-// OFRESH V42 — Supabase migration adapter (preview; scoped intervention/photo writes)
+// OFRESH V47 — county-aware desktop/mobile data adapter (preview; scoped intervention/photo writes)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -53,7 +53,7 @@ function legacy(sheet:string,r:any): any {
   switch(sheet){
     case "Clienti": return {...base,"ID Client":r.id,Client:r.nume,"Nume client":r.nume,Adresa:r.adresa,Zona:r.zona,Oras:r.oras,Judet:r.judet,"Persoana contact":r.persoana_contact,Telefon:r.telefon,Email:r.email,Status:r.status};
     case "Locatii": return {...base,"ID Locatie":r.id,"Nume locatie":r.nume,Adresa:r.adresa,Oras:r.oras,Judet:r.judet,Zona:r.zona,Telefon:r.telefon ?? r.telefone,Email:r.email,Status:r.status,Client:r.nume_client,"ID Client":r.client_id,"GPS Latitudine":r.latitudine,"GPS Longitudine":r.longitudine,"GPS Precizie m":r.gps_precizie,"GPS Actualizat la":r.gps_actualizat_la,latitudine:r.latitudine,longitudine:r.longitudine};
-    case "Aparate": return {...base,"ID Aparat":r.id,"Cod ID":r.cod_id,"ID Locatie":r.locatie_id,Locatie:r.locatie,Client:r.client_nume ?? r.locatie,Producator:r.producator,Model:r.model,Serie:r.serie,"Cod OFRESH":r.cod_ofresh,Status:r.status,Zona:r.zona,"Data instalare":r.data_instalarii,"Tip echipament":r.tip_echipament,"Tip aparat":r.tip_aparat,"Data retragere":r.data_retragere,Adresa:r.adresa,"Ultima interventie":r.ultima_interventie,"Urmatoarea interventie":r.urmatoarea_interventie,"QR Token":r.qr_token,"GPS Latitudine":r.gps_latitudine,"GPS Longitudine":r.gps_longitudine,"GPS Precizie m":r.gps_precizie_m,"GPS Actualizat la":r.gps_actualizat_la,gps_latitudine:r.gps_latitudine,gps_longitudine:r.gps_longitudine,gps_precizie_m:r.gps_precizie_m,gps_actualizat_la:r.gps_actualizat_la};
+    case "Aparate": return {...base,"ID Aparat":r.id,"Cod ID":r.cod_id,"ID Locatie":r.locatie_id,Locatie:r.locatie,Client:r.client_nume ?? r.locatie,Oras:r.oras,Judet:r.judet,Producator:r.producator,Model:r.model,Serie:r.serie,"Cod OFRESH":r.cod_ofresh,Status:r.status,Zona:r.zona,"Data instalare":r.data_instalarii,"Tip echipament":r.tip_echipament,"Tip aparat":r.tip_aparat,"Data retragere":r.data_retragere,Adresa:r.adresa,"Ultima interventie":r.ultima_interventie,"Urmatoarea interventie":r.urmatoarea_interventie,"QR Token":r.qr_token,"GPS Latitudine":r.gps_latitudine,"GPS Longitudine":r.gps_longitudine,"GPS Precizie m":r.gps_precizie_m,"GPS Actualizat la":r.gps_actualizat_la,gps_latitudine:r.gps_latitudine,gps_longitudine:r.gps_longitudine,gps_precizie_m:r.gps_precizie_m,gps_actualizat_la:r.gps_actualizat_la};
     case "Interventii": return {...base,"ID Interventie":r.id,"ID Aparat":r.aparat_id,Data:r.data_interventie,Tehnician:r.tehnician,Tip:r.tip,"Tip interventie":r.tip_interventie,Descriere:r.descriere,Operatiuni:r.operatiuni,Observatii:r.observatii,"ID Tehnician":r.tehnician_id,"Urmatoarea interventie":r.urmatoarea_interventie,"Filtru schimbat":r.filtru_schimbat,Igienizare:r.igienizare,Status:r.status,"ID Locatie":r.locatie_id,"ID Client":r.client_id,"Tip filtru":r.tip_filtru,"Fotografii":r.fotografii_count};
     case "Filtre": return {...base,"ID Filtru":r.id,"ID Aparat":r.aparat_id,"ID Locatie":r.locatie_id,"Tip filtru":r.tip_filtru,"Data montarii":r.data_montarii ?? r.data_montare,"Data montare":r.data_montare ?? r.data_montarii,"Data schimbarii":r.data_schimbarii,"Urmatoarea schimbare":r.urmatoarea_schimbare ?? r.data_urmatoarei_schimbari,"Data urmatoarei schimbari":r.data_urmatoarei_schimbari ?? r.urmatoarea_schimbare,"Interval luni":r.interval_luni,Status:r.status,Observatii:r.observatii};
     case "Produse": return {...base,"ID Produs":r.id,"Cod produs":r.cod_produs,Denumire:r.denumire,Categorie:r.categorie,Brand:r.brand,Pret:r.pret,TVA:r.tva,Status:r.status,Activ:r.activ,Observatii:r.observatii};
@@ -375,6 +375,11 @@ async function main(req:Request) {
         const {data,error}=await sb.storage.from(PHOTO_BUCKET).createSignedUrl(r.storage_path,3600);
         return {...r,signed_url:error?null:data?.signedUrl||null};
       }));
+    }
+    if(name==="Aparate"){
+      const locs=await allRows(sb,"locatii");
+      const byId=new Map(locs.map((loc:any)=>[String(loc.id),loc]));
+      rows=rows.map((m:any)=>{const loc=byId.get(String(m.locatie_id||""));return {...m,oras:loc?.oras??null,judet:loc?.judet??null};});
     }
     return rows.map((r:any)=>legacy(name,r));
   };
