@@ -831,6 +831,19 @@ async function api(params){
 }
 function apiPost(params){return api(params);}
 
+async function ofreshLogoutSession(){
+  const token=ofreshAccessToken,kind=ofreshTokenKind;
+  try{
+    if(token&&kind==="mobile"){
+      await fetch(API_URL,{method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({action:"mobileLogout"})});
+    }else if(token&&kind==="supabase"){
+      await fetch(SUPABASE_URL+"/auth/v1/logout",{method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Authorization":"Bearer "+token}});
+    }
+  }catch(e){console.warn("[OFRESH AUTH] Logout remote indisponibil:",e);}
+  finally{ofreshStoreAuth("","","");}
+}
+
+
 function buildClientsFromMachines(machines){
   const rows=Array.isArray(machines)?machines:[];
   const map=new Map();
@@ -1446,6 +1459,7 @@ function logoutTechnician(){
   techSession=null;
   try{localStorage.removeItem("ofresh_tech_session");}catch(e){}
   if(adminSession){current="dashboard";enterAdminCleanMode();render();load(true);return;}
+  void ofreshLogoutSession();
   showAccessPage();
 }
 function openNavigation(url){ try{ window.location.href=url; }catch(e){ window.open(url,'_self'); } return false; }
@@ -2466,7 +2480,7 @@ async function exportCommercialEspressoWorkbook(){
     msg('Exportul interventiilor espressoarelor a fost generat, cu fotografii ca linkuri clicabile.');
   }catch(e){msg(e?.message||'Nu am putut genera exportul interventiilor espressoarelor.',false);}
 }
-function logoutCommercial(){commercialSession=null;commercialAuthPin="";commercialDataLoading=false;commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};commercialCounty="";searchTerm="";showAccessPage()}
+function logoutCommercial(){if(!adminSession)void ofreshLogoutSession();commercialSession=null;commercialAuthPin="";commercialDataLoading=false;commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};commercialCounty="";searchTerm="";showAccessPage()}
 function commercialActiveMachineRows(){
   return (commercialDb.Aparate||[]).filter(machineIsActiveForTechnician).map(m=>({...m}));
 }
@@ -4470,6 +4484,7 @@ async function filerSaveVisit(row){
 }
 
 function logoutFiler(){
+  void ofreshLogoutSession();
   filerSession=null;filerState={locations:[],totalLocations:0,totalMachines:0,allowedZones:[],allowedEquipmentTypes:[]};filerView='home';filerSelectedLocationKey='';filerSelectedMachineRow=0;filerSearchTerm='';
   filerRestoreAppShell();
   showAccessPage();
@@ -4718,6 +4733,7 @@ async function publicMachinePage(key,isQrToken=false){
 let adminSession=null;
 function logoutApplication(){
   if(!confirm("Vrei sa iesi din aplicatia OFRESH?")) return;
+  void ofreshLogoutSession();
   adminSession=null;
   commercialSession=null;
   techSession=null;
