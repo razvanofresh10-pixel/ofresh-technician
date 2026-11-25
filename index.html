@@ -2123,7 +2123,7 @@ function commercialInterventions(){
   const rows=commercialInterventionRows();
   const val=(row,...keys)=>{for(const key of keys){const v=row?.[key];if(v!==undefined&&v!==null&&String(v).trim()!=="")return Array.isArray(v)?v.join(", "):String(v);}return "";};
   return `<section class="panel">
-    <div class="panelHeader"><div><h3>Istoric interventii</h3><p>Istoricul complet al interventiilor din portofoliul Comercial. Doar vizualizare.</p></div><span class="countBadge">${rows.length} INTERVENTII</span></div>
+    <div class="panelHeader"><div><h3>Istoric schimbari filtre</h3><p>Interventiile in care s-a schimbat filtrul, din portofoliul Comercial. Doar vizualizare.</p></div><span class="countBadge">${rows.length} SCHIMBARI FILTRE</span></div>
     <div class="toolbar"><div class="right">
       <input id="commercialSearchInput" class="search" value="${esc(searchTerm)}" placeholder="Cauta client, aparat, serie, tehnician, interventie..." oninput="commercialSearchInput(this)">
       <select class="search" style="width:180px" onchange="commercialCounty=this.value;commercialPage()"><option value="">Toate judetele</option>${commercialCounties().map(j=>`<option value="${esc(j)}" ${normalizeCounty(j)===normalizeCounty(commercialCounty)?'selected':''}>${esc(j)}</option>`).join("")}</select>
