@@ -4853,7 +4853,7 @@ function openAdminLogin(){
   modal("Acces Administrator",`<div>
     ${inputField("Adresa de e-mail","adminTelefon","","email")}
     ${inputField("Parola","adminPin","","password")}
-    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('admin');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat PIN-ul</button></div>
+    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('admin');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat parola</button></div>
   </div>`,`Intra in Administrator`,`loginAdministrator()`);
   setTimeout(()=>document.getElementById("f_adminTelefon")?.focus(),50);
 }
