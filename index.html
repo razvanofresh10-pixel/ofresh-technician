@@ -684,7 +684,9 @@ if ("serviceWorker" in navigator) {
 <script>
  // Recuperarea PIN-ului se face exclusiv prin Google Apps Script.
 
- const API_URL="https://script.google.com/macros/s/AKfycbwJbdx7a7lG2OpxKW53zzXQ20rQ1IKWLlYIo5UZ7rH7_EjAwiZFXCCozlndzt56O4Ml/exec";
+ const SUPABASE_URL="https://zlbgxeaasctnfmjsrvql.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_a02U8Z2mHoP80mvDATdHHg_8PxojMYb";
+const API_URL=SUPABASE_URL+"/functions/v1/ofresh-online-api";
 const pages={dashboard:"Dashboard",clienti:"Clienti",aparate:"Aparate",interventii:"Interventii",interventiiEspresso:"Service Espressoare",filtre:"Filtre",stoc:"Stoc",tehnicieni:"Tehnicieni",rapoarte:"Rapoarte",utilizatori:"Utilizatori",comercial:"Comercial",setari:"Setari"};
 const icons={dashboard:"D",clienti:"C",aparate:"A",interventii:"I",interventiiEspresso:"☕",filtre:"F",stoc:"S",tehnicieni:"T",rapoarte:"R",utilizatori:"U",comercial:"💼",setari:"⚙"};
 const interventionTypes=["Igienizare","Schimbare filtru","Inlocuire piese","Verificare aparat / testare","Mentenanta 6 luni","Mentenanta 1 an","Interventie la cerere client","Alta interventie"];
@@ -709,22 +711,125 @@ function warmAdminLoginCache(){
   return ofreshAdminLoginWarmPromise;
 }
 
-function api(params){return new Promise((resolve,reject)=>{const action=String(params?.action||'');const filerTrack=/^(loginFiler|filerData|filerUpdateLocation|filerUpdateGps|filerUpdateMachine|filerSaveVisit|filerUploadPhotoChunk|filerFinalizePhotoUpload|filerFinalizePhotoUploads)$/.test(action);const adminTrack=/^(loginUser|warmAdminLoginCache|dashboardData|readSheets|technicianData|commercialLogin|commercialData|uploadPhotoChunk|finalizePhotoUpload)$/.test(action);const track=filerTrack||adminTrack;const t0=performance.now();const cb="ofresh_cb_"+Date.now()+Math.random().toString(36).slice(2);const s=document.createElement("script");s.async=true;s.referrerPolicy="no-referrer-when-downgrade";let done=false;function clean(){clearTimeout(to);try{delete window[cb]}catch{};if(s.parentNode)s.parentNode.removeChild(s)}function perf(d,serverOverride){if(!track)return;const ms=Math.round(performance.now()-t0);window.__ofreshLastApiMs=ms;if(filerTrack)window.__ofreshFilerLastApiMs=ms;const server=serverOverride??d?.diagnostics?.timings?.totalServerMs??d?.diagnostics?.timings?.contextMs??d?.elapsedMs??null;const details={action:action,networkMs:ms,serverMs:server,payloadChars:s.src.length,locations:d?.totalLocations,machines:d?.totalMachines};console.info(filerTrack?'[OFRESH FILER PERF]':'[OFRESH PERF]',details);}const to=setTimeout(()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Google Sheet nu a raspuns. Verifica internetul si deployment-ul Web app."))},25000);window[cb]=d=>{if(done)return;done=true;clean();const serverMs=d&&typeof d==='object'?d.__ofreshServerMs:undefined;if(d&&typeof d==='object')try{delete d.__ofreshServerMs}catch{};perf(d,serverMs);resolve(d)};s.onerror=()=>{if(done)return;done=true;clean();perf(null);reject(new Error("Nu pot conecta OFRESH la Google Apps Script."))};s.src=API_URL+"?"+new URLSearchParams({...params,callback:cb,ts:Date.now()});document.head.appendChild(s)})}
-function apiPost(params){
-  return new Promise((resolve,reject)=>{
-    const nonce=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(x=>x.toString(16).padStart(2,'0')).join('');
-    const frameName='ofresh_post_'+nonce;
-    const iframe=document.createElement('iframe');iframe.name=frameName;iframe.style.display='none';iframe.setAttribute('aria-hidden','true');
-    const form=document.createElement('form');form.method='POST';form.action=API_URL;form.target=frameName;form.style.display='none';
-    const payload={...params,__ofreshPostBridge:'1',__ofreshPostNonce:nonce};
-    Object.entries(payload).forEach(([key,value])=>{const input=document.createElement('input');input.type='hidden';input.name=key;input.value=String(value??'');form.appendChild(input);});
-    let done=false;const timeout=setTimeout(()=>finish(new Error('Google Apps Script nu a raspuns. Incearca din nou.')),30000);
-    function cleanup(){window.removeEventListener('message',onMessage);form.remove();iframe.remove();}
-    function finish(error,data){if(done)return;done=true;clearTimeout(timeout);cleanup();if(error)reject(error);else resolve(data);}
-    function onMessage(event){const d=event.data;if(!d||d.type!=='ofresh-api-response'||d.nonce!==nonce)return;finish(null,d.data);}
-    window.addEventListener('message',onMessage);document.body.append(iframe,form);form.submit();
-  });
+// OFRESH ONLINE — adaptorul aplicatiei existente catre Supabase.
+// Toate citirile si scrierile aplicatiei trec prin Edge Function; nu mai exista fallback Google Apps Script.
+let ofreshAccessToken="";
+let ofreshRefreshToken="";
+let ofreshTokenKind="";
+function ofreshRestoreAuth(){
+  try{
+    ofreshAccessToken=localStorage.getItem("ofresh_access_token")||"";
+    ofreshRefreshToken=localStorage.getItem("ofresh_refresh_token")||"";
+    ofreshTokenKind=localStorage.getItem("ofresh_token_kind")||"";
+  }catch(e){}
 }
+function ofreshStoreAuth(accessToken,refreshToken,kind){
+  ofreshAccessToken=String(accessToken||"");
+  ofreshRefreshToken=String(refreshToken||"");
+  ofreshTokenKind=String(kind||"");
+  try{
+    if(ofreshAccessToken)localStorage.setItem("ofresh_access_token",ofreshAccessToken);else localStorage.removeItem("ofresh_access_token");
+    if(ofreshRefreshToken)localStorage.setItem("ofresh_refresh_token",ofreshRefreshToken);else localStorage.removeItem("ofresh_refresh_token");
+    if(ofreshTokenKind)localStorage.setItem("ofresh_token_kind",ofreshTokenKind);else localStorage.removeItem("ofresh_token_kind");
+  }catch(e){}
+}
+ofreshRestoreAuth();
+async function ofreshRefreshAuth(){
+  if(!ofreshRefreshToken||ofreshTokenKind!=="supabase")return false;
+  const response=await fetch(SUPABASE_URL+"/auth/v1/token?grant_type=refresh_token",{
+    method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({refresh_token:ofreshRefreshToken})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.access_token)throw new Error(data.msg||data.message||data.error_description||"Sesiunea a expirat. Autentifica-te din nou.");
+  ofreshStoreAuth(data.access_token,data.refresh_token||ofreshRefreshToken,"supabase");
+  return true;
+}
+async function ofreshHttp(action,payload,allowRetry=true){
+  const headers={"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"};
+  if(ofreshAccessToken)headers.Authorization="Bearer "+ofreshAccessToken;
+  const response=await fetch(API_URL,{method:"POST",headers,body:JSON.stringify({...payload,action})});
+  const data=await response.json().catch(()=>({success:false,error:"Raspuns invalid de la serverul OFRESH."}));
+  if(response.status===401&&allowRetry&&ofreshRefreshToken&&ofreshTokenKind==="supabase"){
+    await ofreshRefreshAuth();
+    return ofreshHttp(action,payload,false);
+  }
+  if(!response.ok&&data.success!==false)data.success=false;
+  return data;
+}
+async function ofreshPasswordLogin(email,password,expectedRole){
+  const response=await fetch(SUPABASE_URL+"/auth/v1/token?grant_type=password",{
+    method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({email:String(email||"").trim().toLowerCase(),password:String(password||"")})
+  });
+  const session=await response.json().catch(()=>({}));
+  if(!response.ok||!session.access_token)throw new Error(session.msg||session.message||session.error_description||"E-mailul sau parola sunt incorecte.");
+  ofreshStoreAuth(session.access_token,session.refresh_token,"supabase");
+  const identity=await ofreshHttp("whoami",{});
+  if(!identity||identity.success!==true||!identity.profile){
+    ofreshStoreAuth("","","");
+    throw new Error(identity?.error||"Contul nu are un profil OFRESH activ.");
+  }
+  const profile=identity.profile;
+  const role=String(profile.rol||profile.Rol||"").toLowerCase();
+  if(expectedRole==="administrator"&&!["administrator","admin"].includes(role)){
+    ofreshStoreAuth("","","");throw new Error("Contul nu are drepturi de Administrator.");
+  }
+  if(expectedRole==="comercial"&&role!=="comercial"){
+    ofreshStoreAuth("","","");throw new Error("Contul nu are drepturi Comerciale.");
+  }
+  return {success:true,user:{...profile,id:profile.id||session.user?.id,rol:role,Rol:role,Email:session.user?.email||email,email:session.user?.email||email,Nume:profile.nume||profile.Nume||""},session};
+}
+async function ofreshMobileLogin(phone,pin,expectedRole){
+  const result=await ofreshHttp("mobileLogin",{phone:String(phone||""),pin:String(pin||"")},false);
+  if(!result||result.success!==true||!result.token)throw new Error(result?.error||"Telefonul sau PIN-ul este incorect.");
+  const profile=result.profile||{};
+  const role=String(profile.rol||profile.Rol||"").toLowerCase();
+  if(expectedRole&&role!==expectedRole){
+    await fetch(API_URL,{method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Authorization":"Bearer "+result.token,"Content-Type":"application/json"},body:JSON.stringify({action:"mobileLogout"})}).catch(()=>{});
+    throw new Error(expectedRole==="filer"?"Contul nu este activat pentru rolul Filer.":"Contul nu este activat pentru rolul Tehnician.");
+  }
+  ofreshStoreAuth(result.token,"","mobile");
+  const user={...profile,id:profile.id,nume:profile.nume||"",Nume:profile.nume||"",rol:role,Rol:role,telefon:profile.telefon||phone,Telefon:profile.telefon||phone,"ID Utilizator":profile.id||""};
+  if(expectedRole==="filer"){
+    const data=await ofreshHttp("filerData",{});
+    if(!data||data.success!==true)throw new Error(data?.error||"Nu am putut incarca datele Filer.");
+    return {...data,success:true,user};
+  }
+  return {success:true,token:result.token,expiresAt:result.expiresAt,profile,technician:user,user};
+}
+async function api(params){
+  const action=String(params?.action||"");
+  const t0=performance.now();
+  try{
+    let result;
+    if(action==="warmAdminLoginCache")return {success:true,cached:false,source:"supabase"};
+    if(action==="loginUser")result=await ofreshPasswordLogin(params.email||params.user,params.pin,"administrator");
+    else if(action==="commercialLogin")result=await ofreshPasswordLogin(params.email,params.pin,"comercial");
+    else if(action==="login")result=await ofreshMobileLogin(params.telefon,params.pin,"tehnician");
+    else if(action==="loginFiler")result=await ofreshMobileLogin(params.telefon,params.pin,"filer");
+    else if(action==="requestPinRecovery"){
+      const email=String(params.email||"").trim().toLowerCase();
+      const response=await fetch(SUPABASE_URL+"/auth/v1/recover?redirect_to="+encodeURIComponent(location.origin+location.pathname),{
+        method:"POST",headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json"},body:JSON.stringify({email})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.msg||data.message||"Nu am putut trimite linkul de recuperare.");
+      result={success:true,message:"Am trimis un link securizat de recuperare pe adresa introdusa. Deschide linkul din e-mail pentru a seta o parola noua."};
+    }
+    else if(action==="completePinRecovery")throw new Error("Recuperarea se finalizeaza din linkul securizat primit prin e-mail, nu prin codul vechi Google Apps Script.");
+    else result=await ofreshHttp(action,params||{});
+    const ms=Math.round(performance.now()-t0);
+    if(/^(login|loginFiler|loginUser|commercialLogin|dashboardData|readSheets|technicianData|commercialData|filerData|uploadPhotoChunk|finalizePhotoUpload|filerUploadPhotoChunk|filerFinalizePhotoUploads)$/.test(action)){
+      console.info("[OFRESH SUPABASE PERF]",{action,networkMs:ms,success:result?.success===true});
+    }
+    return result;
+  }catch(error){
+    console.error("[OFRESH SUPABASE]",{action,error:String(error?.message||error)});
+    return {success:false,error:error?.message||"Eroare de conexiune cu Supabase."};
+  }
+}
+function apiPost(params){return api(params);}
 
 function buildClientsFromMachines(machines){
   const rows=Array.isArray(machines)?machines:[];
