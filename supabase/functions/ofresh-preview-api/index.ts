@@ -1192,6 +1192,27 @@ async function main(req:Request) {
     const candidateId=String(body.idValue||record[body.idField||""]||record["ID Sursa"]||record["ID Client"]||record["ID Locatie"]||record["ID Aparat"]||record["ID Filtru"]||record["ID Stoc"]||record["ID Tehnician"]||record["ID Utilizator"]||"").trim();
     const legacyId=/^[0-9a-f-]{36}$/i.test(candidateId)?String(record["ID Sursa"]||record.source_id||"").trim():candidateId;
     const mapped=legacyPayload(sheet,record,legacyId);
+    const ensureLocationClientId=async(row:any,fallbackId?:string|null)=>{
+      if(row.client_id) return row.client_id;
+      if(fallbackId) return fallbackId;
+      const clientName=String(row.nume_client||row.nume||"").trim();
+      if(!clientName) throw new Error("Locatia trebuie asociata unui client.");
+      const clientKey=(value:any)=>String(value??"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().toLocaleLowerCase("ro").replace(/\\s+/g," ");
+      const clients=await allRows(sb,"clienti");
+      const matches=clients.filter((item:any)=>clientKey(item.nume)===clientKey(clientName));
+      if(matches.length>1) throw new Error("Exista mai multe inregistrari Client cu aceeasi denumire. Clarifica duplicatul inainte de salvarea locatiei.");
+      if(matches.length===1) return matches[0].id;
+      const {data:created,error:createError}=await sb.from("clienti").insert({
+        nume:clientName,adresa:row.adresa||null,zona:row.zona||null,oras:row.oras||null,judet:row.judet||null,
+        persoana_contact:row.persoana_contact||null,telefon:row.telefon||row.telefone||null,email:row.email||null,
+        status:row.status||"Activ",observatii:row.observatii||null,source_data:{created_via:"ofresh_legacy_location_save"}
+      }).select("*").single();
+      if(createError) throw createError;
+      return created.id;
+    };
+    if(action==="add" && sheet==="Locatii"){
+      mapped.row.client_id=await ensureLocationClientId(mapped.row);
+    }
     if(action==="add"){
       if(sheet==="Clienti"&&!mapped.row.nume) throw new Error("Completeaza numele clientului.");
       if(sheet==="Locatii"&&!mapped.row.nume) throw new Error("Completeaza numele locatiei.");
@@ -1203,6 +1224,7 @@ async function main(req:Request) {
     }
     const oldKey=String(body.idValue||record[body.idField||""]||record.id||"").trim();
     const existing=await resolveLegacyRow(sb,sheet,oldKey);
+    if(sheet==="Locatii" && !mapped.row.client_id) mapped.row.client_id=await ensureLocationClientId(mapped.row,existing.client_id||null);
     const {data,error}=await sb.from(mapped.table).update({...mapped.row,source_data:{...(existing.source_data||{}),...(mapped.row.source_data||{})}}).eq("id",existing.id).select("*").single();
     if(error) throw error;
     return Response.json({success:true,record:legacy(sheet,data)},{headers:CORS});
