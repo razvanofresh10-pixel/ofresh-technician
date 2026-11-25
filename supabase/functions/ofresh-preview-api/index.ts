@@ -723,12 +723,22 @@ async function main(req:Request) {
     const cleanTasks=tasks.map(String).filter((x:string)=>allowedTasks.has(x));
     if(cleanTasks.length!==tasks.length) throw new Error("Lista operatiunilor contine valori nepermise.");
     const flags={igienizare:cleanTasks.includes("Igienizare"),decalcifiere:cleanTasks.includes("Decalcifiere"),curatare_capucinator:cleanTasks.includes("Curatare capucinator"),spalat_grup_cafea:cleanTasks.includes("Spalat grup cafea"),spalat_furtune_lapte:cleanTasks.includes("Spalat furtune lapte"),spalat_tavita_reziduuri:cleanTasks.includes("Spalat tavita reziduuri"),predat_marfa:cleanTasks.includes("Predat marfa")};
-    const photoToken=crypto.randomUUID();
+    const requestId=String(body.requestId||"").trim();
+    const photoToken=String(body.photoToken||"").trim();
+    if(!/^[0-9a-f-]{36}$/i.test(requestId)||!/^[0-9a-f-]{36}$/i.test(photoToken)) throw new Error("Identificatorul salvarii sau autorizarea foto sunt invalide.");
     const expectedPhotoCount=Number(body.photoCount??0);
     if(!Number.isInteger(expectedPhotoCount)||expectedPhotoCount<0||expectedPhotoCount>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
-    const payload:any={technician_profile_id:authUser.id,source_data:{photo_upload_token_hash:await sha256(photoToken),photo_owner_auth_id:authUser.id,photo_upload_expires_at:new Date(Date.now()+3600_000).toISOString(),expected_photo_count:expectedPhotoCount},data_interventie:body.data?new Date(String(body.data)+"T12:00:00").toISOString():new Date().toISOString(),client:machine.client_nume||location?.nume_client||location?.nume||"",adresa:machine.adresa||location?.adresa||"",oras:location?.oras||"",judet:location?.judet||"",cod_ofresh:machine.cod_ofresh,serie_aparat:machine.serie,producator:machine.producator,tip_aparat:machine.tip_aparat||machine.model,operatiuni:cleanTasks,observatii:String(body.observatii||""),...flags,numar_fotografii:0,zona_aparate:machine.zona,tip_echipament:machine.tip_echipament,aparat_id:machine.id,client_id:location?.client_id||null,locatie_id:machine.locatie_id};
+    const tokenHash=await sha256(photoToken);
+    const {data:prior,error:priorErr}=await sb.from("interventii_espressoare").select("id,technician_profile_id,source_data,numar_fotografii").contains("source_data",{client_request_id:requestId}).limit(1).maybeSingle();
+    if(priorErr) throw priorErr;
+    if(prior){
+      const priorMeta=source(prior);
+      if(String(prior.technician_profile_id)!==authUser.id||priorMeta.photo_upload_token_hash!==tokenHash) throw new Error("Identificatorul salvarii este deja folosit.");
+      return Response.json({success:true,visitId:prior.id,photoToken,expectedPhotoCount:Number(priorMeta.expected_photo_count??expectedPhotoCount),duplicate:true},{headers:CORS});
+    }
+    const payload:any={technician_profile_id:authUser.id,source_data:{client_request_id:requestId,photo_upload_token_hash:tokenHash,photo_owner_auth_id:authUser.id,photo_upload_expires_at:new Date(Date.now()+3600_000).toISOString(),expected_photo_count:expectedPhotoCount},data_interventie:body.data?new Date(String(body.data)+"T12:00:00").toISOString():new Date().toISOString(),client:machine.client_nume||location?.nume_client||location?.nume||"",adresa:machine.adresa||location?.adresa||"",oras:location?.oras||"",judet:location?.judet||"",cod_ofresh:machine.cod_ofresh,serie_aparat:machine.serie,producator:machine.producator,tip_aparat:machine.tip_aparat||machine.model,operatiuni:cleanTasks,observatii:String(body.observatii||""),...flags,numar_fotografii:0,zona_aparate:machine.zona,tip_echipament:machine.tip_echipament,aparat_id:machine.id,client_id:location?.client_id||null,locatie_id:machine.locatie_id};
     const {data,error}=await sb.from("interventii_espressoare").insert(payload).select("id").single();
-    if(error)throw error;
+    if(error) throw error;
     return Response.json({success:true,visitId:data.id,photoToken,expectedPhotoCount},{headers:CORS});
   }
   if(action==="filerUploadPhotoChunk"){
@@ -764,17 +774,24 @@ async function main(req:Request) {
     if(action==="filerFinalizePhotoUploads") { try { uploads=typeof body.photos==="string"?JSON.parse(body.photos):body.photos; } catch { throw new Error("Lista fotografiilor este invalida."); } }
     else uploads=[body];
     if(!Array.isArray(uploads)||!uploads.length||uploads.length>5) throw new Error("Alege intre 1 si 5 fotografii.");
-    const {data:existing,error:existingErr}=await sb.from("poze_interventii_espressoare").select("id,numar_poza,categorie").eq("interventie_id",visitId);
+    const {data:existing,error:existingErr}=await sb.from("poze_interventii_espressoare").select("id,numar_poza,categorie,source_data,storage_path,file_name,mime_type,file_size_bytes,taken_at").eq("interventie_id",visitId);
     if(existingErr) throw existingErr;
     if((existing||[]).length+uploads.length>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
-    const existingIndexes=new Set((existing||[]).map((x:any)=>Number(x.numar_poza)));
+    const existingByIndex=new Map<number,any>((existing||[]).map((x:any)=>[Number(x.numar_poza),x]));
     const seen=new Set<number>(); let aviz=(existing||[]).filter((x:any)=>norm(x.categorie).includes("aviz")).length,after=(existing||[]).filter((x:any)=>norm(x.categorie).includes("aparat dupa curatare")).length; const saved:any[]=[];
     for(const item of uploads){
       const uploadId=String(item.uploadId||"").trim(), totalChunks=Number(item.totalChunks), photoIndex=Number(item.photoIndex);
-      if(!uploadId||!Number.isInteger(totalChunks)||totalChunks<1||totalChunks>100||!Number.isInteger(photoIndex)||photoIndex<1||photoIndex>5||photoIndex>Number(meta.expected_photo_count||0)||seen.has(photoIndex)||existingIndexes.has(photoIndex)) throw new Error("Date foto invalide sau duplicate.");
+      if(!uploadId||!Number.isInteger(totalChunks)||totalChunks<1||totalChunks>100||!Number.isInteger(photoIndex)||photoIndex<1||photoIndex>5||photoIndex>Number(meta.expected_photo_count||0)||seen.has(photoIndex)) throw new Error("Date foto invalide sau duplicate.");
+      seen.add(photoIndex);
+      const alreadySaved=existingByIndex.get(photoIndex);
+      if(alreadySaved){
+        if(String(alreadySaved.source_data?.upload_id||"")!==uploadId) throw new Error("Exista deja o alta fotografie pe acest numar.");
+        saved.push(alreadySaved);
+        await sb.storage.from(PHOTO_BUCKET).remove(Array.from({length:totalChunks},(_,i)=>`tmp/${visitId}/${uploadId}/${i}.b64`));
+        continue;
+      }
       const declared=meta.photo_uploads?.[uploadId];
       if(!declared||Number(declared.totalChunks)!==totalChunks||Number(declared.photoIndex)!==photoIndex) throw new Error("Fragmentul foto nu corespunde incarcarii autorizate.");
-      seen.add(photoIndex);
       const category=String(item.category||"Aparat dupa curatare"), cat=norm(category);
       if(cat.includes("aviz")) aviz++; else if(cat.includes("aparat dupa curatare")) after++; else throw new Error("Categoria fotografiei este invalida.");
       if(aviz>1||after>4) throw new Error("Limita este 1 aviz si maximum 4 fotografii dupa curatare.");
@@ -791,20 +808,22 @@ async function main(req:Request) {
       const fileName=safeFileName(item.fileName||"service_espressor.jpg"), objectPath=`espresso/${visitId}/${String(photoIndex).padStart(2,"0")}_${crypto.randomUUID()}_${fileName}`;
       const {error:finalUploadErr}=await sb.storage.from(PHOTO_BUCKET).upload(objectPath,bytes,{contentType:mimeType,upsert:false});
       if(finalUploadErr) throw new Error("Nu am putut salva fotografia finala: "+finalUploadErr.message);
-      const row={interventie_id:visitId,source_id:null,filer:profile.nume||authUser.email||"",client:visit.client||"",aparat:[visit.tip_aparat,visit.serie_aparat].filter(Boolean).join(" - "),categorie:category,storage_path:objectPath,file_name:fileName,file_url:null,numar_poza:photoIndex,mime_type:mimeType,file_size_bytes:bytes.byteLength,taken_at:item.takenAt||null,data_incarcare:new Date().toISOString(),source_data:{storage_bucket:PHOTO_BUCKET,uploaded_by:authUser.id}};
+      const row={interventie_id:visitId,source_id:null,filer:profile.nume||authUser.email||"",client:visit.client||"",aparat:[visit.tip_aparat,visit.serie_aparat].filter(Boolean).join(" - "),categorie:category,storage_path:objectPath,file_name:fileName,file_url:null,numar_poza:photoIndex,mime_type:mimeType,file_size_bytes:bytes.byteLength,taken_at:item.takenAt||null,data_incarcare:new Date().toISOString(),source_data:{storage_bucket:PHOTO_BUCKET,uploaded_by:authUser.id,upload_id:uploadId}};
       const {data:photo,error:photoErr}=await sb.from("poze_interventii_espressoare").insert(row).select("*").single();
       if(photoErr){await sb.storage.from(PHOTO_BUCKET).remove([objectPath]);throw photoErr;}
       saved.push(photo);
       const tempPaths=Array.from({length:totalChunks},(_,i)=>`tmp/${visitId}/${uploadId}/${i}.b64`);
       await sb.storage.from(PHOTO_BUCKET).remove(tempPaths);
     }
-    const total=(existing||[]).length+saved.length;
-    const {error:countErr}=await sb.from("interventii_espressoare").update({numar_fotografii:total}).eq("id",visitId);
+    const {count:total,error:countErr}=await sb.from("poze_interventii_espressoare").select("id",{count:"exact",head:true}).eq("interventie_id",visitId);
     if(countErr) throw countErr;
-    const newSource={...meta,photo_upload_token_hash:null,photo_upload_expires_at:null,photo_uploads:{}};
+    const {error:updateCountErr}=await sb.from("interventii_espressoare").update({numar_fotografii:total||0}).eq("id",visitId);
+    if(updateCountErr) throw updateCountErr;
+    // Keep the short-lived token hash so a retry after a lost response can recognize completed uploads.
+    const newSource={...meta,photo_uploads:{}};
     const {error:metaErr}=await sb.from("interventii_espressoare").update({source_data:newSource}).eq("id",visitId);
     if(metaErr) throw metaErr;
-    return Response.json({success:true,photos:saved,uploaded:saved.length},{headers:CORS});
+    return Response.json({success:true,photos:saved,uploaded:saved.length,total:total||0},{headers:CORS});
   }
   if(action==="saveGpsLocation"){
     if(!isAdmin) throw new Error("Doar administratorul poate actualiza GPS-ul si adresa locatiei.");
