@@ -1028,9 +1028,9 @@ async function main(req:Request) {
     if(!(norm(stock.denumire)===norm(filterType)||norm(stock.cod_produs)===norm(filterType)||norm(stock.source_data?.Produs)===norm(filterType))) throw new Error("Pozitia de stoc selectata nu corespunde tipului de filtru montat.");
     const stockEntered=Number(stock.cantitate_intrata??stock.cantitate??0);
     const stockConsumed=Number(stock.consum||0);
-    if(stockEntered-stockConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
     const stockSource=stock.source_data&&typeof stock.source_data==="object"?stock.source_data:{};
     const stockDone=Array.isArray(stockSource.processed_filter_intervention_ids)&&stockSource.processed_filter_intervention_ids.includes(marker);
+    if(!stockDone && stockEntered-stockConsumed<=0) throw new Error("Filtrul nu mai exista in stoc.");
     if(!stockDone){
       const consumed=Number(stock.consum||0)+1;
       const entered=Number(stock.cantitate_intrata??stock.cantitate??0);
