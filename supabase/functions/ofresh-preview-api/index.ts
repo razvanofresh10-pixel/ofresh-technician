@@ -1060,6 +1060,68 @@ async function main(req:Request) {
     }
     return Response.json({success:true,inserted:insertedIds.length,duplicates:normalized.length-fresh.length,failed:0,errors:[],insertedIds},{headers:CORS});
   }
+  // Dedicated technician save path for standard interventions.
+  // The legacy generic CRUD intentionally excludes Interventii; mobile saves must
+  // use this scoped handler so the server derives ownership and relationships.
+  if(action==="add" && String(body.sheet||"")==="Interventii"){
+    if(!isTech || !technicianRecord) throw new Error("Salvarea interventiilor este disponibila doar unui tehnician autentificat.");
+    if(norm(technicianRecord.status) && !["activ","active"].includes(norm(technicianRecord.status))) throw new Error("Contul de tehnician este inactiv.");
+    let record:any={};
+    try{record=typeof body.record==="string"?JSON.parse(body.record):body.record||{};}catch{throw new Error("Datele interventiei nu sunt valide.");}
+    const machineId=String(record["ID Aparat"]||record.aparat_id||"").trim();
+    const visitDate=String(record.Data||record.data_interventie||"").trim();
+    const interventionType=String(record["Tip interventie"]||record.Tip||record.tip_interventie||"").trim();
+    const legacyVisitId=String(record["ID Interventie"]||record.legacy_intervention_id||"").trim();
+    if(!/^[0-9a-f-]{36}$/i.test(machineId)) throw new Error("Aparatul selectat nu are un identificator valid.");
+    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(visitDate) || Number.isNaN(Date.parse(visitDate+"T12:00:00Z"))) throw new Error("Data interventiei nu este valida.");
+    if(!interventionType) throw new Error("Selecteaza tipul interventiei.");
+    if(!legacyVisitId) throw new Error("Lipseste identificatorul interventiei.");
+    const {data:machine,error:machineErr}=await sb.from("aparate").select("*").eq("id",machineId).maybeSingle();
+    if(machineErr) throw machineErr;
+    if(!machine || !machineIsActive(machine)) throw new Error("Aparatul nu exista sau nu este activ.");
+    if(!machine.locatie_id) throw new Error("Aparatul nu are o locatie asociata.");
+    const {data:location,error:locationErr}=await sb.from("locatii").select("*").eq("id",machine.locatie_id).maybeSingle();
+    if(locationErr) throw locationErr;
+    if(!location) throw new Error("Locatia aparatului nu a fost gasita.");
+    const cities=arr(profile.orase_acces).map(norm), types=arr(profile.tip_echipament_acces), zones=arr(profile.zone_aparate_acces).map(norm);
+    const city=norm(location.oras||machine.source_data?.Oras||machine.source_data?.oras);
+    if(cities.length&&!cities.includes(city)) throw new Error("Aparatul nu se afla in aria autorizata.");
+    if(types.length&&!equipmentMatches(types,machine.tip_echipament||machine.tip_aparat)) throw new Error("Tipul aparatului nu este autorizat.");
+    if(zones.length&&!zones.includes(norm(machine.zona))) throw new Error("Zona aparatului nu este autorizata.");
+    const {data:existing,error:existingErr}=await sb.from("interventii").select("*").contains("source_data",{legacy_intervention_id:legacyVisitId}).limit(1).maybeSingle();
+    if(existingErr) throw existingErr;
+    if(existing) return Response.json({success:true,record:legacy("Interventii",existing),alreadySaved:true},{headers:CORS});
+    const operations=String(record["Operatiuni efectuate"]||record.Operatiuni||"").trim();
+    const notes=String(record.Observatii||record.observatii||"");
+    const billed=record.SolicitareClient===true || record["De facturat"]==="DA" || record.de_facturat===true;
+    const filterChanged=norm(interventionType)==="schimbare filtru";
+    const row={
+      aparat_id:machine.id,
+      locatie_id:location.id,
+      client_id:location.client_id||null,
+      data_interventie:new Date(visitDate+"T12:00:00.000Z").toISOString(),
+      tehnician:String(profile.nume||technicianRecord.nume||""),
+      tehnician_id:authUser.id,
+      tip:interventionType,
+      tip_interventie:interventionType,
+      descriere:notes||null,
+      operatiuni:operations||null,
+      observatii:notes||null,
+      urmatoarea_interventie:record["Urmatoarea interventie"]||null,
+      filtru_schimbat:filterChanged,
+      igienizare:operations.toLocaleLowerCase("ro").includes("igienizare")||norm(interventionType)==="igienizare",
+      tip_filtru:filterChanged?String(record["Tip filtru"]||"").trim()||null:null,
+      status:"Finalizata",
+      de_facturat:billed,
+      solicitare_client:billed,
+      motiv_facturare:billed?String(record.motivFacturare||"Solicitare client"):null,
+      fotografii_count:0,
+      source_data:{legacy_intervention_id:legacyVisitId,created_from:"ofresh_mobile_technician",client_label:String(record.Client||record.Locatie||location.nume||""),operations:operations}
+    };
+    const {data,error}=await sb.from("interventii").insert(row).select("*").single();
+    if(error) throw error;
+    return Response.json({success:true,record:legacy("Interventii",data)},{headers:CORS});
+  }
   if(["add","update","delete"].includes(action) && body.sheet && String(body.sheet)!=="Interventii"){
     if(!isAdmin) throw new Error("Operatiunea este permisa doar administratorului.");
     const sheet=String(body.sheet).trim();
