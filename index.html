@@ -3668,28 +3668,22 @@ async function deleteRecord(sheet,idValue){
         if(!city&&!county&&!mc&&!mj&&address&&ma&&address!==ma)return false;
         return true;
       });
-      const codes=[];
-      for(const m of associated){
-        const code=String(m["Cod OFRESH"]||m.codOfresh||"").trim();
-        if(!code)throw new Error("Nu am sters nimic: un aparat asociat nu are Cod OFRESH. Completeaza codul inainte de stergere.");
-        if(!codes.includes(code))codes.push(code);
+      if(associated.length){
+        throw new Error("Clientul nu poate fi sters deoarece are "+associated.length+" aparate asociate. Pentru protectia istoricului si a interventiilor, aparatele nu vor fi sterse automat. Marcheaza separat aparatele care nu mai sunt folosite, apoi revino la client.");
       }
       const isVirtual=!!client._virtualFromMachines;
       const locationField=client["ID Locatie"]!==undefined&&String(client["ID Locatie"]).trim()!==""?"ID Locatie":client["ID Client"]!==undefined&&String(client["ID Client"]).trim()!==""?"ID Client":client.id!==undefined&&String(client.id).trim()!==""?"id":"";
       const locationValue=locationField?String(client[locationField]).trim():"";
-      const promptText="Stergi clientul "+clientName(client)+"?\n\nVor fi sterse "+codes.length+" aparate asociate. "+(isVirtual?"Clientul este generat din aparate si va disparea dupa stergerea acestora.":"Inregistrarea clientului va fi stearsa din Locatii.")+"\nIstoricul interventiilor si fotografiile vor fi pastrate.";
-      if(!confirm(promptText))return;
-      for(const code of codes)await apiDelete("Aparate","Cod OFRESH",code);
       if(!isVirtual){
-        if(!locationField||!locationValue)throw new Error("Aparatele au fost sterse, dar nu am gasit ID-ul clientului din foaia Locatii. Verifica foaia Locatii inainte de o noua incercare.");
+        if(!locationField||!locationValue)throw new Error("Nu am gasit ID-ul clientului din foaia Locatii. Nu am sters nimic.");
+        if(!confirm("Stergi clientul "+clientName(client)+"?\n\nNu exista aparate asociate. Istoricul interventiilor si fotografiile nu vor fi sterse."))return;
         await apiDelete("Locatii",locationField,locationValue);
       }
-      // Scoatem imediat clientul si aparatele asociate din memoria locala, apoi confirmam prin recitirea bazei.
-      db.Aparate=(db.Aparate||[]).filter(m=>!codes.includes(String(m["Cod OFRESH"]||m.codOfresh||"").trim()));
+      // Clientul generat din aparate nu are rand propriu in Locatii; nu stergem niciun aparat.
       db.Locatii=(db.Locatii||[]).filter(c=>String(c["ID Locatie"]||c["ID Client"]||c.id||"")!==String(locationValue));
       db.Clienti=(db.Clienti||[]).filter(c=>norm(clientName(c))!==name || (city&&norm(c.Oras||c.oras||"")&&norm(c.Oras||c.oras||"")!==city) || (county&&norm(c.Judet||c.judet||"")&&norm(c.Judet||c.judet||"")!==county));
       saveCachedData();
-      msg("Clientul si aparatele asociate au fost sterse. Istoricul interventiilor si fotografiile au fost pastrate.");
+      msg(isVirtual?"Clientul virtual a fost eliminat din lista; aparatele au ramas nemodificate.":"Clientul a fost sters. Istoricul interventiilor si fotografiile au fost pastrate.");
       await load();
       return;
     }
