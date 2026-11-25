@@ -2251,6 +2251,7 @@ async function ensureCommercialHistory(){
     const norm=v=>String(v==null?"":v).trim();
     const photoMap={};
     photos.forEach(p=>{
+      if(!p || typeof p!=="object") return;
       const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId);
       const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);
       const saved=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);
@@ -2287,6 +2288,7 @@ async function ensureCommercialHistory(){
       const photoMap={};
       const norm=v=>String(v==null?"":v).trim();
       photos.forEach(p=>{
+        if(!p || typeof p!=="object") return;
         const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId);
         const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);const saved=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);const url=fileId?('https://drive.google.com/file/d/'+encodeURIComponent(fileId)+'/view'):saved;
         if(id && /^https?:\/\//i.test(url)){if(!photoMap[id])photoMap[id]=[];if(!photoMap[id].includes(url))photoMap[id].push(url);}
@@ -2328,6 +2330,7 @@ async function ensureCommercialEspressoHistory(){
         const norm=v=>String(v==null?"":v).trim();
         const photoMap={};
         photos.forEach(p=>{
+          if(!p || typeof p!=="object") return;
           const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId);
           const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);
           const saved=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL);
@@ -2543,6 +2546,7 @@ function interventionsPage(){
  const norm=v=>String(v==null?"":v).trim();
  const key=v=>norm(v).toLowerCase().replace(/[\s–—-]+/g,"");
  const photoUrl=p=>{
+   if(!p || typeof p!=="object") return "";
    const fileId=norm(p["File ID"]||p["File Id"]||p.fileId||p.fileID);
    if(fileId)return "https://drive.google.com/file/d/"+encodeURIComponent(fileId)+"/view";
    const raw=norm(p["URL poza"]||p["URL Poza"]||p.url||p.URL||p.Link||p.link);
@@ -2550,6 +2554,7 @@ function interventionsPage(){
  };
  const photoMap=new Map();
  photos.forEach(p=>{
+   if(!p || typeof p!=="object") return;
    const id=norm(p["ID Interventie"]||p["ID interventie"]||p.interventionId||p.interventieId||p.ID||p.id);
    const url=photoUrl(p); if(!id||!url)return;
    if(!photoMap.has(id))photoMap.set(id,[]);
@@ -3768,6 +3773,7 @@ function ofreshAddPhotoDetails(rows,photoSheet){
   const idOf=x=>norm(x["ID Interventie"]||x["ID interventie"]||x.interventionId||x.interventieId||x.ID||x.id);
   const grouped=new Map();
   photos.forEach(photo=>{
+    if(!photo || typeof photo!=="object") return;
     const id=idOf(photo);if(!id)return;
     const fileId=norm(photo["File ID"]||photo["File Id"]||photo.fileId||photo.fileID);
     const raw=norm(photo["URL poza"]||photo["URL Poza"]||photo.url||photo.URL||photo.Link||photo.link);
@@ -4438,12 +4444,14 @@ function espressoInterventionsPage(){
   const visibleEspresso=sorted.slice(ofreshEspressoPage*OFRESH_PAGE_SIZE,(ofreshEspressoPage+1)*OFRESH_PAGE_SIZE);
   const photosByIntervention=new Map();
   photos.forEach(p=>{
+    if(!p || typeof p!=="object") return;
     const id=String(p['ID Interventie']||'');
     if(!id)return;
     if(!photosByIntervention.has(id))photosByIntervention.set(id,[]);
     photosByIntervention.get(id).push(p);
   });
   const photoUrl=p=>{
+    if(!p || typeof p!=="object") return "";
     const fileId=String(p['File ID']||p['File Id']||p.fileId||p.fileID||'').trim();
     if(fileId)return 'https://drive.google.com/file/d/'+encodeURIComponent(fileId)+'/view';
     const raw=String(p['URL poza']||p['URL Poza']||p.url||p.URL||'').trim();
