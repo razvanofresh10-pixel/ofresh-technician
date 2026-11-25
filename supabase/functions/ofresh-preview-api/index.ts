@@ -292,6 +292,7 @@ async function main(req:Request) {
     if(appUser.auth_user_id) throw new Error("Aceasta inregistrare Comerciala este deja asociata unui cont Auth.");
     const rights=appUser.drepturi||{};
     const cities=Array.isArray(appUser.orase_acces)?appUser.orase_acces:[];
+    if(!cities.length) throw new Error("Contul Comercial nu are judete alocate. Configureaza mai intai judetele in Utilizatori aplicatie, apoi activeaza autentificarea.");
     const {data:created,error:createErr}=await sb.auth.admin.createUser({email,password,email_confirm:true,user_metadata:{nume:appUser.nume,rol:"comercial"}});
     if(createErr) throw new Error("Nu am putut crea autentificarea Comerciala: "+createErr.message);
     const userId=created.user.id;
