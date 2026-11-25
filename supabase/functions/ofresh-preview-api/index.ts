@@ -723,8 +723,8 @@ async function main(req:Request) {
     const cleanTasks=tasks.map(String).filter((x:string)=>allowedTasks.has(x));
     if(cleanTasks.length!==tasks.length) throw new Error("Lista operatiunilor contine valori nepermise.");
     const flags={igienizare:cleanTasks.includes("Igienizare"),decalcifiere:cleanTasks.includes("Decalcifiere"),curatare_capucinator:cleanTasks.includes("Curatare capucinator"),spalat_grup_cafea:cleanTasks.includes("Spalat grup cafea"),spalat_furtune_lapte:cleanTasks.includes("Spalat furtune lapte"),spalat_tavita_reziduuri:cleanTasks.includes("Spalat tavita reziduuri"),predat_marfa:cleanTasks.includes("Predat marfa")};
-    const requestId=String(body.requestId||"").trim();
-    const photoToken=String(body.photoToken||"").trim();
+    const requestId=String(body.requestId||crypto.randomUUID()).trim();
+    const photoToken=String(body.photoToken||crypto.randomUUID()).trim();
     if(!/^[0-9a-f-]{36}$/i.test(requestId)||!/^[0-9a-f-]{36}$/i.test(photoToken)) throw new Error("Identificatorul salvarii sau autorizarea foto sunt invalide.");
     const expectedPhotoCount=Number(body.photoCount??0);
     if(!Number.isInteger(expectedPhotoCount)||expectedPhotoCount<0||expectedPhotoCount>5) throw new Error("Sunt permise maximum 5 fotografii per interventie.");
