@@ -2292,8 +2292,8 @@ function openCommercial(){
   if(commercialSession){commercialTab='aparate';commercialActiveButton='aparate';commercialPage();document.getElementById("pageTitle").textContent="Comercial";document.getElementById("crumb").textContent="Comercial";return;}
   modal("Acces Comercial",`<div>
     ${inputField("Email","commercialEmail","","email")}
-    ${inputField("PIN","commercialPin","","password")}
-    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('comercial');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat PIN-ul</button></div>
+    ${inputField("Parola","commercialPin","","password")}
+    <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('comercial');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat parola</button></div>
   </div>`,`Intra in Comercial`,`loginCommercial()`);
   setTimeout(()=>document.getElementById("f_commercialEmail")?.focus(),50);
 }
@@ -2301,11 +2301,11 @@ async function loginCommercial(){
   if(window.__ofreshCommercialLoginBusy)return;
   const email=v("commercialEmail").trim().toLowerCase();
   const pin=v("commercialPin").trim();
-  if(!email||!pin)return msg("Completeaza adresa de email si PIN-ul.",false);
+  if(!email||!pin)return msg("Completeaza adresa de email si parola.",false);
   window.__ofreshCommercialLoginBusy=true;
   try{
     const r=await api({action:"commercialLogin",email:email,pin:pin});
-    if(!r||!r.success)throw new Error(r?.error||"Emailul sau PIN-ul este gresit.");
+    if(!r||!r.success)throw new Error(r?.error||"Emailul sau parola este gresita.");
     commercialSession=r.user||{Email:email,Rol:"comercial"};commercialAuthPin=pin;
     commercialDb={Aparate:[],Filtre:[],Interventii:[],Clienti:[],Locatii:[],InterventiiLoaded:false};
     commercialEspressoHistory=[];commercialEspressoHistoryLoaded=false;commercialEspressoLoading=false;
@@ -4852,7 +4852,7 @@ function openAdminLogin(){
   warmAdminLoginCache();
   modal("Acces Administrator",`<div>
     ${inputField("Adresa de e-mail","adminTelefon","","email")}
-    ${inputField("Parola (PIN-ul existent)","adminPin","","password")}
+    ${inputField("Parola","adminPin","","password")}
     <div style="margin-top:10px;text-align:right"><button type="button" class="linkButton" onclick="window.openPinRecovery && window.openPinRecovery('admin');return false;" style="appearance:none;border:0;background:transparent;padding:2px 0;color:#557b78;font:500 12px/1.4 Arial,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;display:inline-block;">Am uitat PIN-ul</button></div>
   </div>`,`Intra in Administrator`,`loginAdministrator()`);
   setTimeout(()=>document.getElementById("f_adminTelefon")?.focus(),50);
@@ -4862,28 +4862,28 @@ async function loginAdministrator(){
   const adminLoginStarted=performance.now();
   window.__ofreshAdminLoginBusy=true;
   try{
-  const email=String(document.getElementById("f_adminTelefon")?.value||"").trim().toLowerCase();
-  const pin=String(document.getElementById("f_adminPin")?.value||"").trim();
-  if(!email||!pin)return msg("Completeaza adresa de e-mail si parola.",false);
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
-  const isActive=x=>{const st=String(x?.Status||x?.status||"Activ").trim().toLowerCase();return st!=="inactiv"&&st!=="inactive"};
-  const matchesAdmin=x=>!!x&&isActive(x)&&userIsAdmin(x)&&String(x.Email||x.email||"").trim().toLowerCase()===email&&userPin(x)===pin;
-  const openAdmin=(u)=>{const shellStarted=performance.now();cancelAdminDashboardRefresh();adminSession=u;commercialSession=null;techSession=null;db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();console.info('[OFRESH PERF]',{phase:'admin-shell-rendered-from-cache',durationMs:Math.round(performance.now()-shellStarted),totalSinceLoginMs:Math.round(performance.now()-adminLoginStarted)});/* Dashboard-ul se actualizeaza doar daca administratorul ramane pe Dashboard; navigarea spre un modul anuleaza timerul si nu asteapta cererea Dashboard. */scheduleAdminDashboardRefresh(650);};
-  try{
-    // Daca utilizatorii sunt in curs de preincalzire, asteptam cache-ul server-side
-    // pentru ca autentificarea sa nu repete o citire lenta din Supabase.
+    const email=String(document.getElementById("f_adminTelefon")?.value||"").trim().toLowerCase();
+    const password=String(document.getElementById("f_adminPin")?.value||"");
+    if(!email||!password)return msg("Completeaza adresa de e-mail si parola.",false);
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Introdu o adresa de e-mail valida.",false);
+    const openAdmin=(u)=>{
+      const shellStarted=performance.now();
+      cancelAdminDashboardRefresh();adminSession=u;commercialSession=null;techSession=null;
+      db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};
+      ofreshLoadedSheets.clear();restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();
+      console.info('[OFRESH PERF]',{phase:'admin-shell-rendered-from-cache',durationMs:Math.round(performance.now()-shellStarted),totalSinceLoginMs:Math.round(performance.now()-adminLoginStarted)});
+      scheduleAdminDashboardRefresh(650);
+    };
     await warmAdminLoginCache();
-    const r=await api({action:"loginUser",email:email,user:email,username:email,pin:pin});
-    if(r&&r.success&&r.user){if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");console.info('[OFRESH PERF]',{phase:'admin-auth-success',totalMs:Math.round(performance.now()-adminLoginStarted)});openAdmin(r.user);return;}
-    throw new Error(r?.error||"E-mailul sau parola este gresita.");
+    const r=await api({action:"loginUser",email:email,user:email,username:email,pin:password});
+    if(!r||!r.success||!r.user)throw new Error(r?.error||"E-mailul sau parola este gresita.");
+    if(!userIsAdmin(r.user))throw new Error("Contul nu are acces Administrator.");
+    console.info('[OFRESH PERF]',{phase:'admin-auth-success',totalMs:Math.round(performance.now()-adminLoginStarted)});
+    openAdmin(r.user);
   }catch(e){
-    // Cache fallback permits login only when a matching active administrator exists locally.
-    const localUser=(db.Utilizatori||[]).find(matchesAdmin);
-    if(localUser){openAdmin(localUser);return;}
     console.info('[OFRESH PERF]',{phase:'admin-auth-failed',totalMs:Math.round(performance.now()-adminLoginStarted),error:String(e?.message||e)});
-    msg(e.message||"E-mailul sau parola este gresita.",false);return;
-  }
-  } finally { window.__ofreshAdminLoginBusy=false; }
+    msg(e.message||"E-mailul sau parola este gresita.",false);
+  }finally{window.__ofreshAdminLoginBusy=false;}
 }
 
 async function initPasswordRecovery(){
