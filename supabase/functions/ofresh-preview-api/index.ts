@@ -1,4 +1,4 @@
-// OFRESH V47 — county-aware desktop/mobile data adapter (preview; scoped intervention/photo writes)
+// OFRESH V48 — commercial filter-history scope + county-aware data adapter (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -363,6 +363,13 @@ async function main(req:Request) {
       rows=rows.filter((r:any)=>r.aparat_id && assignedIds.has(String(r.aparat_id)));
     }
     if(role==="comercial" && name==="Aparate") rows=rows.filter((m:any)=>m.status!=="Retras");
+    // Commercial users may see only filter-change history, never the full technician service log.
+    if(role==="comercial" && name==="Interventii") rows=rows.filter((v:any)=>v.filtru_schimbat===true);
+    if(role==="comercial" && name==="PozeInterventii") {
+      const visits=await allRows(sb,"interventii");
+      const allowedVisits=new Set(visits.filter((v:any)=>v.filtru_schimbat===true).map((v:any)=>String(v.id)));
+      rows=rows.filter((p:any)=>p.interventie_id && allowedVisits.has(String(p.interventie_id)));
+    }
     if(role==="filer" && name==="PozeInterventiiEspressoare") {
       const visits=await allRows(sb,"interventii_espressoare");
       const assignedIds=new Set(arr(profile.aparate_asignate).map((x:any)=>String(x)));
