@@ -160,7 +160,7 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","filerUpdateMachine","technicianUpdateMachine","filerFinalizePhotoUpload","filerUpdateLocation","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","filerAssignmentData","setFilerMachines","mobileLogin","mobileLogout","mobileInterventionHistory","insert","upsert","update","delete","filerEnsureAccessColumns"]);
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","importAparateBatch","filerUpdateMachine","technicianUpdateMachine","filerFinalizePhotoUpload","filerUpdateLocation","list","add","checkFilterStock","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUploads","filerUpdateGps","saveGpsLocation","provisionMobileUser","listMobileProvisionCandidates","listMobileLinkedUsers","setMobilePin","filerAssignmentData","setFilerMachines","mobileLogin","mobileLogout","mobileInterventionHistory","insert","upsert","update","delete","filerEnsureAccessColumns"]);
   if(!previewReadActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview numai-citire."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
   if(action==="publicMachine"){
@@ -910,6 +910,34 @@ async function main(req:Request) {
     if(!isAdmin) throw new Error("Doar administratorul poate verifica structura accesului Filer.");
     return Response.json({success:true,alreadyConfigured:true,columns:["orase_acces","tip_echipament_acces","zone_aparate_acces","aparate_asignate"]},{headers:CORS});
   }
+  if(action==="importAparateBatch"){
+    if(!isAdmin) throw new Error("Importul aparatelor este permis doar Administratorului.");
+    let records:any[]=[];
+    try{records=Array.isArray(body.records)?body.records:JSON.parse(String(body.records||"[]"));}catch{throw new Error("Lista aparatelor pentru import nu este valida.");}
+    if(!records.length) return Response.json({success:true,inserted:0,duplicates:0,failed:0,errors:[]},{headers:CORS});
+    if(records.length>150) throw new Error("Trimite maximum 150 de aparate intr-un lot.");
+    const normalized=records.map((record:any)=>({record,legacyId:String(record?.["ID Aparat"]||record?.["Cod ID"]||record?.cod_id||"").trim()}));
+    if(normalized.some(x=>!x.legacyId)) throw new Error("Fiecare aparat trebuie sa aiba un ID original.");
+    const batchIds=new Set<string>();
+    const unique=normalized.filter(x=>{const k=x.legacyId.toLocaleLowerCase("ro");if(batchIds.has(k))return false;batchIds.add(k);return true;});
+    const ids=unique.map(x=>x.legacyId);
+    const existingIds=new Set<string>();
+    for(let p=0;p<ids.length;p+=100){
+      const part=ids.slice(p,p+100);
+      const {data,error}=await sb.from("aparate").select("cod_id").in("cod_id",part);
+      if(error) throw error;
+      for(const row of data||[]) if(row.cod_id) existingIds.add(String(row.cod_id).toLocaleLowerCase("ro"));
+    }
+    const fresh=unique.filter(x=>!existingIds.has(x.legacyId.toLocaleLowerCase("ro")));
+    const insertedIds:string[]=[];
+    for(let p=0;p<fresh.length;p+=50){
+      const mapped=fresh.slice(p,p+50).map(x=>legacyPayload("Aparate",x.record,x.legacyId).row);
+      const {data,error}=await sb.from("aparate").insert(mapped).select("id,cod_id");
+      if(error) throw new Error("Lotul "+(Math.floor(p/50)+1)+" nu a fost salvat: "+error.message);
+      for(const row of data||[]) insertedIds.push(String(row.cod_id||""));
+    }
+    return Response.json({success:true,inserted:insertedIds.length,duplicates:normalized.length-fresh.length,failed:0,errors:[],insertedIds},{headers:CORS});
+  }
   if(["add","update","delete"].includes(action) && body.sheet && String(body.sheet)!=="Interventii"){
     if(!isAdmin) throw new Error("Operatiunea este permisa doar administratorului.");
     const sheet=String(body.sheet).trim();
@@ -917,6 +945,45 @@ async function main(req:Request) {
     if(action==="delete"){
       const key=String(body.idValue||body.id||"").trim();
       const row=await resolveLegacyRow(sb,sheet,key);
+
+      // Protect the customer -> location -> machine chain. A customer with
+      // any machine in one of its locations cannot be deleted.
+      if(sheet==="Clienti"){
+        const {data:locations,error:locationsError}=await sb.from("locatii").select("id").eq("client_id",row.id);
+        if(locationsError) throw locationsError;
+        const locationIds=(locations||[]).map((x:any)=>x.id);
+        if(locationIds.length){
+          const {data:machines,error:machinesError}=await sb.from("aparate").select("id").in("locatie_id",locationIds);
+          if(machinesError) throw machinesError;
+          if((machines||[]).length) throw new Error("Clientul are aparate asociate. Stergerea este blocata; aparatele si istoricul lor raman intacte.");
+        }
+      }
+
+      // Never allow machine deletion to cascade into standard intervention
+      // history. Retire/deactivate the machine instead.
+      if(sheet==="Aparate"){
+        const [{count:standardCount,error:standardError},{count:espressoCount,error:espressoError}]=await Promise.all([
+          sb.from("interventii").select("id",{count:"exact",head:true}).eq("aparat_id",row.id),
+          sb.from("interventii_espressoare").select("id",{count:"exact",head:true}).eq("aparat_id",row.id)
+        ]);
+        if(standardError) throw standardError;
+        if(espressoError) throw espressoError;
+        if((standardCount||0)+(espressoCount||0)>0) throw new Error("Aparatul are istoric de interventii. Stergerea este blocata; retrage aparatul din evidenta activa pentru a pastra istoricul.");
+      }
+
+      // Do not orphan machines, filters or intervention history by deleting a location.
+      if(sheet==="Locatii"){
+        const [{count:machineCount,error:machineError},{count:filterCount,error:filterError},{count:visitCount,error:visitError}]=await Promise.all([
+          sb.from("aparate").select("id",{count:"exact",head:true}).eq("locatie_id",row.id),
+          sb.from("filtre").select("id",{count:"exact",head:true}).eq("locatie_id",row.id),
+          sb.from("interventii").select("id",{count:"exact",head:true}).eq("locatie_id",row.id)
+        ]);
+        if(machineError) throw machineError;
+        if(filterError) throw filterError;
+        if(visitError) throw visitError;
+        if((machineCount||0)+(filterCount||0)+(visitCount||0)>0) throw new Error("Locatia are aparate, filtre sau interventii asociate. Stergerea este blocata pentru a pastra legaturile si istoricul.");
+      }
+
       const {error}=await sb.from(TABLES[sheet]).delete().eq("id",row.id);
       if(error) throw error;
       return Response.json({success:true,deletedId:row.id},{headers:CORS});
