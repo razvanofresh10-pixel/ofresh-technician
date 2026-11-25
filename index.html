@@ -3676,20 +3676,18 @@ async function deleteRecord(sheet,idValue){
       if(!client)throw new Error("Nu am identificat clientul in datele incarcate. Reincarca aplicatia si incearca din nou.");
       const name=norm(clientName(client));
       if(!name)throw new Error("Clientul nu are nume. Nu am sters nimic.");
-      const city=norm(client.Oras||client.oras||"");
-      const county=norm(client.Judet||client.judet||"");
-      const address=norm(client.Adresa||client.adresa||"");
+      const clientMasterId=String(client["ID Client"]||"").trim();
+      const relatedLocations=(db.Locatii||[]).filter(l=>clientMasterId&&String(l["ID Client"]||l.client_id||"").trim()===clientMasterId);
+      if(relatedLocations.length>1){
+        throw new Error("Clientul are "+relatedLocations.length+" locatii asociate. Nu sterg doar una dintre ele din lista Clienti, pentru a nu lasa date incomplete. Clientul si locatiile sale raman nemodificate.");
+      }
+      const relatedLocationIds=new Set(relatedLocations.map(l=>String(l["ID Locatie"]||l.id||"").trim()).filter(Boolean));
       const associated=(db.Aparate||[]).filter(m=>{
-        const mid=String(m["ID Client"]||m.idClient||m["ID Locatie"]||m.idLocatie||"").trim();
-        if(mid && mid===String(idValue))return true;
-        if(norm(machineClient(m))!==name)return false;
-        const mc=norm(m.Oras||m.oras||"");
-        const mj=norm(m.Judet||m.judet||"");
-        const ma=norm(m.Adresa||m.adresa||"");
-        if(city&&mc&&city!==mc)return false;
-        if(county&&mj&&county!==mj)return false;
-        if(!city&&!county&&!mc&&!mj&&address&&ma&&address!==ma)return false;
-        return true;
+        const machineLocationId=String(m["ID Locatie"]||m.idLocatie||"").trim();
+        const machineClientId=String(m["ID Client"]||m.idClient||"").trim();
+        if(relatedLocationIds.has(machineLocationId)||(clientMasterId&&machineClientId===clientMasterId))return true;
+        if(clientMasterId)return false;
+        return norm(machineClient(m))===name;
       });
       if(associated.length){
         throw new Error("Clientul nu poate fi sters deoarece are "+associated.length+" aparate asociate. Pentru protectia istoricului si a interventiilor, aparatele nu vor fi sterse automat. Marcheaza separat aparatele care nu mai sunt folosite, apoi revino la client.");
@@ -3699,8 +3697,9 @@ async function deleteRecord(sheet,idValue){
       const locationValue=locationField?String(client[locationField]).trim():"";
       if(!isVirtual){
         if(!locationField||!locationValue)throw new Error("Nu am gasit ID-ul clientului din foaia Locatii. Nu am sters nimic.");
-        if(!confirm("Stergi clientul "+clientName(client)+"?\n\nNu exista aparate asociate. Istoricul interventiilor si fotografiile nu vor fi sterse."))return;
+        if(!confirm("Stergi clientul "+clientName(client)+"?\n\nNu exista aparate sau alte locatii asociate. Istoricul interventiilor si fotografiile nu vor fi sterse."))return;
         await apiDelete("Locatii",locationField,locationValue);
+        if(clientMasterId)await apiDelete("Clienti","ID Client",clientMasterId);
       }
       // Clientul generat din aparate nu are rand propriu in Locatii; nu stergem niciun aparat.
       db.Locatii=(db.Locatii||[]).filter(c=>String(c["ID Locatie"]||c["ID Client"]||c.id||"")!==String(locationValue));
