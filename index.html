@@ -4811,7 +4811,7 @@ async function loginAdministrator(){
     const user={"ID Utilizator":p.id,Nume:p.nume||signed.auth.user.email,Email:signed.auth.user.email||p.email||email,Telefon:p.telefon||"",Rol:p.rol||"administrator",Status:"Activ",Drepturi:p.drepturi||{},"Orase acces":p.orase_acces||[],"Tip echipament acces":p.tip_echipament_acces||[],"Zone aparate acces":p.zone_aparate_acces||[]};
     cancelAdminDashboardRefresh();
     adminSession=user;commercialSession=null;techSession=null;
-    const previewBanner=document.getElementById("ofreshSupabasePreviewBanner");if(previewBanner)previewBanner.style.display="block";
+    const previewBanner=document.getElementById("ofreshSupabasePreviewBanner");if(previewBanner)previewBanner.style.display="none";
     db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[]};
     ofreshLoadedSheets.clear();closeModal();enterAdminCleanMode();current="dashboard";render();
     console.info("[OFRESH SUPABASE PERF]",{phase:"admin-authenticated",totalMs:Math.round(performance.now()-started)});
