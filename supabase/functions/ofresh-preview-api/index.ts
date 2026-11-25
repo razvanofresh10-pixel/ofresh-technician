@@ -1,4 +1,4 @@
-// OFRESH V49 — commercial county-enriched filter history (preview)
+// OFRESH V50 — role-scoped dashboard queries + commercial filter history (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -409,15 +409,22 @@ async function main(req:Request) {
     const result:any={success:true}; for(const n of names) result[n]=await fetchSheet(n); return Response.json(result,{headers:CORS});
   }
   if(action==="dashboardData"){
+    // Dashboard queries use the service-role client, so explicitly mirror each role's row scope.
+    const scopedInterventions=()=>{
+      let q=sb.from("interventii");
+      if(role==="comercial") q=q.eq("filtru_schimbat",true);
+      else if(isTech) q=q.eq("tehnician_id",authUser.id);
+      return q;
+    };
     const [machines,locations,filters,recentResult,countResult]=await Promise.all([
       fetchSheet("Aparate"),
       fetchSheet("Locatii"),
       allowed.includes("Filtre")?fetchSheet("Filtre"):Promise.resolve([]),
       allowed.includes("Interventii")
-        ? sb.from("interventii").select("*").order("data_interventie",{ascending:false}).limit(6)
+        ? scopedInterventions().select("*").order("data_interventie",{ascending:false}).limit(6)
         : Promise.resolve({data:[],error:null}),
       allowed.includes("Interventii")
-        ? sb.from("interventii").select("id",{count:"exact",head:true})
+        ? scopedInterventions().select("id",{count:"exact",head:true})
         : Promise.resolve({count:0,error:null})
     ]);
     if(recentResult.error) throw new Error("Interventii recente: "+recentResult.error.message);
