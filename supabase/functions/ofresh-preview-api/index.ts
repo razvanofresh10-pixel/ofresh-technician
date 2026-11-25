@@ -1,4 +1,4 @@
-// OFRESH V48 — commercial filter-history scope + county-aware data adapter (preview)
+// OFRESH V49 — commercial county-enriched filter history (preview)
 // Includes V31 plus canonical-list pagination and role-scoped row filtering.
 // Requires Supabase Edge Function secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // All authenticated actions require a real Supabase Auth access token.
@@ -438,6 +438,15 @@ async function main(req:Request) {
     if(action==="commercialData") for(const n of ["Aparate","Filtre","Clienti","Locatii"]) data[n]=await fetchSheet(n);
     if(action==="commercialHistory") {
       data.Interventii=await fetchSheet("Interventii");
+      // Attach authoritative location fields so the commercial history can be filtered/exported by county.
+      const [locations,machines]=await Promise.all([allRows(sb,"locatii"),allRows(sb,"aparate")]);
+      const locationById=new Map(locations.map((x:any)=>[String(x.id),x]));
+      const machineById=new Map(machines.map((x:any)=>[String(x.id),x]));
+      data.Interventii=data.Interventii.map((visit:any)=>{
+        const machine=machineById.get(String(visit["ID Aparat"]||""));
+        const location=locationById.get(String(visit["ID Locatie"]||machine?.locatie_id||""));
+        return {...visit,Client:visit.Client||location?.nume_client||location?.nume||machine?.client_nume||"",Locatie:location?.nume||"",Adresa:location?.adresa||visit.Adresa||"",Oras:location?.oras||"",Judet:location?.judet||"",Zona:location?.zona||machine?.zona||""};
+      });
       const photos=await fetchSheet("PozeInterventii"), byVisit=new Map<string,string[]>();
       for(const photo of photos){const id=String(photo["ID Interventie"]||"");if(!id)continue;const urls=byVisit.get(id)||[];if(photo["URL poza"])urls.push(photo["URL poza"]);byVisit.set(id,urls);}
       data.Interventii=data.Interventii.map((r:any)=>({...r,Fotografii:(byVisit.get(String(r["ID Interventie"]||""))||[]).join("\n"),"Numar fotografii":(byVisit.get(String(r["ID Interventie"]||""))||[]).length}));
