@@ -4499,7 +4499,7 @@ function decodePublicQrToken(token){
 }
 
 async function qrMachine(r){
- const key=String(r["ID Aparat"]||r["Cod OFRESH"]||r["Serie Aparat"]||r.Serie||"").trim();
+ const key=String(r["QR Token"]||r.qr_token||r["ID Aparat"]||r.id||r["Cod OFRESH"]||r["Serie Aparat"]||r.Serie||"").trim();
  if(!key)return msg("Aparatul nu are ID, Cod OFRESH sau serie pentru QR.",false);
  // QR public V2: in cod apare doar un token opac, nu ID-ul/seria aparatului.
  const token=await makePublicQrToken(key);
@@ -4642,7 +4642,7 @@ function renderPublicMachineData(data,key,isQrToken=false){
   const next=f["Data urmatoarei schimbari"]||f["Data urmatoare schimbare"]||f.urmatorSchimb||"";
   let days="";if(next){const d=new Date(next);if(!isNaN(d))days=Math.ceil((d-new Date())/86400000)}
   const status=days===""?"":days<0?"DEPASIT":days<=15?"SCHIMBARE APROPIATA":"IN TERMEN";
-  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(r.Client||machineClient(r)||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(r["Tip aparat"]||r.Model||"")}</p><p><strong>Serie:</strong> ${esc(r["Serie Aparat"]||r.Serie||"")}</p><p><strong>Zona:</strong> ${esc(r.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||f.tipFiltru||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;
+  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(r.Client||machineClient(r)||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(r["Tip aparat"]||r.Model||"")}</p><p><strong>Serie:</strong> ${esc(r["Serie Aparat"]||r.Serie||"")}</p><p><strong>Zona:</strong> ${esc(r.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||f.tipFiltru||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>`;
   return true;
 }
 
@@ -4655,7 +4655,7 @@ function renderPublicMachineResponse(result){
   if(isEspresso){
     const machineName=m["Tip aparat"]||m.Model||m.Producator||"Espressor";
     const lastVisit=m["Ultima vizita"]||m["Ultima vizită"]||"";
-    document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII APARAT</div><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Denumire aparat:</strong> ${esc(machineName)}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Ultima vizita:</strong> ${esc(lastVisit||"Nu exista vizite inregistrate")}</p></div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;
+    document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII APARAT</div><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Denumire aparat:</strong> ${esc(machineName)}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Ultima vizita:</strong> ${esc(lastVisit||"Nu exista vizite inregistrate")}</p></div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>`;
     return true;
   }
   const f=filters.find(x=>String(x.Status||"Activ").toLowerCase()!=="inactiv")||filters[0]||{};
@@ -4663,7 +4663,7 @@ function renderPublicMachineResponse(result){
   const next=f["Data urmatoarei schimbari"]||f["Data urmatoare schimbare"]||"";
   let days=""; if(next){const d=new Date(next);if(!isNaN(d))days=Math.ceil((d-new Date())/86400000);}
   const status=days===""?"":days<0?"DEPASIT":days<=15?"SCHIMBARE APROPIATA":"IN TERMEN";
-  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(m.Client||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(m["Tip aparat"]||"")}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Zona:</strong> ${esc(m.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate din baza OFRESH Online.</p></div></div>`;
+  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(m.Client||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(m["Tip aparat"]||"")}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Zona:</strong> ${esc(m.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>`;
   return true;
 }
 async function publicMachinePage(key,isQrToken=false){
@@ -4675,7 +4675,7 @@ async function publicMachinePage(key,isQrToken=false){
       const decoded=decodePublicQrToken(key)||String(key||"");
       const result=await api({action:"publicMachine",id:decoded});
       if(renderPublicMachineResponse(result)) return;
-      document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Codul QR nu mai corespunde unui aparat din baza OFRESH.</p></div></div>';
+      document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Aparatul asociat acestui cod QR nu a fost gasit in Supabase.</p></div></div>';
     }catch(e){
       document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Nu s-au putut incarca informatiile</h2><p>Verifica conexiunea la internet si incearca din nou.</p></div></div>';
     }
@@ -4688,7 +4688,7 @@ async function publicMachinePage(key,isQrToken=false){
     db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],Utilizatori:[],...data};
     saveCachedData();
     if(!renderPublicMachineData(db,key,false) && !rendered){
-      document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Codul QR nu mai corespunde unui aparat din baza OFRESH.</p></div></div>';
+      document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Aparatul nu a fost gasit</h2><p>Aparatul asociat acestui cod QR nu a fost gasit in Supabase.</p></div></div>';
     }
   }catch(e){
     if(!rendered){ document.body.innerHTML='<div class="techOverlay"><div class="techLogin"><div class="techLogo">OFRESH</div><h2>Nu s-au putut incarca informatiile</h2><p>Verifica conexiunea la internet si incearca din nou.</p></div></div>'; }
