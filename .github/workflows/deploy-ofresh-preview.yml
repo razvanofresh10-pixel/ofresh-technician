@@ -1,5 +1,6 @@
 name: Deploy OFRESH Supabase Preview
 # Preview-only deployment; publish from supabase-preview without touching production.
+# Trigger preview deployment after the full technician/filer app integration.
 
 on:
   push:
