@@ -3634,12 +3634,20 @@ async function saveIntervention(){
       await rawSave("Filtre",fr,"ID Filtru",old?.["ID Filtru"]||"");
       pending.filterUpdated=true;
     }
-    // Confirmam interventia si revenim imediat la ecranul tehnicianului.
-    // Fotografiile continua in fundal, fara sa blocheze urmatorul aparat.
-    const photosToUpload=pending.photos.slice(pending.photoIndex);
+    // Nu confirmam si nu inchidem formularul pana cand TOATE fotografiile
+    // selectate au fost confirmate de Supabase. La eroare, pastram progresul
+    // si acelasi ID de interventie pentru reincercare fara duplicate.
     const photoMeta={interventionId:pending.interventionId,client:selectedClientName,aparat:machineLabel(m),tehnician:technician,data:v("data")};
+    const totalPhotos=pending.photos.length;
+    while(pending.photoIndex<totalPhotos){
+      const photoNumber=pending.photoIndex+1;
+      if(saveBtn)saveBtn.textContent=`Se incarca fotografia ${photoNumber}/${totalPhotos}...`;
+      msg(totalPhotos?`Interventia este salvata. Se incarca fotografia ${photoNumber} din ${totalPhotos}...`:"Se finalizeaza interventia...",true);
+      await uploadInterventionPhotoFile(pending.photos[pending.photoIndex],photoMeta,pending.photoIndex);
+      pending.photoIndex++;
+    }
     if(!Array.isArray(db.Interventii))db.Interventii=[];
-    db.Interventii.unshift(pending.rec);
+    if(!pending.localInserted){db.Interventii.unshift(pending.rec);pending.localInserted=true;}
     if(interventionType==="Schimbare filtru" && !pending.localStockApplied){
       const stockLocal=(db.Stoc||[]).find(x=>String(x.Produs||x.produs||"").toLowerCase()===tip.toLowerCase());
       if(stockLocal)stockLocal.Consum=Number(stockLocal.Consum||stockLocal.consum||0)+1;
@@ -3652,10 +3660,7 @@ async function saveIntervention(){
     window.__ofreshPendingIntervention=null;
     closeModal();
     if(techSession)showTechnicianHome();
-    msg("Interventia a fost salvata. Poti continua cu urmatorul aparat.",true);
-    if(photosToUpload.length){
-      (async()=>{let uploaded=0;const failed=[];for(let i=0;i<photosToUpload.length;i++){try{await uploadInterventionPhotoFile(photosToUpload[i],photoMeta,i);uploaded++;}catch(err){console.error("[OFRESH TECH PHOTO]",err);failed.push({index:i+1,name:photosToUpload[i]?.name||"fotografie",error:err?.message||"eroare"});}}console.info("[OFRESH TECH PERF]",{phase:"background-photo-upload-complete",uploaded,total:photosToUpload.length,failed});if(failed.length)msg(`Interventia este salvata. Fotografii incarcate: ${uploaded}/${photosToUpload.length}. Verifica fotografiile care au esuat.`,false);else if(photosToUpload.length>1)msg(`Interventia este salvata cu ${uploaded} fotografii.`,true);})();
-    }
+    msg(totalPhotos?`Interventia a fost salvata cu toate cele ${totalPhotos} fotografii.`:"Interventia a fost salvata.",true);
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
   }finally{
