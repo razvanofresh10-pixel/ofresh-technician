@@ -997,7 +997,8 @@ function mergeClientDataFromLoadedSheets(){
     else {
       const x = clientMap.get(key);
       for(const k of ["Adresa","Zona","Oras","Judet","Telefon","Email","Latitudine","Longitudine","Persoana contact"]){ if(!x[k] && c[k]) x[k]=c[k]; }
-      // Pastreaza un ID stabil deja existent; completeaza doar daca lipseste.      if(!x["ID Locatie"] && c["ID Locatie"]) x["ID Locatie"]=c["ID Locatie"];
+      // Pastreaza un ID stabil deja existent; completeaza doar daca lipseste.
+      if(!x["ID Locatie"] && c["ID Locatie"]) x["ID Locatie"]=c["ID Locatie"];
       if(!x["ID Client"] && c["ID Client"]) x["ID Client"]=c["ID Client"];
     }
   }
@@ -1997,6 +1998,7 @@ function ofreshExcelDetails(r){
 }
 function ofreshProducer(r){const d=ofreshExcelDetails(r);return d&&d.producer?d.producer:(r?.Producator||r?.producator||"");}
 function ofreshEquipmentType(r){const d=ofreshExcelDetails(r);return d&&d.equipment?d.equipment:(r?.["Tip Echipament"]||r?.tipEchipament||"");}
+
 // Acces ascuns la sincronizare: caseta OFRESH din partea de jos a meniului.
 async function openHiddenSyncMenu(event){
   if(event){event.preventDefault();event.stopPropagation();}
@@ -2688,7 +2690,7 @@ function stockGroups(){
 function stockRows(){return stockGroups().filter(matches)}
 function stockAvailable(r){return Math.max(0,(Number(r.Cantitate||r.cantitate||0)||0)-(Number(r.Consum||r.consum||r.Consumat||r.consumat||0)||0))}
 function stockPage(){const stockLoaded=typeof ofreshLoadedSheets!=="undefined" && ofreshLoadedSheets.has("Stoc");const rows=stockRows();document.getElementById("app").innerHTML=pageHero("GESTIUNE","Stoc","Gestiunea stocului de filtre si evidenta consumului.",`<button class="primaryButton" onclick="openStoc()">+ Adauga in stoc</button>`)+`<section class="panel"><div class="panelHeader"><div><h3>Stoc disponibil</h3><p>Filtre disponibile pentru interventiile tehnice.</p></div></div>${rows.length?`<div class="tableWrap"><table class="table"><thead><tr><th>Tip filtru</th><th>Intrat</th><th>Consum</th><th>Disponibil</th><th>Furnizor</th><th>Factura</th><th>Data</th><th>Actiuni</th></tr></thead><tbody>${rows.map(s=>`<tr><td><strong>${esc(s.Produs||s.produs||s.tip||"")}</strong></td><td>${Number(s.Cantitate||s.cantitate||0)}</td><td>${Number(s.Consum||s.consum||s.Consumat||s.consumat||0)}</td><td><span class="badge">${stockAvailable(s)}</span></td><td>${esc(s.Furnizor||s.furnizor||"")}</td><td>${esc(s.Factura||s.factura||"")}</td><td>${esc(s.Data||s.data||s["Data actualizare"]||"")}</td><td><button class="secondaryButton" onclick='openStoc(${JSON.stringify(s)})'>Modifica</button></td></tr>`).join("")}</tbody></table></div>`:(!stockLoaded?'<div class="emptyState">Se incarca stocul...</div>':'<div class="emptyState">Stocul de filtre este gol. Adauga filtrele receptionate pentru a putea urmari consumul.</div>')}</section><section class="panel"><div class="panelHeader"><div><h3>Situatie rapida</h3><p>Stoc disponibil pe fiecare tip de filtru.</p></div></div><div class="reportGrid">${filterTypes.map(t=>`<div class="reportCard"><span>${esc(t)}</span><strong>${(db.Stoc||[]).filter(s=>String(s.Produs||s.produs||s.tip||"").toLowerCase()===t.toLowerCase()).reduce((n,s)=>n+stockAvailable(s),0)}</strong><small>bucati disponibile</small></div>`).join("")}</div></section>`}
-async function reportsPage(){document.getElementById("app").innerHTML="<div class=loading>Se incarca rapoartele...</div>";await ensureAdminSheetList(["Clienti","Aparate","Interventii","Filtre","Stoc"]);const loc=db.Clienti||[],mac=db.Aparate||[],ints=db.Interventii||[],fl=db.Filtre||[],st=db.Stoc||[],bill=ints.filter(i=>i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA").length;document.getElementById("app").innerHTML=pageHero("ANALIZA","Rapoarte","Rezumat operational pentru baza OFRESH","")+`<section class="reportGrid"><div class="reportCard"><span>Clienti</span><strong>${loc.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Aparate</span><strong>${mac.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Interventii</span><strong>${ints.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Filtre</span><strong>${fl.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>De facturat</span><strong>${bill}</strong><small>interventii</small></div><div class="reportCard"><span>Nu se factureaza</span><strong>${ints.length-bill}</strong><small>interventii</small></div><div class="reportCard"><span>Stoc</span><strong>${st.length}</strong><small>pozitii</small></div></section><section class="panel"><div class="panelHeader"><div><h3>Export rapoarte</h3><p>Toate exporturile OFRESH sunt centralizate aici.</p></div></div><div class="quickActions"><button class="primaryButton" onclick="exportCompleteWorkbook()">Export complet OFRESH</button><button class="secondaryButton" onclick="exportAllClients()">Export Clienti</button><button class="secondaryButton" onclick="exportSheet('Aparate','OFRESH_Aparate.xlsx')">Export Aparate</button><button class="secondaryButton" onclick="exportSheet('Interventii','OFRESH_Interventii.xlsx')">Export Interventii</button><button class="secondaryButton" onclick="exportSheet('Interventii Espressoare','OFRESH_Interventii_Espressoare.xlsx')">Export Interventii Espressoare</button><button class="secondaryButton" onclick="exportSheet('Filtre','OFRESH_Filtre.xlsx')">Export Filtre</button><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button><button class="secondaryButton" onclick="exportSheet('Stoc','OFRESH_Stoc.xlsx')">Export Stoc</button></div></section><section class="panel"><h3>Ce urmarim</h3><div class="reportList"><div>• Aparatele instalate si statusul lor</div><div>• Interventiile si istoricul tehnic</div><div>• Schimbarile de filtre si scadentele</div><div>• Situatia clientilor si a stocului</div><div>• Interventiile care trebuie facturate</div></div></section>`}
+async function reportsPage(){document.getElementById("app").innerHTML="<div class=loading>Se incarca rapoartele...</div>";await ensureAdminSheetList(["Clienti","Aparate","Interventii","Filtre","Stoc"]);if(current!=="rapoarte")return;const loc=db.Clienti||[],mac=db.Aparate||[],ints=db.Interventii||[],fl=db.Filtre||[],st=db.Stoc||[],bill=ints.filter(i=>i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA").length;document.getElementById("app").innerHTML=pageHero("ANALIZA","Rapoarte","Rezumat operational pentru baza OFRESH","")+`<section class="reportGrid"><div class="reportCard"><span>Clienti</span><strong>${loc.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Aparate</span><strong>${mac.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Interventii</span><strong>${ints.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>Filtre</span><strong>${fl.length}</strong><small>inregistrari</small></div><div class="reportCard"><span>De facturat</span><strong>${bill}</strong><small>interventii</small></div><div class="reportCard"><span>Nu se factureaza</span><strong>${ints.length-bill}</strong><small>interventii</small></div><div class="reportCard"><span>Stoc</span><strong>${st.length}</strong><small>pozitii</small></div></section><section class="panel"><div class="panelHeader"><div><h3>Export rapoarte</h3><p>Toate exporturile OFRESH sunt centralizate aici.</p></div></div><div class="quickActions"><button class="primaryButton" onclick="exportCompleteWorkbook()">Export complet OFRESH</button><button class="secondaryButton" onclick="exportAllClients()">Export Clienti</button><button class="secondaryButton" onclick="exportSheet('Aparate','OFRESH_Aparate.xlsx')">Export Aparate</button><button class="secondaryButton" onclick="exportSheet('Interventii','OFRESH_Interventii.xlsx')">Export Interventii</button><button class="secondaryButton" onclick="exportSheet('Interventii Espressoare','OFRESH_Interventii_Espressoare.xlsx')">Export Interventii Espressoare</button><button class="secondaryButton" onclick="exportSheet('Filtre','OFRESH_Filtre.xlsx')">Export Filtre</button><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button><button class="secondaryButton" onclick="exportSheet('Stoc','OFRESH_Stoc.xlsx')">Export Stoc</button></div></section><section class="panel"><h3>Ce urmarim</h3><div class="reportList"><div>• Aparatele instalate si statusul lor</div><div>• Interventiile si istoricul tehnic</div><div>• Schimbarile de filtre si scadentele</div><div>• Situatia clientilor si a stocului</div><div>• Interventiile care trebuie facturate</div></div></section>`}
 function userRightsList(){return [
   ["Dashboard","Dashboard"],["Clienti","Clienti"],["Aparate","Aparate"],["Export Aparate","Export Aparate"],
   ["Interventii","Interventii"],["Service Espressoare","Service Espressoare"],["Filtre","Filtre / Istoric filtre"],["Stoc","Stoc"],["Tehnicieni","Tehnicieni"],
@@ -2995,7 +2997,8 @@ async function saveMachine(old){
 
   // Salvarea in Google Sheets ruleaza in fundal, fara delay pentru utilizator.
   try{
-    await rawSave("Aparate",rec,idField,idValue);  }catch(e){
+    await rawSave("Aparate",rec,idField,idValue);
+  }catch(e){
     // Revenim la mesaj de eroare, dar pastram datele locale pentru a nu pierde munca utilizatorului.
     msg((e&&e.message)||"Nu am putut salva aparatul in Google Sheets.",false);
   }
@@ -3994,7 +3997,8 @@ function filerAllLocations(){
   const allowedZones=new Set((filerSession?.zones||[]).map(filerNormalizeAccessValue).filter(Boolean));
   if(!allowedTypes.size||!allowedZones.size)return [];
   return raw.map(location=>{
-    const machines=(Array.isArray(location?.machines)?location.machines:[]).filter(machine=>{      const type=filerNormalizeAccessValue(machine?.['Tip Echipament']||machine?.['Tip echipament']||machine?.Echipament||'');
+    const machines=(Array.isArray(location?.machines)?location.machines:[]).filter(machine=>{
+      const type=filerNormalizeAccessValue(machine?.['Tip Echipament']||machine?.['Tip echipament']||machine?.Echipament||'');
       const zone=filerNormalizeAccessValue(machine?.Zona||machine?.zona||machine?.Zone||'');
       return filerIsEspressoRecord(machine)&&filerIsActiveRecord(machine)&&allowedTypes.has(type)&&allowedZones.has(zone);
     });
@@ -4808,7 +4812,7 @@ else if(publicParams.get("m")|| (publicParams.get("public")==="1"&&(publicParams
 else {
   if("serviceWorker" in navigator && location.protocol!=="file:"){navigator.serviceWorker.register("ofresh-sw.js").catch(e=>console.warn("OFRESH PWA:",e));}
   if(location.hash.includes("access_token=") || location.hash.includes("type=recovery") || location.hash.includes("error_code=")){ initPasswordRecovery(); }
-  else if(publicParams.get("filer")==="1"){setTimeout(openFilerLogin,50);}
+  else if(publicParams.get("filer")==="1"){setTimeout(openTechLogin,50);}
   else if(publicParams.get("tehnician")==="1"){setTimeout(openTechLogin,50);}
   else if(publicParams.get("comercial")==="1"){setTimeout(openCommercial,50);}
   else if(publicParams.get("administrator")==="1"||publicParams.get("admin")==="1"){setTimeout(openAdminLogin,50);}
@@ -4993,7 +4997,8 @@ body.ofreshAccess .accessVisualFinal::before,body.ofreshAccess .accessVisualFina
   border-radius:22px!important;background:#fff!important;color:#17202a!important;
   box-shadow:0 24px 80px rgba(0,0,0,.45)!important;border:1px solid rgba(0,0,0,.08)!important;
 }
-#techLoginScreen .techLoginLogo{font-weight:900;letter-spacing:.12em;font-size:25px;text-align:center;margin-bottom:6px}#techLoginScreen .techLoginEyebrow{text-align:center;font-size:11px;font-weight:800;letter-spacing:.14em;opacity:.62;margin-bottom:8px}
+#techLoginScreen .techLoginLogo{font-weight:900;letter-spacing:.12em;font-size:25px;text-align:center;margin-bottom:6px}
+#techLoginScreen .techLoginEyebrow{text-align:center;font-size:11px;font-weight:800;letter-spacing:.14em;opacity:.62;margin-bottom:8px}
 #techLoginScreen h2{text-align:center;margin:0 0 20px;font-size:25px}
 #techLoginScreen .techLoginField{margin:0 0 13px}
 #techLoginScreen label{display:block;font-size:13px;font-weight:800;margin-bottom:6px}
