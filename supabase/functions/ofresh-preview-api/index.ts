@@ -165,7 +165,7 @@ async function main(req:Request) {
   const sb=createClient(url,key,{auth:{persistSession:false}});
   const body=req.method==="GET"?Object.fromEntries(new URL(req.url).searchParams):await req.json().catch(()=>{throw new Error("Corpul cererii nu contine JSON valid.");});
   const action=String(body.action||"read");
-  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","listMobileProvisionCandidates","listMobileLinkedUsers","listCommercialProvisionCandidates","filerAssignmentData","mobileLogin","mobileLogout","mobileInterventionHistory","filerEnsureAccessColumns","checkFilterStock"]);
+  const previewReadActions=new Set(["publicMachine","whoami","read","bootstrap","readSheets","dashboardData","commercialData","commercialHistory","commercialEspressoHistory","technicianData","filerData","filerAccessOptions","findAparat","searchAparate","interventionExportData","listMobileProvisionCandidates","listMobileLinkedUsers","listCommercialProvisionCandidates","filerAssignmentData","mobileLogin","mobileLogout","mobileInterventionHistory","filerEnsureAccessColumns","checkFilterStock","adminUsage"]);
   const previewWriteActions=new Set(["add","update","delete","importAparateBatch","setMobilePin","provisionMobileUser","provisionCommercialUser","setFilerMachines","filerSaveVisit","filerUploadPhotoChunk","filerFinalizePhotoUpload","filerFinalizePhotoUploads","filerUpdateGps","filerUpdateLocation","filerUpdateMachine","technicianUpdateMachine","technicianCompleteFilterChange","uploadPhoto","uploadPhotoChunk","finalizePhotoUpload","saveGpsLocation"]);
   if(!previewReadActions.has(action) && !previewWriteActions.has(action)) return Response.json({success:false,error:"Acțiunea "+action+" nu este disponibilă în versiunea Preview."},{status:403,headers:CORS});
   // QR/public lookup deliberately exposes only the same limited fields as the legacy publicMachine action.
@@ -214,6 +214,12 @@ async function main(req:Request) {
   if(!assignedRoles.has(role) || !Object.prototype.hasOwnProperty.call(READ_ROLES,role)) return new Response(JSON.stringify({success:false,error:"Rol OFRESH necunoscut sau neautorizat pentru acest cont."}),{status:403,headers:CORS});
   if(action==="whoami") return Response.json({success:true,user:{id:authUser.id,email:authUser.email},profile},{headers:CORS});
   const isAdmin = role === "administrator" || role === "admin";
+  if(action==="adminUsage"){
+    if(!isAdmin) throw new Error("Doar administratorul poate vedea consumul resurselor.");
+    const {data,error}=await sb.rpc("ofresh_usage_snapshot");
+    if(error) throw error;
+    return Response.json({success:true,usage:data,limits:{database_bytes:524288000,storage_bytes:1073741824},coverage:{database:true,storage:true,egress:false,edge_invocations:false,mau:false}},{headers:CORS});
+  }
   if(action==="setMobilePin"){
     if(!isAdmin)throw new Error("Doar administratorul poate seta PIN-ul mobil.");
     const userId=String(body.userId||""),pin=String(body.pin||"");
