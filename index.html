@@ -2663,7 +2663,7 @@ function interventionsPage(){
  ofreshInterventionPage=Math.min(ofreshInterventionPage,historyPages-1);
  const visibleHistory=sorted.slice(ofreshInterventionPage*OFRESH_PAGE_SIZE,(ofreshInterventionPage+1)*OFRESH_PAGE_SIZE);
  document.getElementById("app").innerHTML=pageHero("SERVICE","Interventii","Istoricul lucrarilor si interventiilor tehnice",`<button class="primaryButton" onclick="openIntervention()">+ Inregistreaza interventie</button>`)+
- `<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${sorted.length} interventii</p></div><button class="secondaryButton" onclick="exportInvoice()">Export De facturat</button></div>${sorted.length?`<div class="tableWrap"><table class="table ofreshInterventionsTable"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th><th>Fotografii</th></tr></thead><tbody>${visibleHistory.map(i=>{
+ `<section class="panel"><div class="panelHeader"><div><h3>Istoric interventii</h3><p>${sorted.length} interventii</p></div><button class="secondaryButton" onclick="openInterventionExportModal()">Export</button></div>${sorted.length?`<div class="tableWrap"><table class="table ofreshInterventionsTable"><thead><tr><th>Data</th><th>Aparat</th><th>Client</th><th>Tehnician</th><th>Tip interventie</th><th>Operatiuni</th><th>Filtru</th><th>Urmatoarea interventie</th><th>Facturare</th><th>Fotografii</th></tr></thead><tbody>${visibleHistory.map(i=>{
    const m=machineFor(i), bill=i.deFacturat===true||i.solicitareClient===true||String(i["De facturat"]||"").toUpperCase()==="DA";
    const sf=i.tipFiltru||i["Tip filtru"]||"", next=i.urmatorSchimbFiltru||i["Urmator schimb"]||"";
    const id=norm(i["ID Interventie"]||i["ID interventie"]||i.ID||i.id);
@@ -3870,16 +3870,24 @@ async function exportCompleteWorkbook(){
   }catch(e){msg(e?.message||"Nu am putut genera exportul complet.",false)}
 }
 
-async function exportInvoice(){try{
-  await excelReady();
-  const response=await api({action:"interventionExportData"});
+function openInterventionExportModal(){
+ const root=document.getElementById("modalRoot");if(!root)return;
+ root.innerHTML='<div class="modalBackdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalHeader"><div class="modalBrand"><div class="modalMark">OFRESH</div><h2>Export interventii</h2></div><button class="closeButton" onclick="closeModal()">×</button></div><div class="modalBody"><p class="small">Selecteaza ce interventii doresti sa exporti.</p><div class="quickActions" style="display:grid;grid-template-columns:1fr;gap:10px"><button class="primaryButton" onclick="exportInterventions(0)">Toate interventiile</button><button class="secondaryButton" onclick="exportInterventions(1)">Doar cele de facturat</button><button class="secondaryButton" onclick="exportInterventions(2)">Cele care nu se factureaza</button></div></div><div class="modalFooter"><button class="secondaryButton" onclick="closeModal()">Anuleaza</button></div></div></div>';
+}
+async function exportInterventions(mode=0){
+ try{
+  await excelReady();const response=await api({action:"interventionExportData"});
   if(!response||response.success===false)throw new Error(response?.error||"Nu am putut incarca interventiile.");
-  const source=response.data?.Interventii||[];
-  let photos=response.data?.["Poze Interventii"]||[];
+  const source=response.data?.Interventii||[];let photos=response.data?.["Poze Interventii"]||[];
   if(!photos.length){await ensureAdminSheetList(["Poze Interventii"]);photos=db["Poze Interventii"]||[];}
-  const filtered=source.filter(i=>i.deFacturat===true||i.solicitareClient===true||i.SolicitareClient===true||i["Solicitare client"]===true||String(i["De facturat"]||"").toUpperCase()==="DA"||String(i["SolicitareClient"]||"").toUpperCase()==="DA"||String(i["Solicitare client"]||"").toUpperCase()==="DA");
-  const rows=ofreshAddPhotoDetails(filtered,photos);const ws=ofreshInterventionWorksheet(rows);ofreshStyleWorksheetHeader(ws);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"De facturat");XLSX.writeFile(wb,"OFRESH_De_facturat.xlsx");
-}catch(e){msg(e?.message||"Export Excel necesita conexiune la internet.",false)}}
+  const bill=i=>i.deFacturat===true||i.solicitareClient===true||i.SolicitareClient===true||i["Solicitare client"]===true||String(i["De facturat"]||"").toUpperCase()==="DA"||String(i["SolicitareClient"]||"").toUpperCase()==="DA"||String(i["Solicitare client"]||"").toUpperCase()==="DA";
+  const filtered=mode===1?source.filter(bill):mode===2?source.filter(i=>!bill(i)):source;
+  const rows=ofreshAddPhotoDetails(filtered,photos);const ws=ofreshInterventionWorksheet(rows);ofreshStyleWorksheetHeader(ws);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,mode===1?"De facturat":mode===2?"Nu se factureaza":"Interventii");
+  XLSX.writeFile(wb,mode===1?"OFRESH_De_facturat.xlsx":mode===2?"OFRESH_Nu_se_factureaza.xlsx":"OFRESH_Interventii.xlsx");
+  closeModal();msg("Export generat: "+filtered.length+" interventii.",true);
+ }catch(e){msg(e?.message||"Export Excel necesita conexiune la internet.",false)}
+}
 async function prepareImport(input){try{await excelReady();await ensureAdminSheetList(["Locatii"]);const file=input.files[0];if(!file)return;const data=await file.arrayBuffer(),wb=XLSX.read(data,{type:"array"}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:""});
 const norm=v=>String(v??"").trim();
 const get=(r,names)=>{for(const n of names){if(Object.prototype.hasOwnProperty.call(r,n)&&norm(r[n]))return norm(r[n]);}const keys=Object.keys(r);for(const n of names){const k=keys.find(x=>norm(x).toLowerCase()===norm(n).toLowerCase());if(k&&norm(r[k]))return norm(r[k]);}return ""};
