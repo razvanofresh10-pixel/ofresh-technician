@@ -4648,22 +4648,31 @@ function renderPublicMachineData(data,key,isQrToken=false){
 
 function renderPublicMachineResponse(result){
   if(!result || result.success!==true || !result.machine) return false;
-  const m=result.machine, filters=Array.isArray(result.filters)?result.filters:[];
-  const equipment=String(m["Tip Echipament"]||m["Tip echipament"]||"").trim().toLowerCase();
+  const m=result.machine, filters=Array.isArray(result.filters)?result.filters:[], visits=Array.isArray(result.visits)?result.visits:[];
+  const escText=v=>esc(v==null?"":String(v));
+  const fmtDate=v=>{if(!v)return "—";const d=new Date(v);return isNaN(d)?escText(v):d.toLocaleDateString("ro-RO");};
+  const equipment=String(result.equipmentType||m["Tip echipament"]||m["Tip Echipament"]||"").toLowerCase();
   const machineInfo=[m["Tip aparat"],m.Model,m.Producator].filter(Boolean).join(" ").toLowerCase();
-  const isEspresso=/espresso|espressor|coffee|cafea/.test(equipment)||/espresso|espressor|wmf|schaerer|franke|nivona|saeco|de jong|dejong|genius/.test(machineInfo);
+  const isEspresso=equipment==="espresso"||/espresso|espressor|coffee|cafea/.test(equipment)||/espresso|espressor|wmf|schaerer|franke|nivona|saeco|de jong|dejong|genius/.test(machineInfo);
+  const details=[["Client",m.Client],["Locatie",m.Locatie],["Adresa",m.Adresa],["Oras",m.Oras],["Zona",m.Zona]];
+  const detailHtml=details.filter(x=>x[1]).map(x=>'<p><strong>'+x[0]+':</strong> '+escText(x[1])+'</p>').join("");
   if(isEspresso){
-    const machineName=m["Tip aparat"]||m.Model||m.Producator||"Espressor";
-    const lastVisit=m["Ultima vizita"]||m["Ultima vizită"]||"";
-    document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII APARAT</div><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Denumire aparat:</strong> ${esc(machineName)}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Ultima vizita:</strong> ${esc(lastVisit||"Nu exista vizite inregistrate")}</p></div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>`;
+    const history=visits.length?visits.map(v=>{
+      const ops=Array.isArray(v.Operatiuni)?v.Operatiuni.join(", "):(typeof v.Operatiuni==="object"&&v.Operatiuni?Object.entries(v.Operatiuni).filter(x=>x[1]===true).map(x=>x[0]).join(", "):String(v.Operatiuni||""));
+      const tasks=[ops,v.Descriere,v.Observatii].filter(Boolean).join(" · ");
+      return '<div style="padding:12px 0;border-bottom:1px solid #e5e9e7"><p><strong>'+fmtDate(v.Data)+'</strong> — '+escText(v.Tip||"Mentenanta")+'</p>'+(tasks?'<p>'+escText(tasks)+'</p>':"")+'</div>';
+    }).join(""):'<p>Nu exista interventii/mentenante inregistrate.</p>';
+    document.body.innerHTML='<div class="techOverlay"><div class="techLogin" style="max-width:680px"><div class="techLogo">OFRESH</div><div class="eyebrow">FISA PUBLICA APARAT</div><h2>'+escText(m.Client||"")+'</h2><div class="panel" style="margin:15px 0;text-align:left">'+detailHtml+'<p><strong>Producator:</strong> '+escText(m.Producator||"—")+'</p><p><strong>Model:</strong> '+escText(m.Model||m["Tip aparat"]||"—")+'</p><p><strong>Serie aparat:</strong> '+escText(m["Serie Aparat"]||"—")+'</p><p><strong>Cod OFRESH:</strong> '+escText(m["Cod OFRESH"]||"—")+'</p><p><strong>Ultima interventie:</strong> '+fmtDate(m["Ultima interventie"]||visits[0]?.Data)+'</p><p><strong>Urmatoarea mentenanta:</strong> '+fmtDate(m["Urmatoarea interventie"]||visits.find(v=>v["Urmatoarea interventie"])?.["Urmatoarea interventie"])+'</p></div><div class="panel" style="margin:15px 0;text-align:left"><h3>Istoric interventii si mentenanta</h3>'+history+'</div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>';
     return true;
   }
-  const f=filters.find(x=>String(x.Status||"Activ").toLowerCase()!=="inactiv")||filters[0]||{};
-  const last=f["Data montare"]||f["Data schimbare"]||"";
-  const next=f["Data urmatoarei schimbari"]||f["Data urmatoare schimbare"]||"";
-  let days=""; if(next){const d=new Date(next);if(!isNaN(d))days=Math.ceil((d-new Date())/86400000);}
-  const status=days===""?"":days<0?"DEPASIT":days<=15?"SCHIMBARE APROPIATA":"IN TERMEN";
-  document.body.innerHTML=`<div class="techOverlay"><div class="techLogin" style="max-width:620px"><div class="techLogo">OFRESH</div><div class="eyebrow">INFORMATII FILTRU</div><h2>${esc(m.Client||"")}</h2><div class="panel" style="margin:15px 0;text-align:left"><p><strong>Aparat:</strong> ${esc(m["Tip aparat"]||"")}</p><p><strong>Serie:</strong> ${esc(m["Serie Aparat"]||"")}</p><p><strong>Zona:</strong> ${esc(m.Zona||"")}</p><p><strong>Tip filtru:</strong> ${esc(f["Tip filtru"]||"")}</p><p><strong>Ultimul schimb de filtru:</strong> ${esc(last||"Nu exista inregistrare")}</p><p><strong>Urmatorul schimb de filtru:</strong> ${esc(next||"Nu este calculat")}</p>${days!==""?`<p><strong>Timp ramas:</strong> ${days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile"}</p><p><strong>Status:</strong> ${esc(status)}</p>`:""}</div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>`;
+  const active=filters.find(x=>String(x.Status||"Activ").toLowerCase()!=="inactiv")||filters[0]||{};
+  const last=active["Data schimbare"]||active["Data montare"]||"";
+  const next=active["Data urmatoarei schimbari"]||"";
+  let days="";if(next){const d=new Date(next);if(!isNaN(d))days=Math.ceil((d-new Date())/86400000);}
+  const status=days===""?"NEDOCUMENTAT":days<0?"DEPASIT":days<=15?"SCHIMBARE APROPIATA":"IN TERMEN";
+  const statusColor=days===""?"#64748b":days<0?"#b91c1c":days<=15?"#b45309":"#15803d";
+  const filterHistory=filters.length?filters.map(f=>'<p style="padding:8px 0;border-bottom:1px solid #e5e9e7"><strong>'+escText(f["Tip filtru"]||"Filtru")+'</strong> — schimbat: '+fmtDate(f["Data schimbare"]||f["Data montare"])+'; urmatorul: '+fmtDate(f["Data urmatoarei schimbari"])+'</p>').join(""):'<p>Nu exista istoric de filtre inregistrat.</p>';
+  document.body.innerHTML='<div class="techOverlay"><div class="techLogin" style="max-width:680px"><div class="techLogo">OFRESH</div><div class="eyebrow">FISA PUBLICA APARAT DE APA</div><h2>'+escText(m.Client||"")+'</h2><div class="panel" style="margin:15px 0;text-align:left">'+detailHtml+'<p><strong>Cod OFRESH:</strong> '+escText(m["Cod OFRESH"]||"—")+'</p><p><strong>Aparat / model:</strong> '+escText([m.Producator,m.Model||m["Tip aparat"]].filter(Boolean).join(" ")||"—")+'</p><p><strong>Serie:</strong> '+escText(m["Serie Aparat"]||"—")+'</p><p><strong>Tip filtru instalat:</strong> '+escText(active["Tip filtru"]||"—")+'</p><p><strong>Ultima schimbare filtru:</strong> '+fmtDate(last)+'</p><p><strong>Urmatoarea schimbare:</strong> '+fmtDate(next)+'</p><p><strong>Timp ramas:</strong> '+(days===""?"Nu este calculat":days>=0?days+" zile":"scadenta depasita cu "+Math.abs(days)+" zile")+'</p><p><strong>Status filtru:</strong> <span style="font-weight:700;color:'+statusColor+'">'+status+'</span></p></div><div class="panel" style="margin:15px 0;text-align:left"><h3>Istoric schimbari filtre</h3>'+filterHistory+'</div><p class="small" style="text-align:center">Informatiile sunt actualizate direct din Supabase.</p></div></div>';
   return true;
 }
 async function publicMachinePage(key,isQrToken=false){
