@@ -1235,6 +1235,9 @@ async function go(p){
     cancelAdminModuleWarmup();
   }
   const token=++ofreshNavigationToken;
+  // Lista de tehnicieni trebuie citita proaspat din Supabase la fiecare deschidere.
+  // Evitam afisarea unui cache vechi/gol ramas din incarcarea initiala.
+  if(p==="tehnicieni" && adminSession) ofreshLoadedSheets.delete("Tehnicieni");
   if(adminSession) enterAdminCleanMode();
   document.getElementById("pageTitle").textContent=pages[p]||"";
   document.getElementById("crumb").textContent=pages[p]||"";
