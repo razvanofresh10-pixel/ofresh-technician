@@ -3243,14 +3243,29 @@ function openIntervention(existing={}){
   const photoPreview=document.getElementById("interventionPhotoPreview");
   if(photoInput){
     photoInput.addEventListener("change",()=>{
-      const files=[...photoInput.files||[]].filter(f=>String(f.type||"").startsWith("image/")).slice(0,5);
+      const incoming=[...photoInput.files||[]].filter(f=>String(f.type||"").startsWith("image/"));
+      const files=Array.isArray(window.__ofreshInterventionPhotos)?[...window.__ofreshInterventionPhotos]:[];
+      for(const file of incoming){
+        const duplicate=files.some(x=>x.name===file.name&&x.size===file.size&&x.lastModified===file.lastModified);
+        if(!duplicate&&files.length<5)files.push(file);
+      }
       window.__ofreshInterventionPhotos=files;
-      if(photoPreview) photoPreview.innerHTML=files.map((f,i)=>`<div style="position:relative;border:1px solid #d5dfdc;border-radius:10px;overflow:hidden;background:#fff"><img src="${URL.createObjectURL(f)}" style="width:100%;height:90px;object-fit:cover;display:block"><div style="font-size:11px;padding:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i+1}. ${esc(f.name)}</div></div>`).join("");
-      const hint=document.getElementById("photoUploadHint");
-      if(hint)hint.textContent=files.length?files.length+" fotografii selectate.":"Poti adauga pana la 5 fotografii.";
+      renderInterventionPhotoPreview();
+      photoInput.value="";
     });
   }
   window.__ofreshInterventionPhotos=[];
+  window.renderInterventionPhotoPreview=()=>{
+    const files=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos:[];
+    if(photoPreview)photoPreview.innerHTML=files.map((f,i)=>`<div style="position:relative;border:1px solid #d5dfdc;border-radius:10px;overflow:hidden;background:#fff"><img src="${URL.createObjectURL(f)}" style="width:100%;height:90px;object-fit:cover;display:block"><div style="font-size:11px;padding:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i+1}. ${esc(f.name)}</div><button type="button" class="dangerButton" style="width:100%;padding:5px;border-radius:0" onclick="removeInterventionPhoto(${i})">Elimina</button></div>`).join("");
+    const hint=document.getElementById("photoUploadHint");
+    if(hint)hint.textContent=files.length?`${files.length}/5 fotografii selectate. Poti adauga si altele.`:"Poti adauga pana la 5 fotografii.";
+  };
+  window.removeInterventionPhoto=(index)=>{
+    const files=Array.isArray(window.__ofreshInterventionPhotos)?window.__ofreshInterventionPhotos:[];
+    if(index<0||index>=files.length)return;
+    files.splice(index,1);window.__ofreshInterventionPhotos=files;renderInterventionPhotoPreview();
+  };
 
   const cs=document.getElementById("f_clientInterv");
   const categorySelect=document.getElementById("f_tipAparatInterv");
@@ -3639,7 +3654,7 @@ async function saveIntervention(){
     if(techSession)showTechnicianHome();
     msg("Interventia a fost salvata. Poti continua cu urmatorul aparat.",true);
     if(photosToUpload.length){
-      (async()=>{let uploaded=0;for(let i=0;i<photosToUpload.length;i++){try{await uploadInterventionPhotoFile(photosToUpload[i],photoMeta,i);uploaded++;}catch(err){console.error("[OFRESH TECH PHOTO]",err);msg("Interventia este salvata, dar o fotografie nu s-a putut incarca: "+(err?.message||"eroare"),false);break;}}console.info("[OFRESH TECH PERF]",{phase:"background-photo-upload-complete",uploaded,total:photosToUpload.length});})();
+      (async()=>{let uploaded=0;const failed=[];for(let i=0;i<photosToUpload.length;i++){try{await uploadInterventionPhotoFile(photosToUpload[i],photoMeta,i);uploaded++;}catch(err){console.error("[OFRESH TECH PHOTO]",err);failed.push({index:i+1,name:photosToUpload[i]?.name||"fotografie",error:err?.message||"eroare"});}}console.info("[OFRESH TECH PERF]",{phase:"background-photo-upload-complete",uploaded,total:photosToUpload.length,failed});if(failed.length)msg(`Interventia este salvata. Fotografii incarcate: ${uploaded}/${photosToUpload.length}. Verifica fotografiile care au esuat.`,false);else if(photosToUpload.length>1)msg(`Interventia este salvata cu ${uploaded} fotografii.`,true);})();
     }
   }catch(e){
     msg((e&&e.message)||"Nu am putut salva interventia sau fotografia.",false);
