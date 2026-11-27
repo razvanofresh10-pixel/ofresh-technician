@@ -38,7 +38,7 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Publish live Supabase sync, clean module search and filter alerts (quote fix)
+      - name: Deploy live sync and corrected module refresh patch
         run: python3 scripts/fix-preview-index.py
 
       - name: Upload preview site
