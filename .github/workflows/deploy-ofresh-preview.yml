@@ -38,7 +38,7 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Publish corrected stock-cache and alphabetical-county build
+      - name: Force fresh stock reads and publish alphabetical county fix
         run: python3 scripts/fix-preview-index.py
 
       - name: Upload preview site
