@@ -156,20 +156,20 @@ replace_once(
 
 # Clear stale global search when switching modules.
 replace_once(
-    'async function go(p){\\n  const navigationStarted=performance.now();\\n  current=p;',
-    'async function go(p){\\n  const navigationStarted=performance.now();\\n  const previousPage=current;\\n  if(p!==previousPage) searchTerm="";\\n  current=p;',
+    'async function go(p){\n  const navigationStarted=performance.now();\n  current=p;',
+    'async function go(p){\n  const navigationStarted=performance.now();\n  const previousPage=current;\n  if(p!==previousPage) searchTerm="";\n  current=p;',
     "reset search when changing module"
 )
 # Always re-read module data from Supabase when administrator opens a module.
 replace_once(
-    '  if(adminSession && !commercialSession && p!=="dashboard"){\\n    const required=adminSheetsForModule(p);',
-    '  if(adminSession && !commercialSession && p!=="dashboard"){\\n    const required=adminSheetsForModule(p);\\n    required.forEach(name=>ofreshLoadedSheets.delete(name));',
+    '  if(adminSession && !commercialSession && p!=="dashboard"){\n    const required=adminSheetsForModule(p);',
+    '  if(adminSession && !commercialSession && p!=="dashboard"){\n    const required=adminSheetsForModule(p);\n    required.forEach(name=>ofreshLoadedSheets.delete(name));',
     "force fresh Supabase read on module open"
 )
 # Refresh history and photo sheets too.
 replace_once(
-    '          : ["Interventii"];\\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
-    '          : ["Interventii"];\\n      historyNames.forEach(name=>ofreshLoadedSheets.delete(name));\\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
+    '          : ["Interventii"];\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
+    '          : ["Interventii"];\n      historyNames.forEach(name=>ofreshLoadedSheets.delete(name));\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
     "force fresh intervention and photo reads"
 )
 # Subscribe administrator to database changes so direct Supabase edits/deletes refresh the open module.
@@ -197,7 +197,7 @@ function setupOfreshRealtimeSync(){
 '''
 replace_once(
     'const ofreshLoadedSheets = new Set();',
-    realtime + '\\nconst ofreshLoadedSheets = new Set();',
+    realtime + '\nconst ofreshLoadedSheets = new Set();',
     "add Supabase realtime refresh"
 )
 replace_once(
@@ -207,7 +207,7 @@ replace_once(
 )
 replace_once(
     '  adminSession=null;commercialSession=null;techSession=null;filerSession=null;',
-    '  if(ofreshRealtimeChannel){void ofreshSupabase.removeChannel(ofreshRealtimeChannel);ofreshRealtimeChannel=null;}\\n  if(ofreshRealtimeRefreshTimer){clearTimeout(ofreshRealtimeRefreshTimer);ofreshRealtimeRefreshTimer=null;}\\n  adminSession=null;commercialSession=null;techSession=null;filerSession=null;',
+    '  if(ofreshRealtimeChannel){void ofreshSupabase.removeChannel(ofreshRealtimeChannel);ofreshRealtimeChannel=null;}\n  if(ofreshRealtimeRefreshTimer){clearTimeout(ofreshRealtimeRefreshTimer);ofreshRealtimeRefreshTimer=null;}\n  adminSession=null;commercialSession=null;techSession=null;filerSession=null;',
     "stop realtime on logout"
 )
 # Activate 15-day filter replacement alerts and include filters missing a machine link.
@@ -217,8 +217,8 @@ replace_once(
     "15-day filter warning window"
 )
 replace_once(
-    'const dueSoon=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);return !isNaN(x)&&x>=new Date()&&x<=new Date(Date.now()+30*86400000)}).length;\\n  const expired=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);return !isNaN(x)&&x<new Date()}).length;',
-    'const dueSoon=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.data_urmatoarei_schimbari||f.urmatoarea_schimbare||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);const today=new Date();today.setHours(0,0,0,0);return !isNaN(x)&&x>=today&&x<=new Date(Date.now()+15*86400000)}).length;\\n  const expired=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.data_urmatoarei_schimbari||f.urmatoarea_schimbare||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);const today=new Date();today.setHours(0,0,0,0);return !isNaN(x)&&x<today}).length;\\n  const unlinkedFilters=fl.filter(f=>!(f["ID Aparat"]||f.aparatId||f.aparat_id)).length;\\n  const filterAlertCount=dueSoon+expired+unlinkedFilters;',
+    'const dueSoon=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);return !isNaN(x)&&x>=new Date()&&x<=new Date(Date.now()+30*86400000)}).length;\n  const expired=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);return !isNaN(x)&&x<new Date()}).length;',
+    'const dueSoon=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.data_urmatoarei_schimbari||f.urmatoarea_schimbare||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);const today=new Date();today.setHours(0,0,0,0);return !isNaN(x)&&x>=today&&x<=new Date(Date.now()+15*86400000)}).length;\n  const expired=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.data_urmatoarei_schimbari||f.urmatoarea_schimbare||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);const today=new Date();today.setHours(0,0,0,0);return !isNaN(x)&&x<today}).length;\n  const unlinkedFilters=fl.filter(f=>!(f["ID Aparat"]||f.aparatId||f.aparat_id)).length;\n  const filterAlertCount=dueSoon+expired+unlinkedFilters;',
     "calculate filter alert count"
 )
 replace_once(
