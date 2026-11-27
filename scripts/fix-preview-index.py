@@ -81,8 +81,8 @@ replace_once(
     "exclude stock from cache completeness"
 )
 replace_once(
-    'const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Tehnicieni:db.Tehnicieni||[],',
-    'const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Tehnicieni:db.Tehnicieni||[],',
+    'const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],',
+    'const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Filtre:db.Filtre||[],Tehnicieni:db.Tehnicieni||[],',
     "do not persist stock rows"
 )
 
