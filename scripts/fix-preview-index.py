@@ -103,5 +103,55 @@ replace_once(
     "sort stock county dropdown"
 )
 
+
+# Save machine edits by immutable Supabase UUID, not optional OFRESH code/serial.
+# Serial is allowed to remain blank until a technician visits the machine.
+replace_once(
+    'if(!clientNameValue||!tip||!serie)return msg("Completeaza clientul, tipul aparatului si seria.",false);',
+    'if(!clientNameValue||!tip)return msg("Completeaza clientul si tipul aparatului. Seria poate fi completata ulterior de tehnician.",false);',
+    "allow machine without serial"
+)
+replace_once(
+    """  let idField="Cod OFRESH", idValue=cod;
+  if(old){
+    if(existing["Cod OFRESH"]){idField="Cod OFRESH";idValue=String(existing["Cod OFRESH"]);}
+    else if(existing["Serie Aparat"]){idField="Serie Aparat";idValue=String(existing["Serie Aparat"]);}
+    else {idField="Serie Aparat";idValue=serie;}
+  }else{
+    idField="Cod OFRESH"; idValue="";
+  }""",
+    """  // Existing machines are updated by their immutable Supabase UUID.
+  let idField="ID Aparat", idValue=String(old||"");
+  if(!old){idField="Cod OFRESH";idValue="";}""",
+    "update machine by UUID"
+)
+replace_once(
+    """  // Actualizare instant in interfata: nu asteptam reincarcarea tuturor datelor.
+  const idx=(db.Aparate||[]).findIndex(x=>String(machineId(x)).trim()===String(old||"").trim());
+  if(idx>=0) db.Aparate[idx]={...db.Aparate[idx],...rec};
+  else db.Aparate.push(rec);
+  saveCachedData();
+  closeModal();
+  msg(old?"Aparatul a fost actualizat.":"Aparatul a fost adaugat.");
+
+  // Salvarea in Google Sheets ruleaza in fundal, fara delay pentru utilizator.
+  try{
+    await rawSave("Aparate",rec,idField,idValue);
+  }catch(e){
+    // Revenim la mesaj de eroare, dar pastram datele locale pentru a nu pierde munca utilizatorului.
+    msg((e&&e.message)||"Nu am putut salva aparatul in Google Sheets.",false);
+  }""",
+    """  // Confirmam salvarea in Supabase inainte sa inchidem formularul.
+  try{
+    await rawSave("Aparate",rec,idField,idValue);
+    closeModal();
+    msg(old?"Aparatul a fost actualizat in Supabase.":"Aparatul a fost adaugat in Supabase.");
+    await load();
+  }catch(e){
+    msg((e&&e.message)||"Nu am putut salva aparatul in Supabase. Datele nu au fost confirmate.",false);
+    if(btn){btn.disabled=false;btn.textContent="Salveaza aparatul";}
+  }""",
+    "wait for confirmed machine save"
+)
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
