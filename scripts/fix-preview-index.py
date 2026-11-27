@@ -234,7 +234,7 @@ replace_once(
 )
 # Replace separate filter and stock exports with one workbook containing two clearly named worksheets.
 replace_once(
-    '<button class="secondaryButton" onclick="exportSheet(\\'Filtre\\',\\'OFRESH_Filtre.xlsx\\')">Export Filtre</button><button class="secondaryButton" onclick="exportSheet(\\'Stoc\\',\\'OFRESH_Stoc.xlsx\\')">Export Stoc</button>',
+    """<button class="secondaryButton" onclick="exportSheet('Filtre','OFRESH_Filtre.xlsx')">Export Filtre</button><button class="secondaryButton" onclick="exportSheet('Stoc','OFRESH_Stoc.xlsx')">Export Stoc</button>""",
     '<button class="secondaryButton" onclick="exportFiltersAndStock()">Export Filtre + Stoc</button>',
     "combine filter and stock exports"
 )
