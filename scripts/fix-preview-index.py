@@ -210,5 +210,26 @@ replace_once(
     '  if(ofreshRealtimeChannel){void ofreshSupabase.removeChannel(ofreshRealtimeChannel);ofreshRealtimeChannel=null;}\\n  if(ofreshRealtimeRefreshTimer){clearTimeout(ofreshRealtimeRefreshTimer);ofreshRealtimeRefreshTimer=null;}\\n  adminSession=null;commercialSession=null;techSession=null;filerSession=null;',
     "stop realtime on logout"
 )
+# Activate 15-day filter replacement alerts and include filters missing a machine link.
+replace_once(
+    'function soonDate(d){if(!d)return false;const x=new Date(d);const now=new Date();const limit=new Date(Date.now()+30*86400000);return x<=limit}',
+    'function soonDate(d){if(!d)return false;const x=new Date(d);const now=new Date();const limit=new Date(Date.now()+15*86400000);return x>=new Date(now.toDateString())&&x<=limit}',
+    "15-day filter warning window"
+)
+replace_once(
+    'const dueSoon=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);return !isNaN(x)&&x>=new Date()&&x<=new Date(Date.now()+30*86400000)}).length;\\n  const expired=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);return !isNaN(x)&&x<new Date()}).length;',
+    'const dueSoon=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.data_urmatoarei_schimbari||f.urmatoarea_schimbare||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);const today=new Date();today.setHours(0,0,0,0);return !isNaN(x)&&x>=today&&x<=new Date(Date.now()+15*86400000)}).length;\\n  const expired=fl.filter(f=>{const d=f["Data urmatoarei schimbari"]||f.data_urmatoarei_schimbari||f.urmatoarea_schimbare||f.scadenta||f.urmatorSchimb;if(!d)return false;const x=new Date(d);const today=new Date();today.setHours(0,0,0,0);return !isNaN(x)&&x<today}).length;\\n  const unlinkedFilters=fl.filter(f=>!(f["ID Aparat"]||f.aparatId||f.aparat_id)).length;\\n  const filterAlertCount=dueSoon+expired+unlinkedFilters;',
+    "calculate filter alert count"
+)
+replace_once(
+    'onclick="go(\\'filtre\\')" title="Alerte filtre">🔔<b>${dueSoon+expired}</b>',
+    'onclick="go(\\'filtre\\')" title="Alerte filtre">🔔<b>${filterAlertCount}</b>',
+    "show filter alerts on bell"
+)
+replace_once(
+    '<strong>${dueSoon+expired}</strong><span>Filtre de verificat</span>',
+    '<strong>${filterAlertCount}</strong><span>Filtre de verificat</span>',
+    "show filter alerts in KPI"
+)
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
