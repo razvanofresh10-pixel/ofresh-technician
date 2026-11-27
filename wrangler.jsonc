@@ -1,10 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dawn-hall-7a4f",
+  "name": "ofresh-service",
   "compatibility_date": "2026-11-27",
-  "assets": {
-    "directory": "./mobile"
-  },
+  "assets": { "directory": "./dist" },
   "preview_urls": true,
   "previews": {}
 }
