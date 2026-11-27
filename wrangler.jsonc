@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ofresh-service",
   "compatibility_date": "2026-11-27",
-  "assets": { "directory": "./mobile" },
+  "assets": { "directory": "./" },
   "preview_urls": true,
   "previews": {}
 }
