@@ -62,5 +62,41 @@ s = s.replace(
     'r.Cantitate||r["Cantitate intrata"]||r.cantitate||r.cantitate_intrata||r.legacy_export_snapshot?.Cantitate||r.legacy_export_snapshot?.["Cantitate intrata"]||0'
 )
 
+
+# Never restore stock rows from localStorage: stock is transactional data and must
+# always be read from Supabase after opening the module.
+replace_once(
+    'db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...cached};',
+    'db={Locatii:[],Clienti:[],Aparate:[],Interventii:[],Filtre:[],Stoc:[],Tehnicieni:[],...cached};db.Stoc=[];',
+    "clear cached stock rows"
+)
+replace_once(
+    'for(const name of savedSheets){',
+    'for(const name of savedSheets){if(name==="Stoc")continue;',
+    "do not mark cached stock as loaded"
+)
+replace_once(
+    'const cacheableSheets=["Locatii","Clienti","Aparate","Filtre","Stoc","Tehnicieni"];',
+    'const cacheableSheets=["Locatii","Clienti","Aparate","Filtre","Tehnicieni"];',
+    "exclude stock from cache completeness"
+)
+replace_once(
+    'const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Stoc:db.Stoc||[],Tehnicieni:db.Tehnicieni||[],',
+    'const payload={Locatii:db.Locatii||[],Clienti:db.Clienti||[],Aparate:db.Aparate||[],Interventii:db.Interventii||[],Filtre:db.Filtre||[],Tehnicieni:db.Tehnicieni||[],',
+    "do not persist stock rows"
+)
+
+# Sort both county picklists alphabetically using Romanian locale rules.
+replace_once(
+    'const OFRESH_COUNTIES=["Alba","Arad","Arges","Bacau","Bihor","Bistrita-Nasaud","Brasov","Braila","Botosani","Bucuresti","Buzau","Caras-Severin","Calarasi","Cluj","Constanta","Covasna","Dambovita","Dolj","Galati","Giurgiu","Gorj","Harghita","Hunedoara","Ialomita","Iasi","Ilfov","Maramures","Mehedinti","Mures","Neamt","Olt","Prahova","Salaj","Satu Mare","Sibiu","Suceava","Teleorman","Timis","Tulcea","Vaslui","Valcea","Vrancea"];',
+    'const OFRESH_COUNTIES=["Alba","Arad","Arges","Bacau","Bihor","Bistrita-Nasaud","Brasov","Braila","Botosani","Bucuresti","Buzau","Caras-Severin","Calarasi","Cluj","Constanta","Covasna","Dambovita","Dolj","Galati","Giurgiu","Gorj","Harghita","Hunedoara","Ialomita","Iasi","Ilfov","Maramures","Mehedinti","Mures","Neamt","Olt","Prahova","Salaj","Satu Mare","Sibiu","Suceava","Teleorman","Timis","Tulcea","Vaslui","Valcea","Vrancea"].sort((a,b)=>a.localeCompare(b,"ro",{sensitivity:"base"}));',
+    "sort global county dropdown"
+)
+replace_once(
+    'const stockCounties=["Alba","Arad","Arges","Bacau","Bihor","Bistrita-Nasaud","Botosani","Brasov","Braila","Buzau","Caras-Severin","Calarasi","Cluj","Constanta","Covasna","Dambovita","Dolj","Galati","Giurgiu","Gorj","Harghita","Hunedoara","Ialomita","Iasi","Ilfov","Maramures","Mehedinti","Mures","Neamt","Olt","Prahova","Satu Mare","Salaj","Sibiu","Suceava","Teleorman","Timis","Tulcea","Vaslui","Valcea","Vrancea","Bucuresti"];',
+    'const stockCounties=["Alba","Arad","Arges","Bacau","Bihor","Bistrita-Nasaud","Botosani","Brasov","Braila","Buzau","Caras-Severin","Calarasi","Cluj","Constanta","Covasna","Dambovita","Dolj","Galati","Giurgiu","Gorj","Harghita","Hunedoara","Ialomita","Iasi","Ilfov","Maramures","Mehedinti","Mures","Neamt","Olt","Prahova","Satu Mare","Salaj","Sibiu","Suceava","Teleorman","Timis","Tulcea","Vaslui","Valcea","Vrancea","Bucuresti"].sort((a,b)=>a.localeCompare(b,"ro",{sensitivity:"base"}));',
+    "sort stock county dropdown"
+)
+
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
