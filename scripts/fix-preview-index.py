@@ -226,10 +226,5 @@ replace_once(
     """onclick="go('filtre')" title="Alerte filtre">🔔<b>${filterAlertCount}</b>""",
     "show filter alerts on bell"
 )
-replace_once(
-    '<strong>${dueSoon+expired}</strong><span>Filtre de verificat</span>',
-    '<strong>${filterAlertCount}</strong><span>Filtre de verificat</span>',
-    "show filter alerts in KPI"
-)
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
