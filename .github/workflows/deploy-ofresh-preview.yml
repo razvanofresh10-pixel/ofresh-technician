@@ -38,7 +38,7 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Publish confirmed machine-edit saves and optional serial support
+      - name: Remove serial-required validation and publish corrected machine form
         run: python3 scripts/fix-preview-index.py
 
       - name: Upload preview site
