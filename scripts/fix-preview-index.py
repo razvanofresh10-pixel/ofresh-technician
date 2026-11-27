@@ -71,6 +71,11 @@ replace_once(
     "clear cached stock rows"
 )
 replace_once(
+    'const missing=requested.filter(name=>!ofreshLoadedSheets.has(name) && !ofreshSheetLoadPromises.has(name));',
+    'const missing=requested.filter(name=>(name==="Stoc" || !ofreshLoadedSheets.has(name)) && !ofreshSheetLoadPromises.has(name));',
+    "always refresh stock from Supabase"
+)
+replace_once(
     'for(const name of savedSheets){',
     'for(const name of savedSheets){if(name==="Stoc")continue;',
     "do not mark cached stock as loaded"
