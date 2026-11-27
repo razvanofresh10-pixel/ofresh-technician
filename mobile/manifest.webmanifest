@@ -1,7 +1,7 @@
 {
-  "name": "OFRESH Technician & Filer",
-  "short_name": "OFRESH",
-  "description": "Aplicatia mobila OFRESH pentru tehnicieni si fileri",
+  "name": "OFRESH Service",
+  "short_name": "OFRESH Service",
+  "description": "Aplicatia OFRESH pentru tehnicieni si fileri",
   "lang": "ro",
   "start_url": "./index.html",
   "scope": "./",
