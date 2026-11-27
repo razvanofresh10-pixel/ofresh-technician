@@ -172,5 +172,43 @@ replace_once(
     '          : ["Interventii"];\\n      historyNames.forEach(name=>ofreshLoadedSheets.delete(name));\\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
     "force fresh intervention and photo reads"
 )
+# Subscribe administrator to database changes so direct Supabase edits/deletes refresh the open module.
+realtime = '''
+let ofreshRealtimeChannel=null;
+let ofreshRealtimeRefreshTimer=null;
+function setupOfreshRealtimeSync(){
+  if(ofreshRealtimeChannel){void ofreshSupabase.removeChannel(ofreshRealtimeChannel);ofreshRealtimeChannel=null;}
+  if(!adminSession || commercialSession || techSession)return;
+  const tableSheets={aparate:["Aparate"],locatii:["Locatii"],clienti:["Clienti"],interventii:["Interventii"],interventii_espressoare:["Interventii Espressoare"],filtre:["Filtre"],stoc:["Stoc"],tehnicieni:["Tehnicieni"],poze_interventii:["Poze Interventii"],poze_interventii_espressoare:["Poze Interventii Espressoare"]};
+  let channel=ofreshSupabase.channel("ofresh-admin-live-sync");
+  Object.entries(tableSheets).forEach(([table,sheets])=>{
+    channel=channel.on("postgres_changes",{event:"*",schema:"public",table},()=>{
+      sheets.forEach(name=>ofreshLoadedSheets.delete(name));
+      if(ofreshRealtimeRefreshTimer)clearTimeout(ofreshRealtimeRefreshTimer);
+      ofreshRealtimeRefreshTimer=setTimeout(()=>{
+        ofreshRealtimeRefreshTimer=null;
+        if(!adminSession || commercialSession || techSession)return;
+        if(current==="dashboard")loadAdminDashboard(true);else void go(current);
+      },300);
+    });
+  });
+  ofreshRealtimeChannel=channel.subscribe();
+}
+'''
+replace_once(
+    'const ofreshLoadedSheets = new Set();',
+    realtime + '\\nconst ofreshLoadedSheets = new Set();',
+    "add Supabase realtime refresh"
+)
+replace_once(
+    'restoreCachedData(u);closeModal();enterAdminCleanMode();current="dashboard";render();',
+    'restoreCachedData(u);setupOfreshRealtimeSync();closeModal();enterAdminCleanMode();current="dashboard";render();',
+    "start realtime after admin login"
+)
+replace_once(
+    '  adminSession=null;commercialSession=null;techSession=null;filerSession=null;',
+    '  if(ofreshRealtimeChannel){void ofreshSupabase.removeChannel(ofreshRealtimeChannel);ofreshRealtimeChannel=null;}\\n  if(ofreshRealtimeRefreshTimer){clearTimeout(ofreshRealtimeRefreshTimer);ofreshRealtimeRefreshTimer=null;}\\n  adminSession=null;commercialSession=null;techSession=null;filerSession=null;',
+    "stop realtime on logout"
+)
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
