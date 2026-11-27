@@ -38,7 +38,7 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Repair stock page template and legacy stock fields before publishing
+      - name: Refresh stock from Supabase and sort county dropdowns before publishing
         run: python3 scripts/fix-preview-index.py
 
       - name: Upload preview site
