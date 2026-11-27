@@ -226,5 +226,11 @@ replace_once(
     """onclick="go('filtre')" title="Alerte filtre">🔔<b>${filterAlertCount}</b>""",
     "show filter alerts on bell"
 )
+# Resolve filter client and location through the linked machine, not filter.ID Client (which is not a filter column).
+replace_once(
+    'const c=clientIndex.get(String(f["ID Locatie"]||f["ID Client"]||""));return `<tr><td>${esc(machineLabel(m||{})||f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(c?clientName(c):(f.Client||f.client||f.Locatie||f.locatie||""))}</td>',
+    'const c=clientIndex.get(String(m?.["ID Client"]||m?.client_id||""));const client=machineClient(m||{})|| (c?clientName(c):"") || f.Client||f.client||"";return `<tr><td>${esc(machineLabel(m||{})||f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(client)}</td>',
+    "show client name from linked machine on filter monitor"
+)
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
