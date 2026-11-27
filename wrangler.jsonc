@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dawn-hall-7a4f",
+  "compatibility_date": "2026-11-27",
+  "assets": {
+    "directory": "./mobile"
+  },
+  "preview_urls": true,
+  "previews": {}
+}
