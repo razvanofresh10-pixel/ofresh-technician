@@ -154,5 +154,23 @@ replace_once(
     "wait for confirmed machine save"
 )
 
+# Clear stale global search when switching modules.
+replace_once(
+    'async function go(p){\\n  const navigationStarted=performance.now();\\n  current=p;',
+    'async function go(p){\\n  const navigationStarted=performance.now();\\n  const previousPage=current;\\n  if(p!==previousPage) searchTerm="";\\n  current=p;',
+    "reset search when changing module"
+)
+# Always re-read module data from Supabase when administrator opens a module.
+replace_once(
+    '  if(adminSession && !commercialSession && p!=="dashboard"){\\n    const required=adminSheetsForModule(p);',
+    '  if(adminSession && !commercialSession && p!=="dashboard"){\\n    const required=adminSheetsForModule(p);\\n    required.forEach(name=>ofreshLoadedSheets.delete(name));',
+    "force fresh Supabase read on module open"
+)
+# Refresh history and photo sheets too.
+replace_once(
+    '          : ["Interventii"];\\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
+    '          : ["Interventii"];\\n      historyNames.forEach(name=>ofreshLoadedSheets.delete(name));\\n      const fastNames=required.filter(name=>!historyNames.includes(name));',
+    "force fresh intervention and photo reads"
+)
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
