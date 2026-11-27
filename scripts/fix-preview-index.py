@@ -293,7 +293,7 @@ async function exportFiltersAndStock(){
 '''
 replace_once(
     'async function reportsPage(){',
-    export_fn + '\\nasync function reportsPage(){',
+    export_fn + chr(10) + 'async function reportsPage(){',
     "add combined filter and stock export"
 )
 
