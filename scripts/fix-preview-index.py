@@ -297,5 +297,33 @@ replace_once(
     "add combined filter and stock export"
 )
 
+# Compress every technician/intervention photo client-side before upload.
+# Keep enough detail for service evidence while targeting at most 75 KB per photo.
+replace_once(
+    'let max=640, quality=.55, data="";',
+    'let max=960, quality=.46, data="";',
+    "increase photo detail while lowering file-size target"
+)
+replace_once(
+    'if(data.length<=150000)break;',
+    'if(data.length<=75000)break;',
+    "target 75 KB compressed photos"
+)
+replace_once(
+    'if(quality>.24)quality-=.08;',
+    'if(quality>.26)quality-=.05;',
+    "adaptive JPEG quality for smaller photos"
+)
+replace_once(
+    'else {max=Math.max(240,Math.round(max*.82));quality=.42;}',
+    'else {max=Math.max(400,Math.round(max*.88));quality=.38;}',
+    "reduce image dimensions only when needed"
+)
+replace_once(
+    'if(!data||data.length>150000)return reject(new Error("Fotografia nu poate fi redusa suficient. Incearca o poza mai mica."));',
+    'if(!data||data.length>75000)return reject(new Error("Fotografia nu poate fi comprimata suficient. Incearca sa refaci fotografia cu telefonul."));',
+    "enforce compressed photo size limit"
+)
+
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
