@@ -222,8 +222,8 @@ replace_once(
     "calculate filter alert count"
 )
 replace_once(
-    'onclick="go(\\'filtre\\')" title="Alerte filtre">🔔<b>${dueSoon+expired}</b>',
-    'onclick="go(\\'filtre\\')" title="Alerte filtre">🔔<b>${filterAlertCount}</b>',
+    """onclick="go('filtre')" title="Alerte filtre">🔔<b>${dueSoon+expired}</b>""",
+    """onclick="go('filtre')" title="Alerte filtre">🔔<b>${filterAlertCount}</b>""",
     "show filter alerts on bell"
 )
 replace_once(
