@@ -153,5 +153,17 @@ replace_once(
   }""",
     "wait for confirmed machine save"
 )
+
+# Remove any remaining serial-required validation paired with the exact blocking message.
+# The technician may enter the serial after visiting the machine.
+import re
+s, serial_validation_count = re.subn(
+    r'if\\s*\\((?P<condition>[^)]*(?:serie|Serie)[^)]*)\\)\\s*return\\s+msg\\(\\s*["\\\']Completeaza clientul, tipul aparatului si seria\\.["\\\']\\s*,\\s*false\\s*\\)\\s*;',
+    'if(!clientNameValue||!tip)return msg("Completeaza clientul si tipul aparatului. Seria poate fi completata ulterior de tehnician.",false);',
+    s
+)
+if serial_validation_count < 1:
+    raise SystemExit("serial validation: expected at least one blocking validation to replace; refusing to publish.")
+
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
