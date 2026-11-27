@@ -232,5 +232,70 @@ replace_once(
     'const c=clientIndex.get(String(m?.["ID Client"]||m?.client_id||""));const client=machineClient(m||{})|| (c?clientName(c):"") || f.Client||f.client||"";return `<tr><td>${esc(machineLabel(m||{})||f.Aparat||f.aparat||f["ID Aparat"]||f.aparatId||"")}</td><td>${esc(client)}</td>',
     "show client name from linked machine on filter monitor"
 )
+# Replace separate filter and stock exports with one workbook containing two clearly named worksheets.
+replace_once(
+    '<button class="secondaryButton" onclick="exportSheet(\\'Filtre\\',\\'OFRESH_Filtre.xlsx\\')">Export Filtre</button><button class="secondaryButton" onclick="exportSheet(\\'Stoc\\',\\'OFRESH_Stoc.xlsx\\')">Export Stoc</button>',
+    '<button class="secondaryButton" onclick="exportFiltersAndStock()">Export Filtre + Stoc</button>',
+    "combine filter and stock exports"
+)
+export_fn = '''
+async function exportFiltersAndStock(){
+ try{
+  await excelReady();
+  const names=["Filtre","Stoc","Aparate","Locatii","Clienti"];
+  const response=await api({action:"readSheets",sheets:JSON.stringify(names)});
+  if(!response||response.success!==true)throw new Error(response?.error||"Nu am putut incarca filtrele si stocul.");
+  const machines=Array.isArray(response.Aparate)?response.Aparate:[];
+  const locations=Array.isArray(response.Locatii)?response.Locatii:[];
+  const clients=Array.isArray(response.Clienti)?response.Clienti:[];
+  const machineById=new Map(machines.map(m=>[String(m["ID Aparat"]||m.id||""),m]));
+  const locationById=new Map(locations.map(l=>[String(l["ID Locatie"]||l.id||""),l]));
+  const clientById=new Map(clients.map(c=>[String(c["ID Client"]||c.id||""),c]));
+  const filters=(response.Filtre||[]).map(f=>{
+   const m=machineById.get(String(f["ID Aparat"]||f.aparat_id||""))||{};
+   const loc=locationById.get(String(m["ID Locatie"]||m.locatie_id||f["ID Locatie"]||""))||{};
+   const client=clientById.get(String(m["ID Client"]||m.client_id||loc["ID Client"]||loc.client_id||""))||{};
+   return {
+    "Client":m.Client||m.client_nume||loc.Client||client.Client||client.nume||f.Client||"",
+    "Locatie":loc["Nume locatie"]||loc.nume||"",
+    "Aparat":machineLabel(m)||f.Aparat||"",
+    "Cod OFRESH":m["Cod OFRESH"]||m.cod_ofresh||"",
+    "Serie aparat":m.Serie||m.serie||"",
+    "Tip filtru":f["Tip filtru"]||f.tip_filtru||"",
+    "Data montarii":f["Data montare"]||f["Data montarii"]||f.data_montare||f.data_montarii||"",
+    "Data urmatoarei schimbari":f["Data urmatoarei schimbari"]||f.urmatoarea_schimbare||f.data_urmatoarei_schimbari||"",
+    "Status":f.Status||f.status||""
+   };
+  });
+  const stock=(response.Stoc||[]).map(r=>({
+   "Tip filtru / produs":r.Denumire||r.denumire||r.Produs||r.produs||"",
+   "Cod produs":r["Cod produs"]||r.cod_produs||"",
+   "Judet / locatie":r.Locatie||r.locatie||r.Judet||r.judet||"",
+   "Cantitate intrata":r["Cantitate intrata"]??r.cantitate_intrata??r.Cantitate??r.cantitate??0,
+   "Consum":r.Consum??r.consum??0,
+   "Stoc disponibil":r["Stoc actual"]??r.stoc_actual??Math.max(0,Number(r["Cantitate intrata"]??r.cantitate_intrata??r.Cantitate??r.cantitate??0)-Number(r.Consum??r.consum??0)),
+   "Unitate":r.Unitate||r.unitate||"",
+   "Furnizor":r.Furnizor||r.furnizor||"",
+   "Factura":r.Factura||r.factura||"",
+   "Data intrarii":r["Data intrare"]||r.data_intrare||"",
+   "Observatii":r.Observatii||r.observatii||""
+  }));
+  const wb=XLSX.utils.book_new();
+  const wsF=XLSX.utils.json_to_sheet(filters.length?filters:[{"Informatii":"Nu exista filtre inregistrate."}]);
+  const wsS=XLSX.utils.json_to_sheet(stock.length?stock:[{"Informatii":"Nu exista pozitii de stoc inregistrate."}]);
+  ofreshStyleWorksheetHeader(wsF);ofreshStyleWorksheetHeader(wsS);
+  XLSX.utils.book_append_sheet(wb,wsF,"Monitorizare filtre");
+  XLSX.utils.book_append_sheet(wb,wsS,"Stoc pe judete");
+  XLSX.writeFile(wb,"OFRESH_Filtre_si_Stoc.xlsx");
+  msg("Exportul Filtre + Stoc a fost generat intr-un singur fisier Excel, cu doua foi distincte.",true);
+ }catch(e){msg(e?.message||"Nu am putut genera exportul Filtre + Stoc.",false);}
+}
+'''
+replace_once(
+    'async function reportsPage(){',
+    export_fn + '\\nasync function reportsPage(){',
+    "add combined filter and stock export"
+)
+
 p.write_text(s, encoding="utf-8")
 print("Repaired stock page template and mapped current plus legacy Supabase stock fields.")
